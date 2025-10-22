@@ -4,6 +4,10 @@ import { useAuthStore } from "../stores/authStore";
 import { useSocket } from "../context/SocketContext";
 import { useQueueStore } from "../stores/queueStore";
 
+interface Submission {
+  track_url: string;
+}
+
 const DashboardPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const { user } = useAuthStore();
@@ -63,7 +67,7 @@ const DashboardPage = () => {
             <div className="text-center p-4">Loading queue...</div>
           ) : (
             <ul className="space-y-2">
-              {queue.map((item, index) => (
+              {queue.map((item: Submission, index) => (
                 <li key={index} className="p-3 bg-gray-800 rounded-lg shadow">
                   {item.track_url}
                 </li>
