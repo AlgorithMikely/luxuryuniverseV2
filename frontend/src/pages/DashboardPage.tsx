@@ -25,7 +25,7 @@ const DashboardPage = () => {
   useEffect(() => {
     if (!socket) return;
 
-    socket.on("queue_updated", (newQueueData) => {
+    socket.on("queue_updated", (newQueueData: any[]) => {
       console.log("Queue was updated by server!");
       setQueue(newQueueData);
     });

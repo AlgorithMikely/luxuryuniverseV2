@@ -4,9 +4,14 @@ import { useAuthStore } from "../stores/authStore";
 import { useSocket } from "../context/SocketContext";
 import toast from "react-hot-toast";
 
+interface Submission {
+  track_url: string;
+  status: string;
+}
+
 const UserHubPage = () => {
   const [balance, setBalance] = useState(0);
-  const [submissions, setSubmissions] = useState([]);
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { user } = useAuthStore();
   const socket = useSocket();
@@ -31,7 +36,7 @@ const UserHubPage = () => {
   useEffect(() => {
     if (!socket) return;
 
-    socket.on("balance_updated", (data) => {
+    socket.on("balance_updated", (data: { new_balance: number }) => {
       console.log("Balance was updated by server!");
       setBalance(data.new_balance);
       toast.success("You received new coins!");
@@ -56,7 +61,7 @@ const UserHubPage = () => {
         <div>
           <h2 className="text-2xl font-bold mb-2">Your Submissions</h2>
           <ul className="space-y-2">
-            {submissions.map((item, index) => (
+          {submissions.map((item, index) => (
               <li key={index} className="p-3 bg-gray-800 rounded-lg shadow flex justify-between">
                 <span>{item.track_url}</span>
                 <span className="capitalize">{item.status}</span>
