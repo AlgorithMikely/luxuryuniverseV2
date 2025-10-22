@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     DISCORD_CLIENT_ID: str = "your_discord_client_id"
     DISCORD_CLIENT_SECRET: str = "your_discord_client_secret"
     DISCORD_REDIRECT_URI: str = "http://localhost:8000/auth/callback"
+    FRONTEND_URL: str = "http://localhost:5173"
 
 
     class Config:

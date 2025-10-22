@@ -14,7 +14,8 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     if (token) {
-      const newSocket = io("ws://localhost:8000/ws", {
+      const newSocket = io({
+        path: "/ws",
         auth: { token },
       });
       setSocket(newSocket);

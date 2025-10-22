@@ -15,7 +15,28 @@ Universe Bot is a full-stack music review and community platform for streamers. 
 - **Frontend**: React, TypeScript, Vite, Zustand, Tailwind CSS, `socket.io-client`
 - **Database**: SQLite (development), PostgreSQL (production)
 
-## Setup and Installation
+## Deployment with Docker (Recommended)
+
+1.  **Clone the repository.**
+2.  **Create a `.env` file** in the project root with the following variables. These will be used by Docker Compose to configure the services.
+    ```env
+    # PostgreSQL Settings
+    POSTGRES_USER=user
+    POSTGRES_PASSWORD=password
+    POSTGRES_DB=universe_bot
+
+    # Discord Settings
+    DISCORD_TOKEN=your_discord_bot_token
+    DISCORD_CLIENT_ID=your_discord_client_id
+    DISCORD_CLIENT_SECRET=your_discord_client_secret
+    ```
+3.  **Run the application:**
+    ```bash
+    docker-compose up --build
+    ```
+    This command will build the Docker images and start all the services. The frontend will be available at `http://localhost:5173`.
+
+## Manual Setup (for Development)
 
 ### Prerequisites
 
