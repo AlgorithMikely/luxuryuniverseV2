@@ -1,0 +1,37 @@
+from fastapi import HTTPException
+from sqlalchemy.orm import Session
+from sio_instance import sio
+import security
+from services import user_service, queue_service
+from database import SessionLocal
+
+@sio.on("connect")
+async def connect(sid, environ, auth):
+    if not auth or "token" not in auth:
+        raise ConnectionRefusedError("Authentication failed")
+
+    try:
+        token_data = security.verify_token(auth["token"], HTTPException(status_code=401))
+    except HTTPException:
+        raise ConnectionRefusedError("Authentication failed")
+
+    with SessionLocal() as db:
+        user = user_service.get_user_by_discord_id(db, token_data.discord_id)
+        if not user:
+            raise ConnectionRefusedError("User not found")
+
+        # Add user to a room for their own user-specific events
+        sio.enter_room(sid, f"user_room_{user.id}")
+
+        # If the user is a reviewer, add them to their reviewer room
+        reviewer = queue_service.get_reviewer_by_user_id(db, user.id)
+        if reviewer:
+            sio.enter_room(sid, f"reviewer_room_{reviewer.id}")
+
+        # Add user to rooms for any communities they are a part of
+        # (This would require a different data model, e.g., a many-to-many relationship
+        # between users and reviewers. For now, we'll just add them to their own
+        # user and reviewer rooms.)
+
+    print(f"Client connected: {sid}")
+    return True

@@ -1,0 +1,34 @@
+[tool.poetry]
+name = "app"
+version = "0.1.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = ">=3.12"
+pydantic = ">=2.12.3,<3.0.0"
+python-dotenv = ">=1.1.1,<2.0.0"
+sqlalchemy = ">=2.0.44,<3.0.0"
+psycopg2-binary = ">=2.9.11,<3.0.0"
+alembic = ">=1.17.0,<2.0.0"
+pydantic-settings = ">=2.11.0,<3.0.0"
+pytest = ">=8.4.2,<9.0.0"
+discord-py = ">=2.6.4,<3.0.0"
+yt-dlp = ">=2025.10.14,<2026.0.0"
+TikTokLive = "^6.6.5"
+betterproto = {version = "2.0.0b7", python = ">=3.12,<4.0"}
+fastapi = "^0.119.1"
+uvicorn = "^0.38.0"
+python-jose = {extras = ["cryptography"], version = "^3.5.0"}
+httpx = "^0.28.1"
+pytest-httpx = "^0.35.0"
+python-socketio = "^5.14.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+anyio_backend = "asyncio"
