@@ -34,7 +34,6 @@ export const useAuthStore = create<AuthState>()(
           set({ user: response.data });
         } catch (error) {
           console.error("Failed to fetch user profile:", error);
-          // Handle error, maybe logout the user
           set({ token: null, user: null, roles: [] });
         }
       },

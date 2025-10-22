@@ -32,5 +32,3 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     <SocketContext.Provider value={socket}>{children}</SocketContext.Provider>
   );
 };
-
-export {};

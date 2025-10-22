@@ -18,7 +18,7 @@ const UserHubPage = () => {
 
   useEffect(() => {
     if (user) {
-      const reviewerId = 1; // Hardcoded for now
+      const reviewerId = user.reviewer_profile?.id || 1; // Default to 1 if not a reviewer
       const fetchInitialData = async () => {
         setIsLoading(true);
         const [balanceRes, submissionsRes] = await Promise.all([
