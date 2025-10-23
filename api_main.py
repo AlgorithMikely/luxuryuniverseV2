@@ -25,6 +25,6 @@ app.mount("/", socket_app)
 def read_root():
     return {"Hello": "World"}
 
-@api_router.get("/health")
+@app.get("/api/health")
 def health_check():
     return {"status": "ok"}
