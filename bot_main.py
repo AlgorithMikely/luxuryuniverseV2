@@ -21,6 +21,15 @@ class UniverseBot(commands.Bot):
         await self.load_extension("cogs.economy_cog")
         print("Cogs loaded.")
 
+    async def on_ready(self):
+        print(f'Logged in as {self.user} (ID: {self.user.id})')
+        print('Syncing slash commands...')
+        try:
+            synced = await self.tree.sync()
+            print(f"Synced {len(synced)} commands.")
+        except Exception as e:
+            print(f"Failed to sync commands: {e}")
+
 async def main():
     """The main entrypoint for the bot."""
     intents = discord.Intents.default()
@@ -28,16 +37,6 @@ async def main():
     intents.reactions = True      # Required for on_reaction_add event
 
     bot = UniverseBot(command_prefix="!", intents=intents)
-
-    @bot.command()
-    @commands.is_owner()
-    async def sync(ctx):
-        """Syncs the slash commands with Discord."""
-        try:
-            synced = await bot.tree.sync()
-            await ctx.send(f"Synced {len(synced)} commands.")
-        except Exception as e:
-            await ctx.send(f"Failed to sync commands: {e}")
 
     async with bot:
         await bot.start(settings.DISCORD_TOKEN)
