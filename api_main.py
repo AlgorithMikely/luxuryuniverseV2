@@ -8,17 +8,14 @@ from fastapi import APIRouter
 
 app = FastAPI(title="Universe Bot API")
 
-# Create a root router for the API
-api_router = APIRouter(prefix="/api")
-
 socket_app = socketio.ASGIApp(sio)
 
-api_router.include_router(auth.router)
-api_router.include_router(reviewer_api.router)
-api_router.include_router(user_api.router)
+# Include API routers under the /api prefix
+app.include_router(auth.router, prefix="/api")
+app.include_router(reviewer_api.router, prefix="/api")
+app.include_router(user_api.router, prefix="/api")
 
-app.include_router(api_router)
-app.mount("/", socket_app)
+app.mount("/ws", socket_app)
 
 
 @app.get("/")
