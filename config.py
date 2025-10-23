@@ -19,10 +19,12 @@ class Settings(BaseSettings):
 
     @model_validator(mode='before')
     def assemble_db_connection(cls, v: Any) -> Dict[str, Any]:
-        if isinstance(v, dict) and 'SQLALCHEMY_DATABASE_URI' not in v:
+        if isinstance(v, dict):
+            # Forcibly use the correct internal Docker host and port.
+            # This ensures the backend can always connect to the db container.
             v['SQLALCHEMY_DATABASE_URI'] = (
-                f"postgresql://{v.get('POSTGRES_USER')}:{v.get('POSTGRES_PASSWORD')}"
-                f"@{v.get('POSTGRES_SERVER')}:{v.get('POSTGRES_PORT')}/{v.get('POSTGRES_DB')}"
+                f"postgresql://{v.get('POSTGRES_USER', 'user')}:{v.get('POSTGRES_PASSWORD', 'password')}"
+                f"@db:5432/{v.get('POSTGRES_DB', 'universe_bot')}"
             )
         return v
 
