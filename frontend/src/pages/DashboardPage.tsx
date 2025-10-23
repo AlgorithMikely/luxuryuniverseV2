@@ -15,15 +15,15 @@ const DashboardPage = () => {
   const { queue, setQueue } = useQueueStore();
 
   useEffect(() => {
-    if (user && user.reviewer_profile) {
-      const fetchQueue = async () => {
+    const fetchQueue = async () => {
+      if (user && user.reviewer_profile) {
         setIsLoading(true);
         const response = await api.get(`/${user.reviewer_profile.id}/queue`);
         setQueue(response.data);
         setIsLoading(false);
-      };
-      fetchQueue();
-    }
+      }
+    };
+    fetchQueue();
   }, [user, setQueue]);
 
   useEffect(() => {
