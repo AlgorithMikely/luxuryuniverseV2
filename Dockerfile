@@ -16,6 +16,10 @@ RUN poetry install --no-root
 # Copy the rest of the application code to the container
 COPY . .
 
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+ENTRYPOINT ["docker-entrypoint.sh"]
+
 # Expose the port the app runs on
 EXPOSE 8000
 
