@@ -15,7 +15,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(reviewer_api.router, prefix="/api")
 app.include_router(user_api.router, prefix="/api")
 
-app.mount("/ws", socket_app)
+app.mount("/", socket_app)
 
 
 @app.get("/")
