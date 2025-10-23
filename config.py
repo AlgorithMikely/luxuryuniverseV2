@@ -29,9 +29,9 @@ class Settings(BaseSettings):
         return v
 
     # Discord OAuth2 Settings
-    DISCORD_CLIENT_ID: str = "your_discord_client_id"
-    DISCORD_CLIENT_SECRET: str = "your_discord_client_secret"
-    DISCORD_REDIRECT_URI: str = "http://localhost:8000/auth/callback"
+    DISCORD_CLIENT_ID: str
+    DISCORD_CLIENT_SECRET: str
+    DISCORD_REDIRECT_URI: str
     FRONTEND_URL: str = "http://localhost:5173"
 
 
