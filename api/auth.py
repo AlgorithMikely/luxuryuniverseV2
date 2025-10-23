@@ -14,9 +14,10 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 @router.get("/login")
 async def login():
     """Redirects the user to Discord's OAuth2 authorization URL."""
-    redirect_uri = f"https://discord.com/api/oauth2/authorize?client_id={settings.DISCORD_CLIENT_ID}&redirect_uri={settings.DISCORD_REDIRECT_URI}&response_type=code&scope=identify"
-    print(f"Generated Discord OAuth2 URL: {redirect_uri}")
-    return RedirectResponse(redirect_uri)
+    return RedirectResponse(
+        f"https://discord.com/api/oauth2/authorize?client_id={settings.DISCORD_CLIENT_ID}"
+        f"&redirect_uri={settings.DISCORD_REDIRECT_URI}&response_type=code&scope=identify"
+    )
 
 @router.get("/callback")
 async def callback(code: str, db: Session = Depends(get_db)):
