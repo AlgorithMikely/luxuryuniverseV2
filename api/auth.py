@@ -14,12 +14,15 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 @router.get("/login")
 async def login():
     """Redirects the user to Discord's OAuth2 authorization URL."""
-    redirect_uri = f"https://discord.com/api/oauth2/authorize?client_id={settings.DISCORD_CLIENT_ID}&redirect_uri={settings.DISCORD_REDIRECT_URI}&response_type=code&scope=identify"
-    print("--- DIAGNOSTIC URL ---")
-    print(f"Generated Discord OAuth2 URL: {redirect_uri}")
-    print(f"Redirect URI part sent to Discord: {settings.DISCORD_REDIRECT_URI}")
-    print("--- END DIAGNOSTIC URL ---")
-    return RedirectResponse(redirect_uri)
+    print("--- THIS IS THE EXACT URL TO PUT IN DISCORD ---")
+    print(settings.DISCORD_REDIRECT_URI)
+    print("--- COPY THE LINE ABOVE AND PASTE IT IN THE DISCORD DEVELOPER PORTAL ---")
+
+    redirect_url = (
+        f"https://discord.com/api/oauth2/authorize?client_id={settings.DISCORD_CLIENT_ID}"
+        f"&redirect_uri={settings.DISCORD_REDIRECT_URI}&response_type=code&scope=identify"
+    )
+    return RedirectResponse(redirect_url)
 
 @router.get("/callback")
 async def callback(code: str, db: Session = Depends(get_db)):
