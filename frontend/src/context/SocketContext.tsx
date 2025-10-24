@@ -20,6 +20,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       });
 
       newSocket.on("connect_error", (err) => {
+        console.error("Socket connection error:", err.message);
         if (err.message === "Authentication failed") {
           logout();
         }
@@ -37,7 +38,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       }
       setSocket(null);
     }
-  }, [token, logout, socket]);
+  }, [token, logout]);
 
   return (
     <SocketContext.Provider value={socket}>{children}</SocketContext.Provider>
