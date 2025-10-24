@@ -15,18 +15,19 @@ def get_authorized_reviewer(db: Session, user_discord_id: str, channel_id: str) 
     """
     from services import queue_service  # Local import to avoid circular dependency
 
-    user = get_user_by_discord_id(db, user_discord_id)
-    if not user:
-        return None
-
-    is_admin = user.discord_id in settings.ADMIN_DISCORD_IDS
-
+    # Check for admin status first, this does not require a database lookup.
+    is_admin = str(user_discord_id) in settings.ADMIN_DISCORD_IDS
     reviewer = queue_service.get_reviewer_by_channel_id(db, channel_id)
 
     if is_admin:
         if not reviewer:
             raise OwnerContextError("Admin commands must be run in a reviewer's channel.")
         return reviewer
+
+    # If not an admin, proceed with database lookup for reviewer/moderator roles.
+    user = get_user_by_discord_id(db, user_discord_id)
+    if not user:
+        return None
 
     if not reviewer:
         return None
