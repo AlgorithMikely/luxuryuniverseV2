@@ -20,6 +20,9 @@ def db_session():
         db.close()
         Base.metadata.drop_all(bind=engine)
 
+def test_get_authorized_reviewer(db_session: Session):
+    user_service.get_authorized_reviewer(db_session, "12345", "channel")
+
 def test_get_or_create_user(db_session: Session):
     # Test creating a new user
     user = user_service.get_or_create_user(db_session, "123", "testuser")
