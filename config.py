@@ -15,7 +15,6 @@ class Settings(BaseSettings):
             return v
         return []
     # Core settings
-    LOG_FILE: str = "/tmp/debug.log"
     DISCORD_TOKEN: str = "your_discord_token_here"
     SECRET_KEY: str = "a_very_secret_key"
     ALGORITHM: str = "HS256"

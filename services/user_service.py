@@ -19,7 +19,7 @@ def get_authorized_reviewer(db: Session, user_discord_id: str, channel_id: str) 
     if not user:
         return None
 
-    is_admin = str(user.discord_id) in settings.ADMIN_DISCORD_IDS
+    is_admin = user.discord_id in settings.ADMIN_DISCORD_IDS
 
     reviewer = queue_service.get_reviewer_by_channel_id(db, channel_id)
 
