@@ -2,24 +2,30 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from services import queue_service, user_service
+from services.user_service import OwnerContextError
 
 class QueueCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    async def _get_reviewer_from_interaction(self, interaction: discord.Interaction):
-        with self.bot.SessionLocal() as db:
-            user = user_service.get_user_by_discord_id(db, str(interaction.user.id))
-            if not user:
-                return None
-            return queue_service.get_reviewer_by_user_id(db, user.id)
+    async def _get_authorized_reviewer(self, interaction: discord.Interaction):
+        """Helper to get the authorized reviewer and handle common errors."""
+        try:
+            with self.bot.SessionLocal() as db:
+                reviewer = user_service.get_authorized_reviewer(
+                    db, str(interaction.user.id), str(interaction.channel.id)
+                )
+            return reviewer
+        except OwnerContextError as e:
+            await interaction.response.send_message(str(e), ephemeral=True)
+            return None
 
     @app_commands.command(name="open", description="Open the submission queue.")
     @app_commands.guild_only()
     async def open_queue(self, interaction: discord.Interaction):
-        reviewer = await self._get_reviewer_from_interaction(interaction)
+        reviewer = await self._get_authorized_reviewer(interaction)
         if not reviewer:
-            await interaction.response.send_message("You are not a reviewer.", ephemeral=True)
+            await interaction.response.send_message("You are not authorized to manage this queue.", ephemeral=True)
             return
 
         with self.bot.SessionLocal() as db:
@@ -29,9 +35,9 @@ class QueueCog(commands.Cog):
     @app_commands.command(name="close", description="Close the submission queue.")
     @app_commands.guild_only()
     async def close_queue(self, interaction: discord.Interaction):
-        reviewer = await self._get_reviewer_from_interaction(interaction)
+        reviewer = await self._get_authorized_reviewer(interaction)
         if not reviewer:
-            await interaction.response.send_message("You are not a reviewer.", ephemeral=True)
+            await interaction.response.send_message("You are not authorized to manage this queue.", ephemeral=True)
             return
 
         with self.bot.SessionLocal() as db:
@@ -41,9 +47,9 @@ class QueueCog(commands.Cog):
     @app_commands.command(name="next", description="Get the next track from the queue.")
     @app_commands.guild_only()
     async def next_track(self, interaction: discord.Interaction):
-        reviewer = await self._get_reviewer_from_interaction(interaction)
+        reviewer = await self._get_authorized_reviewer(interaction)
         if not reviewer:
-            await interaction.response.send_message("You are not a reviewer.", ephemeral=True)
+            await interaction.response.send_message("You are not authorized to manage this queue.", ephemeral=True)
             return
 
         with self.bot.SessionLocal() as db:
@@ -64,9 +70,9 @@ class QueueCog(commands.Cog):
     @app_commands.command(name="queue", description="View the current submission queue.")
     @app_commands.guild_only()
     async def view_queue(self, interaction: discord.Interaction):
-        reviewer = await self._get_reviewer_from_interaction(interaction)
+        reviewer = await self._get_authorized_reviewer(interaction)
         if not reviewer:
-            await interaction.response.send_message("You are not a reviewer.", ephemeral=True)
+            await interaction.response.send_message("You are not authorized to view this queue.", ephemeral=True)
             return
 
         with self.bot.SessionLocal() as db:

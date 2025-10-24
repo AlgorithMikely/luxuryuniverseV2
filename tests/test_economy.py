@@ -23,7 +23,13 @@ def db_session():
 @pytest.mark.anyio
 async def test_add_coins_creates_transaction_and_updates_wallet(db_session: Session):
     user = user_service.get_or_create_user(db_session, "123", "testuser")
-    reviewer = Reviewer(user_id=user.id, discord_channel_id="456", tiktok_handle="test")
+    reviewer = Reviewer(
+        user_id=user.id,
+        submission_channel_id="456",
+        queue_channel_id="456q",
+        reviewer_role_id="456r",
+        tiktok_handle="test"
+    )
     db_session.add(reviewer)
     db_session.commit()
 
@@ -37,7 +43,13 @@ async def test_add_coins_creates_transaction_and_updates_wallet(db_session: Sess
 
 def test_get_balance_on_new_user_returns_zero(db_session: Session):
     user = user_service.get_or_create_user(db_session, "123", "testuser")
-    reviewer = Reviewer(user_id=user.id, discord_channel_id="456", tiktok_handle="test")
+    reviewer = Reviewer(
+        user_id=user.id,
+        submission_channel_id="456",
+        queue_channel_id="456q",
+        reviewer_role_id="456r",
+        tiktok_handle="test"
+    )
     db_session.add(reviewer)
     db_session.commit()
 

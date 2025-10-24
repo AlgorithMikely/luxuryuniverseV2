@@ -37,7 +37,13 @@ def test_get_or_create_user(db_session: Session):
 @pytest.mark.anyio
 async def test_create_submission(db_session: Session):
     user = user_service.get_or_create_user(db_session, "123", "testuser")
-    reviewer = Reviewer(user_id=user.id, discord_channel_id="456", tiktok_handle="test")
+    reviewer = Reviewer(
+        user_id=user.id,
+        submission_channel_id="456",
+        queue_channel_id="456q",
+        reviewer_role_id="456r",
+        tiktok_handle="test"
+    )
     db_session.add(reviewer)
     db_session.commit()
 
@@ -49,7 +55,13 @@ async def test_create_submission(db_session: Session):
 @pytest.mark.anyio
 async def test_get_pending_queue(db_session: Session):
     user = user_service.get_or_create_user(db_session, "123", "testuser")
-    reviewer = Reviewer(user_id=user.id, discord_channel_id="456", tiktok_handle="test")
+    reviewer = Reviewer(
+        user_id=user.id,
+        submission_channel_id="456",
+        queue_channel_id="456q",
+        reviewer_role_id="456r",
+        tiktok_handle="test"
+    )
     db_session.add(reviewer)
     db_session.commit()
 
@@ -63,11 +75,23 @@ async def test_get_pending_queue(db_session: Session):
 @pytest.mark.anyio
 async def test_reviewer_isolation(db_session: Session):
     user1 = user_service.get_or_create_user(db_session, "1", "user1")
-    reviewer1 = Reviewer(user_id=user1.id, discord_channel_id="1", tiktok_handle="reviewer1")
+    reviewer1 = Reviewer(
+        user_id=user1.id,
+        submission_channel_id="1",
+        queue_channel_id="1q",
+        reviewer_role_id="1r",
+        tiktok_handle="reviewer1"
+    )
     db_session.add(reviewer1)
 
     user2 = user_service.get_or_create_user(db_session, "2", "user2")
-    reviewer2 = Reviewer(user_id=user2.id, discord_channel_id="2", tiktok_handle="reviewer2")
+    reviewer2 = Reviewer(
+        user_id=user2.id,
+        submission_channel_id="2",
+        queue_channel_id="2q",
+        reviewer_role_id="2r",
+        tiktok_handle="reviewer2"
+    )
     db_session.add(reviewer2)
     db_session.commit()
 
@@ -84,7 +108,13 @@ async def test_reviewer_isolation(db_session: Session):
 
 def test_set_queue_status(db_session: Session):
     user = user_service.get_or_create_user(db_session, "123", "testuser")
-    reviewer = Reviewer(user_id=user.id, discord_channel_id="456", tiktok_handle="test")
+    reviewer = Reviewer(
+        user_id=user.id,
+        submission_channel_id="456",
+        queue_channel_id="456q",
+        reviewer_role_id="456r",
+        tiktok_handle="test"
+    )
     db_session.add(reviewer)
     db_session.commit()
 
@@ -94,7 +124,13 @@ def test_set_queue_status(db_session: Session):
 @pytest.mark.anyio
 async def test_advance_queue(db_session: Session):
     user = user_service.get_or_create_user(db_session, "123", "testuser")
-    reviewer = Reviewer(user_id=user.id, discord_channel_id="456", tiktok_handle="test")
+    reviewer = Reviewer(
+        user_id=user.id,
+        submission_channel_id="456",
+        queue_channel_id="456q",
+        reviewer_role_id="456r",
+        tiktok_handle="test"
+    )
     db_session.add(reviewer)
     db_session.commit()
 

@@ -24,6 +24,7 @@ class User(Base):
     reviewer_profile = relationship("Reviewer", back_populates="user", uselist=False)
     submissions = relationship("Submission", back_populates="user")
     transactions = relationship("Transaction", back_populates="user")
+    moderated_reviewers = relationship("Moderator", back_populates="user")
 
 
 class Reviewer(Base):
@@ -31,13 +32,16 @@ class Reviewer(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
     tiktok_handle = Column(String, unique=True)
-    discord_channel_id = Column(String, unique=True, nullable=False)
+    submission_channel_id = Column(String, unique=True, nullable=False)
+    queue_channel_id = Column(String, unique=True, nullable=False)
+    reviewer_role_id = Column(String, unique=True, nullable=False)
     queue_status = Column(String, default="closed", nullable=False)
 
     user = relationship("User", back_populates="reviewer_profile")
     submissions = relationship("Submission", back_populates="reviewer")
     economy_configs = relationship("EconomyConfig", back_populates="reviewer")
     transactions = relationship("Transaction", back_populates="reviewer")
+    moderators = relationship("Moderator", back_populates="reviewer")
 
 
 class Submission(Base):
@@ -86,3 +90,13 @@ class Wallet(Base):
 
     user = relationship("User")
     reviewer = relationship("Reviewer")
+
+
+class Moderator(Base):
+    __tablename__ = "moderators"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    reviewer_id = Column(Integer, ForeignKey("reviewers.id"), nullable=False)
+
+    user = relationship("User", back_populates="moderated_reviewers")
+    reviewer = relationship("Reviewer", back_populates="moderators")
