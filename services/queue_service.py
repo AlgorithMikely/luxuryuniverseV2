@@ -56,7 +56,29 @@ def get_reviewer_by_user_id(db: Session, user_id: int) -> Optional[models.Review
     return db.query(models.Reviewer).filter(models.Reviewer.user_id == user_id).first()
 
 def get_reviewer_by_channel_id(db: Session, channel_id: str) -> Optional[models.Reviewer]:
-    return db.query(models.Reviewer).filter(models.Reviewer.discord_channel_id == str(channel_id)).first()
+    return db.query(models.Reviewer).filter(
+        (models.Reviewer.submission_channel_id == channel_id) |
+        (models.Reviewer.queue_channel_id == channel_id)
+    ).first()
 
 def get_submissions_by_user(db: Session, user_id: int) -> list[models.Submission]:
     return db.query(models.Submission).filter(models.Submission.user_id == user_id).all()
+
+def advance_queue_and_get_user(db: Session, reviewer_id: int) -> Optional[tuple[models.Submission, str]]:
+    submission = db.query(models.Submission).filter(
+        models.Submission.reviewer_id == reviewer_id,
+        models.Submission.status == 'pending'
+    ).order_by(models.Submission.submitted_at.asc()).first()
+
+    if submission:
+        submission.status = 'played'
+        db.commit()
+        db.refresh(submission)
+        return submission, submission.user.discord_id
+    return None
+
+def get_pending_queue_with_users(db: Session, reviewer_id: int) -> list[tuple[models.Submission, str]]:
+    return db.query(models.Submission, models.User.discord_id).join(models.User).filter(
+        models.Submission.reviewer_id == reviewer_id,
+        models.Submission.status == 'pending'
+    ).order_by(models.Submission.submitted_at.asc()).all()
