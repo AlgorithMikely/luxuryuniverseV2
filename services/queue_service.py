@@ -56,9 +56,10 @@ def get_reviewer_by_user_id(db: Session, user_id: int) -> Optional[models.Review
     return db.query(models.Reviewer).filter(models.Reviewer.user_id == user_id).first()
 
 def get_reviewer_by_channel_id(db: Session, channel_id: str) -> Optional[models.Reviewer]:
+    channel_id_str = str(channel_id)
     return db.query(models.Reviewer).filter(
-        (models.Reviewer.submission_channel_id == channel_id) |
-        (models.Reviewer.queue_channel_id == channel_id)
+        (models.Reviewer.submission_channel_id == channel_id_str) |
+        (models.Reviewer.queue_channel_id == channel_id_str)
     ).first()
 
 def get_submissions_by_user(db: Session, user_id: int) -> list[models.Submission]:

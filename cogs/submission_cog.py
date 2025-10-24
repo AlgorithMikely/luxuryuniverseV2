@@ -13,7 +13,7 @@ class PassiveSubmissionCog(commands.Cog):
             return
 
         with self.bot.SessionLocal() as db:
-            reviewer = queue_service.get_reviewer_by_channel_id(db, message.channel.id)
+            reviewer = queue_service.get_reviewer_by_channel_id(db, str(message.channel.id))
 
             if not reviewer or reviewer.queue_status != "open":
                 return
