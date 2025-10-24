@@ -4,6 +4,8 @@ interface Submission {
   id: number;
   track_url: string;
   status: string;
+  is_spotlighted: boolean;
+  is_bookmarked: boolean;
 }
 
 interface QueueState {

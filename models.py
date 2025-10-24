@@ -6,6 +6,7 @@ from sqlalchemy import (
     ForeignKey,
     DateTime,
     Index,
+    Boolean,
 )
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
@@ -50,8 +51,11 @@ class Submission(Base):
     reviewer_id = Column(Integer, ForeignKey("reviewers.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     track_url = Column(String, nullable=False)
-    status = Column(String, default="pending", nullable=False)
+    status = Column(String, default="pending", nullable=False)  # pending, playing, played
     submitted_at = Column(DateTime, default=datetime.datetime.utcnow)
+    played_at = Column(DateTime, nullable=True)
+    is_spotlighted = Column(Boolean, default=False, nullable=False)
+    is_bookmarked = Column(Boolean, default=False, nullable=False)
 
     reviewer = relationship("Reviewer", back_populates="submissions")
     user = relationship("User", back_populates="submissions")

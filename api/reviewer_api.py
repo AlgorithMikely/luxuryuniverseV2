@@ -33,3 +33,41 @@ async def next_track(reviewer_id: int, db: Session = Depends(get_db)):
     if not submission:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Queue is empty")
     return submission
+
+@router.post("/queue/submission/{submission_id}/spotlight", dependencies=[Depends(check_is_reviewer)])
+async def spotlight_submission(
+    reviewer_id: int,
+    submission_id: int,
+    spotlight: bool,
+    db: Session = Depends(get_db)
+):
+    submission = await queue_service.spotlight_submission(
+        db,
+        reviewer_id=reviewer_id,
+        submission_id=submission_id,
+        spotlight=spotlight
+    )
+    if not submission:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+    return submission
+
+@router.get("/queue/history", dependencies=[Depends(check_is_reviewer)])
+async def get_queue_history(reviewer_id: int, db: Session = Depends(get_db)):
+    return queue_service.get_played_queue(db, reviewer_id=reviewer_id)
+
+@router.post("/queue/submission/{submission_id}/bookmark", dependencies=[Depends(check_is_reviewer)])
+async def bookmark_submission(
+    reviewer_id: int,
+    submission_id: int,
+    bookmark: bool,
+    db: Session = Depends(get_db)
+):
+    submission = await queue_service.bookmark_submission(
+        db,
+        reviewer_id=reviewer_id,
+        submission_id=submission_id,
+        bookmark=bookmark
+    )
+    if not submission:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+    return submission

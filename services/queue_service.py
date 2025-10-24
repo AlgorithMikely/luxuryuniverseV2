@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 import models
 from typing import Optional
 import event_service
+import datetime
 
 async def create_submission(db: Session, reviewer_id: int, user_id: int, track_url: str) -> models.Submission:
     # ... logic to find or create user ...
@@ -27,6 +28,44 @@ def get_pending_queue(db: Session, reviewer_id: int) -> list[models.Submission]:
         models.Submission.status == 'pending'
     ).order_by(models.Submission.submitted_at.asc()).all()
 
+def get_played_queue(db: Session, reviewer_id: int) -> list[models.Submission]:
+    return db.query(models.Submission).filter(
+        models.Submission.reviewer_id == reviewer_id,
+        models.Submission.status == 'played'
+    ).order_by(models.Submission.played_at.desc()).all()
+
+async def spotlight_submission(db: Session, reviewer_id: int, submission_id: int, spotlight: bool) -> Optional[models.Submission]:
+    submission = db.query(models.Submission).filter(
+        models.Submission.id == submission_id,
+        models.Submission.reviewer_id == reviewer_id
+    ).first()
+
+    if submission:
+        submission.is_spotlighted = spotlight
+        db.commit()
+        db.refresh(submission)
+
+        new_queue = get_pending_queue(db, reviewer_id)
+        await event_service.emit_queue_update(reviewer_id, [s.__dict__ for s in new_queue])
+
+    return submission
+
+async def bookmark_submission(db: Session, reviewer_id: int, submission_id: int, bookmark: bool) -> Optional[models.Submission]:
+    submission = db.query(models.Submission).filter(
+        models.Submission.id == submission_id,
+        models.Submission.reviewer_id == reviewer_id
+    ).first()
+
+    if submission:
+        submission.is_bookmarked = bookmark
+        db.commit()
+        db.refresh(submission)
+
+        new_queue = get_pending_queue(db, reviewer_id)
+        await event_service.emit_queue_update(reviewer_id, [s.__dict__ for s in new_queue])
+
+    return submission
+
 def set_queue_status(db: Session, reviewer_id: int, status: str):
     reviewer = db.query(models.Reviewer).filter(models.Reviewer.id == reviewer_id).first()
     if reviewer:
@@ -43,6 +82,7 @@ async def advance_queue(db: Session, reviewer_id: int) -> Optional[models.Submis
 
     if submission:
         submission.status = 'played'
+        submission.played_at = datetime.datetime.utcnow()
         db.commit()
         db.refresh(submission)
 
