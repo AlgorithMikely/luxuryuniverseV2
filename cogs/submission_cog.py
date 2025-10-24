@@ -18,16 +18,26 @@ class PassiveSubmissionCog(commands.Cog):
             if not reviewer or reviewer.queue_status != "open":
                 return
 
+            submission_url = None
+            if message.attachments:
+                submission_url = message.attachments[0].url
+            else:
+                submission_url = message.content
+
+            if not submission_url:
+                return
+
             try:
                 # Use yt-dlp to validate the URL
                 with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True}) as ydl:
-                    info_dict = ydl.extract_info(message.content, download=False)
+                    info_dict = ydl.extract_info(submission_url, download=False)
                     if not info_dict:
                         raise ValueError("Invalid link")
 
                 user = user_service.get_or_create_user(db, str(message.author.id), message.author.name)
-                await queue_service.create_submission(db, reviewer.id, user.id, message.content)
+                await queue_service.create_submission(db, reviewer.id, user.id, submission_url)
                 await message.add_reaction("✅")
+                await message.delete()
 
             except (yt_dlp.utils.DownloadError, ValueError):
                 await message.add_reaction("❌")
