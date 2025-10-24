@@ -21,12 +21,12 @@ async def connect(sid, environ, auth):
             raise ConnectionRefusedError("User not found")
 
         # Add user to a room for their own user-specific events
-        sio.enter_room(sid, f"user_room_{user.id}")
+        await sio.enter_room(sid, f"user_room_{user.id}")
 
         # If the user is a reviewer, add them to their reviewer room
         reviewer = queue_service.get_reviewer_by_user_id(db, user.id)
         if reviewer:
-            sio.enter_room(sid, f"reviewer_room_{reviewer.id}")
+            await sio.enter_room(sid, f"reviewer_room_{reviewer.id}")
 
         # Add user to rooms for any communities they are a part of
         # (This would require a different data model, e.g., a many-to-many relationship
