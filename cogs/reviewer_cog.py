@@ -9,8 +9,10 @@ class ReviewerCog(commands.Cog):
 
     @app_commands.command(name="add_reviewer", description="Add a new reviewer.")
     @app_commands.guild_only()
-    @app_commands.checks.is_owner()
     async def add_reviewer(self, interaction: discord.Interaction, user: discord.User, submission_channel: discord.TextChannel, queue_channel: discord.TextChannel, reviewer_role: discord.Role):
+        if str(interaction.user.id) not in self.bot.settings.ADMIN_DISCORD_IDS:
+            await interaction.response.send_message("You are not authorized to use this command.", ephemeral=True)
+            return
         with self.bot.SessionLocal() as db:
             db_user = user_service.get_or_create_user(db, str(user.id), user.name)
             reviewer = user_service.create_reviewer(

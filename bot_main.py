@@ -11,6 +11,7 @@ class UniverseBot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.SessionLocal: sessionmaker = SessionLocal
+        self.settings = settings
 
     async def setup_hook(self):
         # This is called when the bot is preparing to start

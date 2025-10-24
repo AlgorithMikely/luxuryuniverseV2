@@ -3,9 +3,9 @@ from pydantic import model_validator, field_validator
 from typing import Optional, Dict, Any, List
 
 class Settings(BaseSettings):
-    OWNER_DISCORD_IDS: List[str] = []
+    ADMIN_DISCORD_IDS: List[str] = []
 
-    @field_validator('OWNER_DISCORD_IDS', mode='before')
+    @field_validator('ADMIN_DISCORD_IDS', mode='before')
     def split_string(cls, v: Any) -> List[str]:
         if isinstance(v, str):
             return [id.strip() for id in v.split(',')]
