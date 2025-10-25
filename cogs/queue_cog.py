@@ -86,7 +86,12 @@ class QueueCog(commands.Cog):
             color=discord.Color.blue()
         )
         embed.set_footer(text=f"Submitted by {user.name}")
-        await interaction.followup.send(embed=embed)
+
+        queue_channel = self.bot.get_channel(int(reviewer.queue_channel_id))
+        if queue_channel:
+            await queue_channel.send(embed=embed)
+
+        await interaction.followup.send("Next track announced in the queue channel.", ephemeral=True)
 
     @app_commands.command(name="queue", description="View the current submission queue.")
     @app_commands.guild_only()

@@ -3,6 +3,7 @@ import models
 from typing import Optional
 import event_service
 import datetime
+import asyncio
 
 async def create_submission(db: Session, reviewer_id: int, user_id: int, track_url: str) -> models.Submission:
     # ... logic to find or create user ...
@@ -113,8 +114,20 @@ def advance_queue_and_get_user(db: Session, reviewer_id: int) -> Optional[tuple[
 
     if submission:
         submission.status = 'played'
+        submission.played_at = datetime.datetime.utcnow()
         db.commit()
         db.refresh(submission)
+
+        # Emit a queue update
+        new_queue = get_pending_queue(db, reviewer_id)
+
+        async def emit_event():
+            await event_service.emit_queue_update(reviewer_id, [s.__dict__ for s in new_queue])
+
+        # Run the async function in a separate thread to avoid blocking
+        import threading
+        threading.Thread(target=lambda: asyncio.run(emit_event())).start()
+
         return submission, submission.user.discord_id
     return None
 
