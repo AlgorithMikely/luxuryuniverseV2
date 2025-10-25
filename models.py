@@ -35,6 +35,7 @@ class Reviewer(Base):
     tiktok_handle = Column(String, unique=True)
     submission_channel_id = Column(String, unique=True, nullable=False)
     queue_channel_id = Column(String, unique=True, nullable=False)
+    files_and_links_channel_id = Column(String, unique=True, nullable=True)
     reviewer_role_id = Column(String, unique=True, nullable=False)
     queue_status = Column(String, default="closed", nullable=False)
 

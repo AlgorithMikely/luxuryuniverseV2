@@ -51,6 +51,7 @@ class ReviewerCog(commands.Cog):
         # Create channels
         submission_channel = await category.create_text_channel("submissions", overwrites=submission_overwrites)
         queue_channel = await category.create_text_channel("queue", overwrites=overwrites)
+        files_and_links_channel = await category.create_text_channel("files-and-links", overwrites=overwrites)
 
         def db_call():
             with self.bot.SessionLocal() as db:
@@ -60,6 +61,7 @@ class ReviewerCog(commands.Cog):
                     db_user.id,
                     submission_channel_id=str(submission_channel.id),
                     queue_channel_id=str(queue_channel.id),
+                    files_and_links_channel_id=str(files_and_links_channel.id),
                     reviewer_role_id=str(reviewer_role.id)
                 )
 

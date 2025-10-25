@@ -83,7 +83,9 @@ const DashboardPage = () => {
   return (
     <div className="bg-gray-900 text-white min-h-screen p-4 sm:p-8">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-4">Reviewer Dashboard</h1>
+        <h1 className="text-3xl font-bold mb-4">
+          {user.username}'s Reviewer Dashboard
+        </h1>
         <div className="mb-4">
           <button
             onClick={handleNextTrack}

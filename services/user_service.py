@@ -86,7 +86,7 @@ def get_reviewer_by_user_id(db: Session, user_id: int) -> Optional[models.Review
     """Retrieves a reviewer profile by user ID."""
     return db.query(models.Reviewer).filter(models.Reviewer.user_id == user_id).first()
 
-def create_reviewer(db: Session, user_id: int, submission_channel_id: str, queue_channel_id: str, reviewer_role_id: str) -> Optional[models.Reviewer]:
+def create_reviewer(db: Session, user_id: int, submission_channel_id: str, queue_channel_id: str, files_and_links_channel_id: str, reviewer_role_id: str) -> Optional[models.Reviewer]:
     """Creates a new reviewer profile for a user."""
     existing_reviewer = get_reviewer_by_user_id(db, user_id)
     if existing_reviewer:
@@ -96,6 +96,7 @@ def create_reviewer(db: Session, user_id: int, submission_channel_id: str, queue
         user_id=user_id,
         submission_channel_id=submission_channel_id,
         queue_channel_id=queue_channel_id,
+        files_and_links_channel_id=files_and_links_channel_id,
         reviewer_role_id=reviewer_role_id
     )
     db.add(new_reviewer)

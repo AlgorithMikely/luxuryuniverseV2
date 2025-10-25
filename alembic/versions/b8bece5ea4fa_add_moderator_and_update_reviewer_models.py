@@ -36,9 +36,9 @@ def upgrade() -> None:
         batch_op.add_column(sa.Column('submission_channel_id', sa.String(), nullable=False))
         batch_op.add_column(sa.Column('queue_channel_id', sa.String(), nullable=False))
         batch_op.add_column(sa.Column('reviewer_role_id', sa.String(), nullable=False))
-        batch_op.create_unique_constraint(None, ['reviewer_role_id'])
-        batch_op.create_unique_constraint(None, ['queue_channel_id'])
-        batch_op.create_unique_constraint(None, ['submission_channel_id'])
+        batch_op.create_unique_constraint("uq_reviewer_role_id", ['reviewer_role_id'])
+        batch_op.create_unique_constraint("uq_queue_channel_id", ['queue_channel_id'])
+        batch_op.create_unique_constraint("uq_submission_channel_id", ['submission_channel_id'])
         batch_op.drop_column('discord_channel_id')
 
     # ### end Alembic commands ###
