@@ -10,6 +10,7 @@ interface User {
   reviewer_profile: {
     id: number;
   } | null;
+  roles: string[];
 }
 
 interface AuthState {
