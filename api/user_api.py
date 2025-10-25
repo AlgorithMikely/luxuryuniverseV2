@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 import schemas
 import security
 from database import get_db
-from services import economy_service, user_service
+from services import economy_service, user_service, queue_service
 
 router = APIRouter(prefix="/user", tags=["User"])
 
