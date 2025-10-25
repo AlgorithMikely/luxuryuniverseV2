@@ -38,7 +38,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       }
       setSocket(null);
     }
-  }, [token, logout]);
+  }, [token]);
 
   return (
     <SocketContext.Provider value={socket}>{children}</SocketContext.Provider>
