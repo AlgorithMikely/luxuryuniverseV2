@@ -18,11 +18,10 @@ const UserHubPage = () => {
 
   useEffect(() => {
     if (user) {
-      const reviewerId = user.reviewer_profile?.id || 1; // Default to 1 if not a reviewer
       const fetchInitialData = async () => {
         setIsLoading(true);
         const [balanceRes, submissionsRes] = await Promise.all([
-          api.get(`/user/me/balance?reviewer_id=${reviewerId}`),
+          api.get(`/user/me/balance`),
           api.get("/user/me/submissions"),
         ]);
         setBalance(balanceRes.data.balance);
