@@ -8,10 +8,14 @@ const DashboardRedirect = () => {
   const { user } = useAuthStore();
 
   useEffect(() => {
-    if (user && user.reviewer_profile) {
-      navigate(`/dashboard/${user.reviewer_profile.id}`);
+    if (user) {
+      if (user.reviewer_profile) {
+        navigate(`/dashboard/${user.reviewer_profile.id}`);
+      } else {
+        navigate("/hub");
+      }
     }
-  }, [user]);
+  }, [user, navigate]);
 
   return <div>Loading...</div>;
 };
