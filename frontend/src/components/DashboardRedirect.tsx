@@ -11,7 +11,7 @@ const DashboardRedirect = () => {
     if (user && user.reviewer_profile) {
       navigate(`/dashboard/${user.reviewer_profile.id}`);
     }
-  }, [user, navigate]);
+  }, [user]);
 
   return <div>Loading...</div>;
 };
