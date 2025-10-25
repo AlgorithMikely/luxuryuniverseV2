@@ -132,3 +132,7 @@ def remove_moderator(db: Session, reviewer_id: int, moderator_user_id: int) -> b
     db.delete(moderator)
     db.commit()
     return True
+
+def get_all_reviewers(db: Session) -> list[models.Reviewer]:
+    """Retrieves all reviewers."""
+    return db.query(models.Reviewer).all()

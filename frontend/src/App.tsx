@@ -4,6 +4,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import LoginPage from "./pages/LoginPage";
 import AuthCallbackPage from "./pages/AuthCallbackPage";
 import DashboardPage from "./pages/DashboardPage";
+import DashboardRedirect from "./components/DashboardRedirect";
 import UserHubPage from "./pages/UserHubPage";
 import ErrorPage from "./pages/ErrorPage";
 import { Toaster } from "react-hot-toast";
@@ -19,10 +20,18 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
             <Route
-              path="/dashboard"
+              path="/dashboard/:reviewerId"
               element={
                 <ProtectedRoute>
                   <DashboardPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <DashboardRedirect />
                 </ProtectedRoute>
               }
             />

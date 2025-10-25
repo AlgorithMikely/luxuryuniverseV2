@@ -3,6 +3,14 @@ import api from "../services/api";
 import { useAuthStore } from "../stores/authStore";
 import { useSocket } from "../context/SocketContext";
 import { useQueueStore } from "../stores/queueStore";
+import { useParams, useNavigate } from "react-router-dom";
+
+interface Reviewer {
+  id: number;
+  user: {
+    username: string;
+  };
+}
 
 interface Submission {
   id: number;
@@ -14,28 +22,48 @@ interface Submission {
 const DashboardPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [history, setHistory] = useState<Submission[]>([]);
+  const [reviewers, setReviewers] = useState<Reviewer[]>([]);
+  const [currentReviewerName, setCurrentReviewerName] = useState<string>("");
   const { user } = useAuthStore();
   const socket = useSocket();
   const { queue, setQueue } = useQueueStore();
+  const { reviewerId } = useParams();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchQueue = async () => {
-      if (user && user.reviewer_profile) {
+      if (reviewerId) {
         setIsLoading(true);
-        const response = await api.get(`/${user.reviewer_profile.id}/queue`);
+        const response = await api.get(`/${reviewerId}/queue`);
         setQueue(response.data);
         setIsLoading(false);
       }
     };
     const fetchHistory = async () => {
-      if (user && user.reviewer_profile) {
-        const response = await api.get(`/${user.reviewer_profile.id}/queue/history`);
+      if (reviewerId) {
+        const response = await api.get(`/${reviewerId}/queue/history`);
         setHistory(response.data);
       }
     };
     fetchQueue();
     fetchHistory();
-  }, [user, setQueue]);
+  }, [reviewerId, setQueue]);
+
+  useEffect(() => {
+    const fetchReviewers = async () => {
+      if (user && user.roles.includes("admin")) {
+        const response = await api.get("/admin/reviewers");
+        setReviewers(response.data);
+        const currentReviewer = response.data.find(
+          (r: Reviewer) => r.id === parseInt(reviewerId || "")
+        );
+        if (currentReviewer) {
+          setCurrentReviewerName(currentReviewer.user.username);
+        }
+      }
+    };
+    fetchReviewers();
+  }, [user, reviewerId]);
 
   useEffect(() => {
     if (!socket) return;
@@ -51,15 +79,15 @@ const DashboardPage = () => {
   }, [socket, setQueue]);
 
   const handleNextTrack = async () => {
-    if (user && user.reviewer_profile) {
-      await api.post(`/${user.reviewer_profile.id}/queue/next`);
+    if (reviewerId) {
+      await api.post(`/${reviewerId}/queue/next`);
     }
   };
 
   const handleSpotlight = async (submissionId: number, spotlight: boolean) => {
-    if (user && user.reviewer_profile) {
+    if (reviewerId) {
       await api.post(
-        `/${user.reviewer_profile.id}/queue/submission/${submissionId}/spotlight`,
+        `/${reviewerId}/queue/submission/${submissionId}/spotlight`,
         null,
         { params: { spotlight } }
       );
@@ -67,9 +95,9 @@ const DashboardPage = () => {
   };
 
   const handleBookmark = async (submissionId: number, bookmark: boolean) => {
-    if (user && user.reviewer_profile) {
+    if (reviewerId) {
       await api.post(
-        `/${user.reviewer_profile.id}/queue/submission/${submissionId}/bookmark`,
+        `/${reviewerId}/queue/submission/${submissionId}/bookmark`,
         null,
         { params: { bookmark } }
       );
@@ -84,8 +112,22 @@ const DashboardPage = () => {
     <div className="bg-gray-900 text-white min-h-screen p-4 sm:p-8">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold mb-4">
-          {user.username}'s Reviewer Dashboard
+          {currentReviewerName || user.username}'s Reviewer Dashboard
         </h1>
+        {user.roles.includes("admin") && (
+          <div className="mb-4">
+            <select
+              onChange={(e) => navigate(`/dashboard/${e.target.value}`)}
+              className="bg-gray-700 text-white p-2 rounded"
+            >
+              {reviewers.map((reviewer) => (
+                <option key={reviewer.id} value={reviewer.id}>
+                  {reviewer.user.username}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="mb-4">
           <button
             onClick={handleNextTrack}
