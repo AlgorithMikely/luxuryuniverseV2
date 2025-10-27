@@ -15,6 +15,7 @@ class User(UserBase):
     class Config:
         from_attributes = True
 
+
 class UserSubmissionsResponse(BaseModel):
     user: User
     submissions: List["SubmissionDetail"]
