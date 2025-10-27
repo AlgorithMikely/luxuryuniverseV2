@@ -20,10 +20,9 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       });
 
       newSocket.on("connect_error", (err) => {
+        // Don't log out on connection error, as the socket will try to reconnect automatically.
+        // This prevents race conditions on initial login from killing the user's session.
         console.error("Socket connection error:", err.message);
-        if (err.message === "Authentication failed") {
-          logout();
-        }
       });
 
       setSocket(newSocket);
