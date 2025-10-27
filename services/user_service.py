@@ -51,20 +51,21 @@ def get_user_by_discord_id(db: Session, discord_id: str) -> models.User | None:
     """Retrieves a user by their Discord ID."""
     return db.query(models.User).filter(models.User.discord_id == discord_id).first()
 
-def get_or_create_user(db: Session, discord_id: str, username: str) -> models.User:
+def get_or_create_user(db: Session, discord_id: str, username: str, avatar: str = None) -> models.User:
     """
     Retrieves a user by their Discord ID, or creates a new one if they don't exist.
     """
     user = get_user_by_discord_id(db, discord_id)
     if user:
-        # Update username if it has changed
-        if user.username != username:
+        # Update username and avatar if they have changed
+        if user.username != username or user.avatar != avatar:
             user.username = username
+            user.avatar = avatar
             db.commit()
             db.refresh(user)
         return user
 
-    new_user = models.User(discord_id=discord_id, username=username)
+    new_user = models.User(discord_id=discord_id, username=username, avatar=avatar)
     db.add(new_user)
     db.commit()
     db.refresh(new_user)

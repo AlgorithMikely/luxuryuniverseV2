@@ -32,3 +32,22 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     discord_id: str | None = None
     roles: List[str] = []
+
+class Reviewer(BaseModel):
+    id: int
+    user: User
+
+class SubmissionReviewer(BaseModel):
+    reviewer: Reviewer
+
+class SubmissionDetail(BaseModel):
+    id: int
+    track_url: str
+    status: str
+    artist: str | None = None
+    title: str | None = None
+    submission_count: int
+    reviewers: List[SubmissionReviewer]
+
+    class Config:
+        from_attributes = True

@@ -34,14 +34,16 @@ class PassiveSubmissionCog(commands.Cog):
                     if not info_dict:
                         raise ValueError("Invalid link")
 
-                user = user_service.get_or_create_user(db, str(message.author.id), message.author.name)
+                user = user_service.get_or_create_user(db, str(message.author.id), message.author.name, str(message.author.avatar))
 
                 if reviewer.files_and_links_channel_id:
                     files_and_links_channel = self.bot.get_channel(int(reviewer.files_and_links_channel_id))
                     if files_and_links_channel:
                         await files_and_links_channel.send(f"Submission from {message.author.mention}: {submission_url}")
 
-                await queue_service.create_submission(db, reviewer.id, user.id, submission_url)
+                artist = info_dict.get('artist')
+                title = info_dict.get('title')
+                await queue_service.create_submission(db, reviewer.id, user.id, submission_url, artist, title)
                 await message.add_reaction("✅")
                 await message.delete()
 

@@ -5,17 +5,42 @@ import event_service
 import datetime
 import asyncio
 
-async def create_submission(db: Session, reviewer_id: int, user_id: int, track_url: str) -> models.Submission:
-    # ... logic to find or create user ...
-    new_submission = models.Submission(
-        reviewer_id=reviewer_id,
-        user_id=user_id,
-        track_url=track_url,
-        status='pending'
-    )
-    db.add(new_submission)
-    db.commit()
-    db.refresh(new_submission)
+async def create_submission(db: Session, reviewer_id: int, user_id: int, track_url: str, artist: str = None, title: str = None) -> models.Submission:
+    # Check if a submission with the same track_url exists
+    existing_submission = db.query(models.Submission).filter(models.Submission.track_url == track_url).first()
+
+    if existing_submission:
+        # If it exists, increment the submission_count and add a new reviewer association
+        existing_submission.submission_count += 1
+        new_submission_reviewer = models.SubmissionReviewer(
+            submission_id=existing_submission.id,
+            reviewer_id=reviewer_id
+        )
+        db.add(new_submission_reviewer)
+        db.commit()
+        db.refresh(existing_submission)
+        new_submission = existing_submission
+    else:
+        # If it doesn't exist, create a new submission
+        new_submission = models.Submission(
+            reviewer_id=reviewer_id,
+            user_id=user_id,
+            track_url=track_url,
+            status='pending',
+            artist=artist,
+            title=title
+        )
+        db.add(new_submission)
+        db.commit()
+        db.refresh(new_submission)
+
+        # Add the first reviewer association
+        new_submission_reviewer = models.SubmissionReviewer(
+            submission_id=new_submission.id,
+            reviewer_id=reviewer_id
+        )
+        db.add(new_submission_reviewer)
+        db.commit()
 
     # Emit a queue update
     new_queue = get_pending_queue(db, reviewer_id)
@@ -103,8 +128,20 @@ def get_reviewer_by_channel_id(db: Session, channel_id: str) -> Optional[models.
         (models.Reviewer.queue_channel_id == channel_id_str)
     ).first()
 
+from sqlalchemy.orm import joinedload
+
 def get_submissions_by_user(db: Session, user_id: int) -> list[models.Submission]:
-    return db.query(models.Submission).filter(models.Submission.user_id == user_id).all()
+    """
+    Retrieves all submissions by a specific user, along with the reviewers
+    for each submission.
+    """
+    return (
+        db.query(models.Submission)
+        .filter(models.Submission.user_id == user_id)
+        .options(joinedload(models.Submission.reviewers).joinedload(models.SubmissionReviewer.reviewer))
+        .order_by(models.Submission.submitted_at.desc())
+        .all()
+    )
 
 def advance_queue_and_get_user(db: Session, reviewer_id: int) -> Optional[tuple[models.Submission, str]]:
     submission = db.query(models.Submission).filter(

@@ -20,6 +20,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     discord_id = Column(String, unique=True, index=True, nullable=False)
     username = Column(String, nullable=False)
+    avatar = Column(String, nullable=True)
     tiktok_username = Column(String, unique=True, nullable=True)
 
     reviewer_profile = relationship("Reviewer", back_populates="user", uselist=False)
@@ -62,6 +63,21 @@ class Submission(Base):
     user = relationship("User", back_populates="submissions")
 
     __table_args__ = (Index("ix_submission_reviewer_id_status", "reviewer_id", "status"),)
+
+    artist = Column(String, nullable=True)
+    title = Column(String, nullable=True)
+    submission_count = Column(Integer, default=1, nullable=False)
+    reviewers = relationship("SubmissionReviewer", back_populates="submission")
+
+
+class SubmissionReviewer(Base):
+    __tablename__ = "submission_reviewers"
+    id = Column(Integer, primary_key=True, index=True)
+    submission_id = Column(Integer, ForeignKey("submissions.id"), nullable=False)
+    reviewer_id = Column(Integer, ForeignKey("reviewers.id"), nullable=False)
+
+    submission = relationship("Submission", back_populates="reviewers")
+    reviewer = relationship("Reviewer")
 
 
 class EconomyConfig(Base):

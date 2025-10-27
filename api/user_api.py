@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
+from typing import List
 
 import schemas
 import security
@@ -29,7 +30,7 @@ async def get_my_balance(
         balance = economy_service.get_total_balance(db, user_id=user.id)
     return {"balance": balance}
 
-@router.get("/me/submissions")
+@router.get("/me/submissions", response_model=List[schemas.SubmissionDetail])
 async def get_my_submissions(
     current_user: schemas.TokenData = Depends(security.get_current_user),
     db: Session = Depends(get_db),

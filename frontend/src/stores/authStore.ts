@@ -7,6 +7,7 @@ interface User {
   id: number;
   discord_id: string;
   username: string;
+  avatar: string | null;
   reviewer_profile: {
     id: number;
   } | null;
