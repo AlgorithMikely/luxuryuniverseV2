@@ -30,10 +30,11 @@ async def get_my_balance(
         balance = economy_service.get_total_balance(db, user_id=user.id)
     return {"balance": balance}
 
-@router.get("/me/submissions", response_model=List[schemas.SubmissionDetail])
+@router.get("/me/submissions", response_model=schemas.UserSubmissionsResponse)
 async def get_my_submissions(
     current_user: schemas.TokenData = Depends(security.get_current_user),
     db: Session = Depends(get_db),
 ):
     user = user_service.get_user_by_discord_id(db, current_user.discord_id)
-    return queue_service.get_submissions_by_user(db, user_id=user.id)
+    submissions = queue_service.get_submissions_by_user(db, user_id=user.id)
+    return schemas.UserSubmissionsResponse(user=user, submissions=submissions)

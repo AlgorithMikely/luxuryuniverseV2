@@ -4,12 +4,20 @@ from typing import List
 class UserBase(BaseModel):
     discord_id: str
     username: str
+    avatar: str | None = None
 
 class UserCreate(UserBase):
     pass
 
 class User(UserBase):
     id: int
+
+    class Config:
+        from_attributes = True
+
+class UserSubmissionsResponse(BaseModel):
+    user: User
+    submissions: List["SubmissionDetail"]
 
     class Config:
         from_attributes = True

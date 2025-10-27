@@ -20,14 +20,6 @@ interface Submission {
   }[];
 }
 
-interface UserSubmissionsResponse {
-  user: {
-    username: string;
-    avatar: string;
-  };
-  submissions: Submission[];
-}
-
 const UserHubPage = () => {
   const [balance, setBalance] = useState(0);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -42,7 +34,7 @@ const UserHubPage = () => {
         setIsLoading(true);
         const [balanceRes, submissionsRes] = await Promise.all([
           api.get(`/user/me/balance`),
-          api.get<UserSubmissionsResponse>("/user/me/submissions"),
+          api.get("/user/me/submissions"),
         ]);
         setBalance(balanceRes.data.balance);
         setSubmissions(submissionsRes.data.submissions);
