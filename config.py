@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     DISCORD_TOKEN: str = "your_discord_token_here"
     SECRET_KEY: str = "a_very_secret_key"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 129600 # 90 days
 
     # Database settings
     POSTGRES_SERVER: str = "localhost"
