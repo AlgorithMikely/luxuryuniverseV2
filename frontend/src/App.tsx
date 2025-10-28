@@ -35,15 +35,15 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route path="/" element={<LoginPage />} />
             <Route
-              path="/hub"
+              path="*"
               element={
                 <ProtectedRoute>
                   <UserHubPage />
                 </ProtectedRoute>
               }
             />
-            <Route path="/" element={<LoginPage />} />
           </Routes>
         </BrowserRouter>
       </ErrorBoundary>
