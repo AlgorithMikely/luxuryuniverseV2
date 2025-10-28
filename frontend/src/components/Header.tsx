@@ -13,9 +13,12 @@ interface Reviewer {
 const Header = () => {
   const { user, logout } = useAuthStore();
   const [reviewers, setReviewers] = useState<Reviewer[]>([]);
+  // Dedicated state to safely manage the dropdown's controlled value
+  const [selectedReviewer, setSelectedReviewer] = useState<string>("");
   const navigate = useNavigate();
   const { reviewerId } = useParams<{ reviewerId: string }>();
 
+  // Effect to fetch the list of reviewers for admin users
   useEffect(() => {
     const fetchReviewers = async () => {
       if (user && user.roles.includes("admin")) {
@@ -30,16 +33,27 @@ const Header = () => {
     fetchReviewers();
   }, [user]);
 
+  // Effect to safely synchronize the selected value with the URL and the fetched data
+  useEffect(() => {
+    // Check if the reviewerId from the URL exists in our fetched list
+    const isValidReviewer = reviewers.some(
+      (r) => r.id.toString() === reviewerId
+    );
+
+    if (isValidReviewer) {
+      // If it's a valid selection, update our state to match the URL
+      setSelectedReviewer(reviewerId!);
+    } else {
+      // Otherwise, reset to the default (unselected) state
+      setSelectedReviewer("");
+    }
+    // This logic runs whenever the URL or the list of reviewers changes
+  }, [reviewerId, reviewers]);
+
   const handleLogout = () => {
     logout();
     navigate("/login");
   };
-
-  // Prevent React error by ensuring the select's value exists as an option.
-  // If the reviewerId from the URL isn't in the fetched list yet, default to "".
-  const currentSelection = reviewers.some((r) => r.id.toString() === reviewerId)
-    ? reviewerId
-    : "";
 
   return (
     <header className="bg-gray-800 p-4 shadow-md">
@@ -49,16 +63,14 @@ const Header = () => {
           {user && user.roles.includes("admin") && (
             <div className="relative">
               <select
-                value={currentSelection}
+                value={selectedReviewer} // Bind to our safe state variable
                 onChange={(e) => navigate(`/dashboard/${e.target.value}`)}
                 className="bg-gray-700 text-white p-2 rounded"
               >
-                {/* The placeholder option is only shown when no valid reviewer is selected */}
-                {!currentSelection && (
-                  <option value="" disabled>
-                    Select a Reviewer
-                  </option>
-                )}
+                {/* This default option is selected when selectedReviewer is "" */}
+                <option value="" disabled>
+                  Select a Reviewer
+                </option>
                 {reviewers.map((reviewer) => (
                   <option key={reviewer.id} value={reviewer.id}>
                     {reviewer.user.username}
