@@ -2,7 +2,8 @@ import discord
 from discord.ext import commands
 import io
 import yt_dlp
-from services import queue_service, user_service, event_service
+from services import queue_service, user_service
+import event_service
 import asyncio
 
 class PassiveSubmissionCog(commands.Cog):
