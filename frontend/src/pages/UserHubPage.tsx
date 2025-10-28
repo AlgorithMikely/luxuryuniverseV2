@@ -195,13 +195,13 @@ const UserHubPage = () => {
                     return (
                       <tr key={item.id || index} className="bg-gray-800">
                         <td className="p-2">
-                          <a 
-                            href={item.track_url || "#"} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
+                          <a
+                            href={item.track_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
                             className="text-purple-400 hover:underline"
                           >
-                            {item.track_url || "N/A"}
+                            {item.title || item.track_url}
                           </a>
                         </td>
                         <td className="p-2">{item.artist || "N/A"}</td>
