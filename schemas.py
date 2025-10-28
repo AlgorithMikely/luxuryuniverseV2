@@ -38,6 +38,9 @@ class Reviewer(BaseModel):
     id: int
     user: User
 
+    class Config:
+        from_attributes = True
+
 class SubmissionReviewer(BaseModel):
     reviewer: Reviewer
 
