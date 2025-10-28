@@ -8,11 +8,13 @@ class Settings(BaseSettings):
     @field_validator('ADMIN_DISCORD_IDS', mode='before')
     def split_string(cls, v: Any) -> List[str]:
         if isinstance(v, str):
-            return [id.strip() for id in v.split(',')]
+            return [id.strip() for id in v.split(',') if id.strip()]
         if isinstance(v, (int, float)):
-             return [str(v)]
+            return [str(v)]
         if isinstance(v, list):
-            return v
+            # Ensure all elements in the list are strings
+            return [str(item).strip() for item in v]
+        # Return an empty list if the input is not a recognized type
         return []
     # Core settings
     DISCORD_TOKEN: str = "your_discord_token_here"
