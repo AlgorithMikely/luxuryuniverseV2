@@ -6,6 +6,7 @@ from services import queue_service, user_service
 import event_service
 import asyncio
 import logging
+import schemas
 
 class PassiveSubmissionCog(commands.Cog):
     def __init__(self, bot):
@@ -65,8 +66,9 @@ class PassiveSubmissionCog(commands.Cog):
             # We need a new session for these async-context db calls
             with self.bot.SessionLocal() as db:
                 # 1. Emit the queue update event
-                new_queue = queue_service.get_pending_queue(db, reviewer.id)
-                await event_service.emit_queue_update(reviewer.id, [s.__dict__ for s in new_queue])
+                new_queue_models = queue_service.get_pending_queue(db, reviewer.id)
+                new_queue_schemas = [schemas.SubmissionDetail.from_orm(s) for s in new_queue_models]
+                await event_service.emit_queue_update(reviewer.id, [s.dict() for s in new_queue_schemas])
 
                 # 2. Copy file/link to the files channel
                 if reviewer.files_and_links_channel_id:
