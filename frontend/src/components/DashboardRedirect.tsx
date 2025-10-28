@@ -9,7 +9,9 @@ const DashboardRedirect = () => {
 
   useEffect(() => {
     if (user) {
-      if (user.reviewer_profile) {
+      if (user.roles.includes("admin")) {
+        navigate("/admin");
+      } else if (user.reviewer_profile) {
         navigate(`/dashboard/${user.reviewer_profile.id}`);
       } else {
         navigate("/hub");

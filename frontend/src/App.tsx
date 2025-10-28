@@ -5,6 +5,7 @@ import LoginPage from "./pages/LoginPage";
 import AuthCallbackPage from "./pages/AuthCallbackPage";
 import DashboardPage from "./pages/DashboardPage";
 import DashboardRedirect from "./components/DashboardRedirect";
+import AdminDashboardPage from "./pages/AdminDashboardPage";
 import UserHubPage from "./pages/UserHubPage";
 import ErrorPage from "./pages/ErrorPage";
 import { Toaster } from "react-hot-toast";
@@ -32,6 +33,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <DashboardRedirect />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute>
+                  <AdminDashboardPage />
                 </ProtectedRoute>
               }
             />
