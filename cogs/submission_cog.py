@@ -5,6 +5,7 @@ import yt_dlp
 from services import queue_service, user_service
 import event_service
 import asyncio
+import logging
 
 class PassiveSubmissionCog(commands.Cog):
     def __init__(self, bot):
@@ -12,13 +13,14 @@ class PassiveSubmissionCog(commands.Cog):
 
     def _process_submission(self, author_id, author_name, author_avatar, reviewer_id, submission_url: str):
         """Synchronous function to handle blocking operations, with its own db session."""
-        with self.bot.SessionLocal() as db:
-            # Use yt-dlp to validate the URL
-            with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True}) as ydl:
-                info_dict = ydl.extract_info(submission_url, download=False)
-                if not info_dict:
-                    raise ValueError("Invalid link")
+        # Step 1: Validate the URL *before* any database operations.
+        with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True}) as ydl:
+            info_dict = ydl.extract_info(submission_url, download=False)
+            if not info_dict:
+                raise ValueError("Invalid link")
 
+        # Step 2: If validation succeeds, then open a database session.
+        with self.bot.SessionLocal() as db:
             user = user_service.get_or_create_user(db, str(author_id), author_name, str(author_avatar))
 
             artist = info_dict.get('artist')
@@ -90,7 +92,7 @@ class PassiveSubmissionCog(commands.Cog):
                     print(f"Failed to delete message {message.id}: {e}")
 
         except Exception as e:
-            print(f"An error occurred processing submission: {e}")
+            logging.exception("An error occurred processing submission.")
             await message.add_reaction("❌")
             try:
                 await message.author.send(f"Sorry, your submission in #{message.channel.name} failed: An unexpected error occurred.")
