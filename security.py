@@ -17,7 +17,7 @@ def create_access_token(data: dict):
 
 def verify_token(token: str, credentials_exception) -> schemas.TokenData:
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM], options={"verify_exp": True})
         discord_id: str = payload.get("sub")
         roles: List[str] = payload.get("roles", [])
         if discord_id is None:
