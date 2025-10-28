@@ -138,7 +138,11 @@ def get_submissions_by_user(db: Session, user_id: int) -> list[models.Submission
     return (
         db.query(models.Submission)
         .filter(models.Submission.user_id == user_id)
-        .options(joinedload(models.Submission.reviewers).joinedload(models.SubmissionReviewer.reviewer))
+        .options(
+            joinedload(models.Submission.reviewers)
+            .joinedload(models.SubmissionReviewer.reviewer)
+            .joinedload(models.Reviewer.user)
+        )
         .order_by(models.Submission.submitted_at.desc())
         .all()
     )

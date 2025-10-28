@@ -45,15 +45,8 @@ const UserHubPage = () => {
           api.get<UserSubmissionsResponse>("/user/me/submissions"),
         ]);
 
-        if (submissionsRes.data && submissionsRes.data.user) {
-          setBalance(balanceRes.data.balance);
-          setSubmissions(submissionsRes.data.submissions);
-        } else {
-          // Handle case where user data might not be ready
-          console.warn("User data not found in submissions response, will retry...");
-          setTimeout(fetchInitialData, 1000); // Retry after 1 second
-          return;
-        }
+        setBalance(balanceRes.data.balance);
+        setSubmissions(submissionsRes.data.submissions || []);
       } catch (error) {
         console.error("Failed to fetch user data:", error);
         // Optionally handle the error, e.g., show an error message
@@ -139,7 +132,7 @@ const UserHubPage = () => {
                   <td className="p-2 capitalize">{item.status}</td>
                   <td className="p-2">{item.submission_count}</td>
                   <td className="p-2">
-                    {item.reviewers.map(r => r.reviewer.user.username).join(", ")}
+                    {item.reviewers.map(r => r.reviewer?.user?.username).join(", ")}
                   </td>
                 </tr>
               ))}
