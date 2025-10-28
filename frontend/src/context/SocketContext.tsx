@@ -1,3 +1,4 @@
+
 import { createContext, useContext, useEffect, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import { useAuthStore } from "../stores/authStore";
@@ -14,7 +15,8 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     if (token) {
-      const newSocket = io({
+      // Specify the backend URL explicitly
+      const newSocket = io("http://localhost:8000", {
         path: "/socket.io/",
         auth: { token },
       });
@@ -40,6 +42,6 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
   }, [token, logout]);
 
   return (
-    <SocketContext.Provider value={socket}>{children}</SocketContext.Provider>
+      <SocketContext.Provider value={socket}>{children}</SocketContext.Provider>
   );
 };
