@@ -41,6 +41,9 @@ class Reviewer(BaseModel):
 class SubmissionReviewer(BaseModel):
     reviewer: Reviewer
 
+    class Config:
+        from_attributes = True
+
 class SubmissionDetail(BaseModel):
     id: int
     track_url: str
