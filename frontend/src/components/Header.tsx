@@ -13,15 +13,17 @@ interface Reviewer {
 const Header = () => {
   const { user, logout } = useAuthStore();
   const [reviewers, setReviewers] = useState<Reviewer[]>([]);
-  // Dedicated state to safely manage the dropdown's controlled value
   const [selectedReviewer, setSelectedReviewer] = useState<string>("");
   const navigate = useNavigate();
   const { reviewerId } = useParams<{ reviewerId: string }>();
 
-  // Effect to fetch the list of reviewers for admin users
+  // A memoized value to safely check if the user is an admin
+  const isAdmin = user && Array.isArray(user.roles) && user.roles.includes("admin");
+
   useEffect(() => {
     const fetchReviewers = async () => {
-      if (user && user.roles.includes("admin")) {
+      // Only fetch reviewers if the user is an admin
+      if (isAdmin) {
         try {
           const response = await api.get<Reviewer[]>("/admin/reviewers");
           setReviewers(response.data);
@@ -31,23 +33,20 @@ const Header = () => {
       }
     };
     fetchReviewers();
-  }, [user]);
+  }, [isAdmin]); // Dependency array ensures this runs only when admin status changes
 
-  // Effect to safely synchronize the selected value with the URL and the fetched data
   useEffect(() => {
-    // Check if the reviewerId from the URL exists in our fetched list
-    const isValidReviewer = reviewers.some(
-      (r) => r.id.toString() === reviewerId
-    );
-
-    if (isValidReviewer) {
-      // If it's a valid selection, update our state to match the URL
-      setSelectedReviewer(reviewerId!);
-    } else {
-      // Otherwise, reset to the default (unselected) state
-      setSelectedReviewer("");
+    // Only perform this logic if there are reviewers to check against
+    if (reviewers.length > 0) {
+      const isValidReviewer = reviewers.some(
+        (r) => r.id.toString() === reviewerId
+      );
+      if (isValidReviewer) {
+        setSelectedReviewer(reviewerId!);
+      } else {
+        setSelectedReviewer("");
+      }
     }
-    // This logic runs whenever the URL or the list of reviewers changes
   }, [reviewerId, reviewers]);
 
   const handleLogout = () => {
@@ -60,14 +59,14 @@ const Header = () => {
       <div className="max-w-7xl mx-auto flex justify-between items-center">
         <h1 className="text-xl font-bold text-white">Universe Bot</h1>
         <div className="flex items-center space-x-4">
-          {user && user.roles.includes("admin") && (
+          {/* Use the safe isAdmin check for conditional rendering */}
+          {isAdmin && (
             <div className="relative">
               <select
-                value={selectedReviewer} // Bind to our safe state variable
+                value={selectedReviewer}
                 onChange={(e) => navigate(`/dashboard/${e.target.value}`)}
                 className="bg-gray-700 text-white p-2 rounded"
               >
-                {/* This default option is selected when selectedReviewer is "" */}
                 <option value="" disabled>
                   Select a Reviewer
                 </option>
