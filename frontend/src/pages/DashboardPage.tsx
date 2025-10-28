@@ -29,6 +29,9 @@ const DashboardPage = () => {
   const { queue, setQueue } = useQueueStore();
   const { reviewerId } = useParams();
 
+  // Safely determine if the current user is an admin
+  const isAdmin = user && Array.isArray(user.roles) && user.roles.includes("admin");
+
   useEffect(() => {
     const fetchQueue = async () => {
       if (reviewerId) {
@@ -51,7 +54,8 @@ const DashboardPage = () => {
   useEffect(() => {
     const fetchCurrentReviewerName = async () => {
       if (!user) return;
-      if (user.roles.includes("admin")) {
+      // Use the safe isAdmin check here
+      if (isAdmin) {
         try {
           const response = await api.get("/admin/reviewers");
           const currentReviewer = response.data.find(
@@ -63,15 +67,16 @@ const DashboardPage = () => {
             setCurrentReviewerName(user.username);
           }
         } catch (error) {
-            console.error("Failed to fetch reviewers for name lookup", error)
-            setCurrentReviewerName(user.username);
+          console.error("Failed to fetch reviewers for name lookup", error);
+          setCurrentReviewerName(user.username);
         }
       } else {
+        // Non-admin users will just see their own name
         setCurrentReviewerName(user.username);
       }
     };
     fetchCurrentReviewerName();
-  }, [user, reviewerId]);
+  }, [user, reviewerId, isAdmin]); // Add isAdmin to the dependency array
 
 
   useEffect(() => {
