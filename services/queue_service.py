@@ -5,7 +5,7 @@ import event_service
 import datetime
 import asyncio
 
-async def create_submission(db: Session, reviewer_id: int, user_id: int, track_url: str, artist: str = None, title: str = None) -> models.Submission:
+def create_submission(db: Session, reviewer_id: int, user_id: int, track_url: str, artist: str = None, title: str = None) -> models.Submission:
     # Check if a submission with the same track_url exists
     existing_submission = db.query(models.Submission).filter(models.Submission.track_url == track_url).first()
 
@@ -41,10 +41,6 @@ async def create_submission(db: Session, reviewer_id: int, user_id: int, track_u
         )
         db.add(new_submission_reviewer)
         db.commit()
-
-    # Emit a queue update
-    new_queue = get_pending_queue(db, reviewer_id)
-    await event_service.emit_queue_update(reviewer_id, [s.__dict__ for s in new_queue])
 
     return new_submission
 
