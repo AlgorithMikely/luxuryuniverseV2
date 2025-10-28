@@ -15,14 +15,6 @@ class User(UserBase):
     class Config:
         from_attributes = True
 
-
-class UserSubmissionsResponse(BaseModel):
-    user: User
-    submissions: List["SubmissionDetail"]
-
-    class Config:
-        from_attributes = True
-
 class ReviewerProfile(BaseModel):
     id: int
     tiktok_handle: str | None = None
@@ -60,3 +52,12 @@ class SubmissionDetail(BaseModel):
 
     class Config:
         from_attributes = True
+
+class UserSubmissionsResponse(BaseModel):
+    user: User
+    submissions: List["SubmissionDetail"]
+
+    class Config:
+        from_attributes = True
+
+UserSubmissionsResponse.model_rebuild()

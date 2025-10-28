@@ -37,17 +37,31 @@ const UserHubPage = () => {
   const socket = useSocket();
 
   useEffect(() => {
-    if (user) {
-      const fetchInitialData = async () => {
-        setIsLoading(true);
+    const fetchInitialData = async () => {
+      setIsLoading(true);
+      try {
         const [balanceRes, submissionsRes] = await Promise.all([
           api.get(`/user/me/balance`),
           api.get<UserSubmissionsResponse>("/user/me/submissions"),
         ]);
-        setBalance(balanceRes.data.balance);
-        setSubmissions(submissionsRes.data.submissions);
-        setIsLoading(false);
-      };
+
+        if (submissionsRes.data && submissionsRes.data.user) {
+          setBalance(balanceRes.data.balance);
+          setSubmissions(submissionsRes.data.submissions);
+        } else {
+          // Handle case where user data might not be ready
+          console.warn("User data not found in submissions response, will retry...");
+          setTimeout(fetchInitialData, 1000); // Retry after 1 second
+          return;
+        }
+      } catch (error) {
+        console.error("Failed to fetch user data:", error);
+        // Optionally handle the error, e.g., show an error message
+      }
+      setIsLoading(false);
+    };
+
+    if (user) {
       fetchInitialData();
     }
   }, [user]);
@@ -66,7 +80,7 @@ const UserHubPage = () => {
     };
   }, [socket]);
 
-  if (isLoading) {
+  if (isLoading || !user) {
     return <div className="text-white text-center p-8">Loading your hub...</div>
   }
 
