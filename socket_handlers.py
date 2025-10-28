@@ -28,7 +28,8 @@ async def connect(sid, environ, auth):
     try:
         user, reviewer = await asyncio.to_thread(db_operations)
     except ConnectionRefusedError as e:
-        raise e
+        print(f"Socket connection refused for sid {sid}: {e}")
+        return False
 
     # Add user to a room for their own user-specific events
     await sio.enter_room(sid, f"user_room_{user.id}")
