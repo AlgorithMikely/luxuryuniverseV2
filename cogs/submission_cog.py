@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+import io
 import yt_dlp
 from services import queue_service, user_service
 
@@ -39,13 +40,27 @@ class PassiveSubmissionCog(commands.Cog):
                 if reviewer.files_and_links_channel_id:
                     files_and_links_channel = self.bot.get_channel(int(reviewer.files_and_links_channel_id))
                     if files_and_links_channel:
-                        await files_and_links_channel.send(f"Submission from {message.author.mention}: {submission_url}")
+                        if message.attachments:
+                            # If there's an attachment, download and re-upload it
+                            attachment = message.attachments[0]
+                            file_content = await attachment.read()
+                            discord_file = discord.File(io.BytesIO(file_content), filename=attachment.filename)
+                            await files_and_links_channel.send(f"Submission from {message.author.mention}:", file=discord_file)
+                        else:
+                            # If it's just a link, send the link
+                            await files_and_links_channel.send(f"Submission from {message.author.mention}: {submission_url}")
 
                 artist = info_dict.get('artist')
                 title = info_dict.get('title')
                 await queue_service.create_submission(db, reviewer.id, user.id, submission_url, artist, title)
                 await message.add_reaction("✅")
-                await message.delete()
+
+                try:
+                    await message.delete()
+                except discord.Forbidden:
+                    print(f"Failed to delete message {message.id}: Missing 'Manage Messages' permission.")
+                except discord.HTTPException as e:
+                    print(f"Failed to delete message {message.id}: {e}")
 
             except (yt_dlp.utils.DownloadError, ValueError):
                 await message.add_reaction("❌")
