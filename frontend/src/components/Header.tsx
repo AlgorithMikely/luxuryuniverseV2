@@ -14,13 +14,13 @@ const Header = () => {
   const { user, logout } = useAuthStore();
   const [reviewers, setReviewers] = useState<Reviewer[]>([]);
   const navigate = useNavigate();
-  const { reviewerId } = useParams();
+  const { reviewerId } = useParams<{ reviewerId: string }>();
 
   useEffect(() => {
     const fetchReviewers = async () => {
       if (user && user.roles.includes("admin")) {
         try {
-          const response = await api.get("/admin/reviewers");
+          const response = await api.get<Reviewer[]>("/admin/reviewers");
           setReviewers(response.data);
         } catch (error) {
           console.error("Failed to fetch reviewers:", error);
@@ -35,6 +35,12 @@ const Header = () => {
     navigate("/login");
   };
 
+  // Prevent React error by ensuring the select's value exists as an option.
+  // If the reviewerId from the URL isn't in the fetched list yet, default to "".
+  const currentSelection = reviewers.some((r) => r.id.toString() === reviewerId)
+    ? reviewerId
+    : "";
+
   return (
     <header className="bg-gray-800 p-4 shadow-md">
       <div className="max-w-7xl mx-auto flex justify-between items-center">
@@ -43,13 +49,16 @@ const Header = () => {
           {user && user.roles.includes("admin") && (
             <div className="relative">
               <select
-                value={reviewerId || ""}
+                value={currentSelection}
                 onChange={(e) => navigate(`/dashboard/${e.target.value}`)}
                 className="bg-gray-700 text-white p-2 rounded"
               >
-                <option value="" disabled>
-                  Select a Reviewer
-                </option>
+                {/* The placeholder option is only shown when no valid reviewer is selected */}
+                {!currentSelection && (
+                  <option value="" disabled>
+                    Select a Reviewer
+                  </option>
+                )}
                 {reviewers.map((reviewer) => (
                   <option key={reviewer.id} value={reviewer.id}>
                     {reviewer.user.username}
