@@ -140,10 +140,12 @@ const UserHubPage = () => {
     <div className="bg-gray-900 text-white min-h-screen">
       <Header />
       <div className="p-4 sm:p-8">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-4">Your Hub</h1>
-        <div className="mb-4 p-4 bg-gray-800 rounded-lg shadow">
-          <h2 className="text-2xl font-bold">Balance: {balance} Luxury Coins</h2>
+        <div className="max-w-4xl mx-auto">
+          <h1 className="text-3xl font-bold mb-4">Your Hub</h1>
+          <div className="mb-4 p-4 bg-gray-800 rounded-lg shadow">
+            <h2 className="text-2xl font-bold">
+              Balance: {balance} Luxury Coins
+            </h2>
         </div>
         <div>
           <h2 className="text-2xl font-bold mb-2">Your Submissions</h2>
