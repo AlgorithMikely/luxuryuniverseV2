@@ -9,53 +9,53 @@ import AdminDashboardPage from "./pages/AdminDashboardPage";
 import UserHubPage from "./pages/UserHubPage";
 import ErrorPage from "./pages/ErrorPage";
 import { Toaster } from "react-hot-toast";
-import { ErrorBoundary } from "react-error-boundary";
+import ErrorBoundary from "./components/ErrorBoundary"; // Import the new ErrorBoundary
 
 function App() {
   return (
     <SocketProvider>
       <Toaster />
-      <ErrorBoundary FallbackComponent={ErrorPage}>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/auth/callback" element={<AuthCallbackPage />} />
-            <Route
-              path="/dashboard/:reviewerId"
-              element={
-                <ProtectedRoute>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/auth/callback" element={<AuthCallbackPage />} />
+          <Route
+            path="/dashboard/:reviewerId"
+            element={
+              <ProtectedRoute>
+                <ErrorBoundary>
                   <DashboardPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <DashboardRedirect />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin"
-              element={
-                <ProtectedRoute>
-                  <AdminDashboardPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route path="/" element={<LoginPage />} />
-            <Route
-              path="*"
-              element={
-                <ProtectedRoute>
-                  <UserHubPage />
-                </ProtectedRoute>
-              }
-            />
-          </Routes>
-        </BrowserRouter>
-      </ErrorBoundary>
+                </ErrorBoundary>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <DashboardRedirect />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <AdminDashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/" element={<LoginPage />} />
+          <Route
+            path="*"
+            element={
+              <ProtectedRoute>
+                <UserHubPage />
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </BrowserRouter>
     </SocketProvider>
   );
 }
