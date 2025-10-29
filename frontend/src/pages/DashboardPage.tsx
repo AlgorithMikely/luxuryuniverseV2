@@ -124,7 +124,15 @@ const DashboardPage = () => {
     if (submission.title && submission.artist) {
       return `${submission.title} - ${submission.artist}`;
     }
-    return submission.track_url;
+    // Fallback to filename if title and artist are not available
+    try {
+      const url = new URL(submission.track_url);
+      const pathnameParts = url.pathname.split('/');
+      return pathnameParts[pathnameParts.length - 1] || submission.track_url;
+    } catch (error) {
+      // If the URL is malformed, just return the original URL
+      return submission.track_url;
+    }
   };
 
   if (!user) {
