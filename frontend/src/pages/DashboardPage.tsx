@@ -174,6 +174,7 @@ const DashboardPage = () => {
             {currentTrack ? (
               <>
                 <WaveformPlayer
+                  key={currentTrack.id}
                   src={currentTrack.track_url}
                   header={getTrackDisplayName(currentTrack)}
                 />
