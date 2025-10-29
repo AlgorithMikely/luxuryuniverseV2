@@ -5,6 +5,8 @@ import { useSocket } from "../context/SocketContext";
 import { useQueueStore } from "../stores/queueStore";
 import { useParams } from "react-router-dom";
 import Header from "../components/Header";
+import AudioPlayer from "react-h5-audio-player";
+import "react-h5-audio-player/lib/styles.css";
 
 interface Reviewer {
   id: number;
@@ -26,6 +28,7 @@ const DashboardPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [history, setHistory] = useState<Submission[]>([]);
   const [currentReviewerName, setCurrentReviewerName] = useState<string>("");
+  const [currentTrack, setCurrentTrack] = useState<Submission | null>(null);
   const { user } = useAuthStore();
   const socket = useSocket();
   const { queue, setQueue } = useQueueStore();
@@ -40,6 +43,9 @@ const DashboardPage = () => {
         setIsLoading(true);
         const response = await api.get(`/${reviewerId}/queue`);
         setQueue(response.data);
+        if (response.data.length > 0) {
+          setCurrentTrack(response.data[0]);
+        }
         setIsLoading(false);
       }
     };
@@ -87,6 +93,11 @@ const DashboardPage = () => {
     socket.on("queue_updated", (newQueueData: any[]) => {
       console.log("Queue was updated by server!");
       setQueue(newQueueData);
+      if (newQueueData.length > 0) {
+        setCurrentTrack(newQueueData[0]);
+      } else {
+        setCurrentTrack(null);
+      }
     });
 
     return () => {
@@ -158,9 +169,15 @@ const DashboardPage = () => {
           {currentReviewerName}'s Reviewer Dashboard
         </h1>
           <div className="mb-4">
+            <AudioPlayer
+              src={currentTrack ? currentTrack.track_url : ""}
+              header={currentTrack ? getTrackDisplayName(currentTrack) : "No song in queue"}
+              onPlay={e => console.log("onPlay")}
+              // other props here
+            />
             <button
               onClick={handleNextTrack}
-              className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded w-full sm:w-auto"
+              className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded w-full sm:w-auto mt-4"
             >
               Next Track
             </button>
