@@ -169,6 +169,12 @@ const DashboardPage = () => {
           {currentReviewerName}'s Reviewer Dashboard
         </h1>
           <div className="mb-4">
+            {currentTrack && (
+              <div className="mb-4">
+                <h2 className="text-2xl font-bold">Now Playing</h2>
+                <p>{getTrackDisplayName(currentTrack)}</p>
+              </div>
+            )}
             <AudioPlayer
               src={currentTrack ? currentTrack.track_url : ""}
               header={currentTrack ? getTrackDisplayName(currentTrack) : "No song in queue"}
@@ -188,7 +194,7 @@ const DashboardPage = () => {
               <div className="text-center p-4">Loading queue...</div>
             ) : (
               <ul className="space-y-2">
-                {queue.map((item: Submission) => (
+                {queue.filter(item => item.id !== currentTrack?.id).map((item: Submission) => (
                   <li key={item.id} className="p-3 bg-gray-800 rounded-lg shadow flex justify-between items-center">
                     <a
                       href={item.track_url}
