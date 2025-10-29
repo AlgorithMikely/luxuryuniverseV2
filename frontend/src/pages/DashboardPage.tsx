@@ -16,6 +16,8 @@ interface Reviewer {
 interface Submission {
   id: number;
   track_url: string;
+  title: string | null;
+  artist: string | null;
   is_spotlighted: boolean;
   is_bookmarked: boolean;
 }
@@ -118,6 +120,13 @@ const DashboardPage = () => {
     }
   };
 
+  const getTrackDisplayName = (submission: Submission) => {
+    if (submission.title && submission.artist) {
+      return `${submission.title} - ${submission.artist}`;
+    }
+    return submission.track_url;
+  };
+
   if (!user) {
     return <div>Loading user...</div>;
   }
@@ -146,7 +155,14 @@ const DashboardPage = () => {
               <ul className="space-y-2">
                 {queue.map((item: Submission) => (
                   <li key={item.id} className="p-3 bg-gray-800 rounded-lg shadow flex justify-between items-center">
-                    <span>{item.track_url}</span>
+                    <a
+                      href={item.track_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-purple-400 hover:underline"
+                    >
+                      {getTrackDisplayName(item)}
+                    </a>
                     <div>
                       <button
                         onClick={() => handleSpotlight(item.id, !item.is_spotlighted)}
@@ -175,7 +191,14 @@ const DashboardPage = () => {
             <ul className="space-y-2">
               {history.map((item: Submission) => (
                 <li key={item.id} className="p-3 bg-gray-800 rounded-lg shadow">
-                  {item.track_url}
+                  <a
+                    href={item.track_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-purple-400 hover:underline"
+                  >
+                    {getTrackDisplayName(item)}
+                  </a>
                 </li>
               ))}
             </ul>
