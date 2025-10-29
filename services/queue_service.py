@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 import models
+import schemas
 from typing import Optional
 import event_service
 import datetime
@@ -76,8 +77,9 @@ async def spotlight_submission(db: Session, reviewer_id: int, submission_id: int
         db.commit()
         db.refresh(submission)
 
-        new_queue = get_pending_queue(db, reviewer_id)
-        await event_service.emit_queue_update(reviewer_id, [s.__dict__ for s in new_queue])
+        new_queue_models = get_pending_queue(db, reviewer_id)
+        new_queue_schemas = [schemas.SubmissionDetail.from_orm(s) for s in new_queue_models]
+        await event_service.emit_queue_update(reviewer_id, [s.dict() for s in new_queue_schemas])
 
     return submission
 
@@ -92,8 +94,9 @@ async def bookmark_submission(db: Session, reviewer_id: int, submission_id: int,
         db.commit()
         db.refresh(submission)
 
-        new_queue = get_pending_queue(db, reviewer_id)
-        await event_service.emit_queue_update(reviewer_id, [s.__dict__ for s in new_queue])
+        new_queue_models = get_pending_queue(db, reviewer_id)
+        new_queue_schemas = [schemas.SubmissionDetail.from_orm(s) for s in new_queue_models]
+        await event_service.emit_queue_update(reviewer_id, [s.dict() for s in new_queue_schemas])
 
     return submission
 
@@ -108,7 +111,10 @@ def set_queue_status(db: Session, reviewer_id: int, status: str):
 async def advance_queue(db: Session, reviewer_id: int) -> Optional[models.Submission]:
     submission = db.query(models.Submission).filter(
         models.Submission.reviewer_id == reviewer_id,
-        models.Submission.status == 'pending'
+        or_(
+            models.Submission.status == 'queued',
+            models.Submission.status == 'pending'
+        )
     ).order_by(models.Submission.submitted_at.asc()).first()
 
     if submission:
@@ -117,9 +123,9 @@ async def advance_queue(db: Session, reviewer_id: int) -> Optional[models.Submis
         db.commit()
         db.refresh(submission)
 
-        # Emit a queue update
-        new_queue = get_pending_queue(db, reviewer_id)
-        await event_service.emit_queue_update(reviewer_id, [s.__dict__ for s in new_queue])
+        new_queue_models = get_pending_queue(db, reviewer_id)
+        new_queue_schemas = [schemas.SubmissionDetail.from_orm(s) for s in new_queue_models]
+        await event_service.emit_queue_update(reviewer_id, [s.dict() for s in new_queue_schemas])
 
     return submission
 
@@ -155,7 +161,10 @@ def get_submissions_by_user(db: Session, user_id: int) -> list[models.Submission
 def advance_queue_and_get_user(db: Session, reviewer_id: int) -> Optional[tuple[models.Submission, str]]:
     submission = db.query(models.Submission).filter(
         models.Submission.reviewer_id == reviewer_id,
-        models.Submission.status == 'pending'
+        or_(
+            models.Submission.status == 'queued',
+            models.Submission.status == 'pending'
+        )
     ).order_by(models.Submission.submitted_at.asc()).first()
 
     if submission:
@@ -164,13 +173,12 @@ def advance_queue_and_get_user(db: Session, reviewer_id: int) -> Optional[tuple[
         db.commit()
         db.refresh(submission)
 
-        # Emit a queue update
-        new_queue = get_pending_queue(db, reviewer_id)
+        new_queue_models = get_pending_queue(db, reviewer_id)
+        new_queue_schemas = [schemas.SubmissionDetail.from_orm(s) for s in new_queue_models]
 
         async def emit_event():
-            await event_service.emit_queue_update(reviewer_id, [s.__dict__ for s in new_queue])
+            await event_service.emit_queue_update(reviewer_id, [s.dict() for s in new_queue_schemas])
 
-        # Run the async function in a separate thread to avoid blocking
         import threading
         threading.Thread(target=lambda: asyncio.run(emit_event())).start()
 
@@ -180,5 +188,8 @@ def advance_queue_and_get_user(db: Session, reviewer_id: int) -> Optional[tuple[
 def get_pending_queue_with_users(db: Session, reviewer_id: int) -> list[tuple[models.Submission, str]]:
     return db.query(models.Submission, models.User.discord_id).join(models.User).filter(
         models.Submission.reviewer_id == reviewer_id,
-        models.Submission.status == 'pending'
+        or_(
+            models.Submission.status == 'queued',
+            models.Submission.status == 'pending'
+        )
     ).order_by(models.Submission.submitted_at.asc()).all()
