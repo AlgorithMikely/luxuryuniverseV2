@@ -20,7 +20,6 @@ const WaveformPlayer: React.FC<WaveformPlayerProps> = ({ src, header }) => {
         cursorColor: "#673AB7",
         barWidth: 2,
         barRadius: 3,
-        responsive: true,
         height: 100,
       });
 
