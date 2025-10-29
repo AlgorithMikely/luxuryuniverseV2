@@ -5,8 +5,7 @@ import { useSocket } from "../context/SocketContext";
 import { useQueueStore } from "../stores/queueStore";
 import { useParams } from "react-router-dom";
 import Header from "../components/Header";
-import AudioPlayer from "react-h5-audio-player";
-import "react-h5-audio-player/lib/styles.css";
+import WaveformPlayer from "../components/WaveformPlayer";
 
 interface Reviewer {
   id: number;
@@ -170,17 +169,11 @@ const DashboardPage = () => {
         </h1>
           <div className="mb-4">
             {currentTrack && (
-              <div className="mb-4">
-                <h2 className="text-2xl font-bold">Now Playing</h2>
-                <p>{getTrackDisplayName(currentTrack)}</p>
-              </div>
+              <WaveformPlayer
+                src={currentTrack.track_url}
+                header={getTrackDisplayName(currentTrack)}
+              />
             )}
-            <AudioPlayer
-              src={currentTrack ? currentTrack.track_url : ""}
-              header={currentTrack ? getTrackDisplayName(currentTrack) : "No song in queue"}
-              onPlay={e => console.log("onPlay")}
-              // other props here
-            />
             <button
               onClick={handleNextTrack}
               className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded w-full sm:w-auto mt-4"
