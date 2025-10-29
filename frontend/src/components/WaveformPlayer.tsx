@@ -23,7 +23,8 @@ const WaveformPlayer: React.FC<WaveformPlayerProps> = ({ src, header }) => {
         height: 100,
       });
 
-      wavesurfer.current.load(src);
+      const proxyUrl = `/api/proxy/audio?url=${encodeURIComponent(src)}`;
+      wavesurfer.current.load(proxyUrl);
 
       wavesurfer.current.on("play", () => setIsPlaying(true));
       wavesurfer.current.on("pause", () => setIsPlaying(false));
