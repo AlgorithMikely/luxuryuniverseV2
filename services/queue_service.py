@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 import models
 from typing import Optional
 import event_service
@@ -26,7 +27,7 @@ def create_submission(db: Session, reviewer_id: int, user_id: int, track_url: st
             reviewer_id=reviewer_id,
             user_id=user_id,
             track_url=track_url,
-            status='pending',
+            status='queued',
             artist=artist,
             title=title
         )
@@ -45,9 +46,17 @@ def create_submission(db: Session, reviewer_id: int, user_id: int, track_url: st
     return new_submission
 
 def get_pending_queue(db: Session, reviewer_id: int) -> list[models.Submission]:
+    """
+    Retrieves all submissions that are currently in the queue for a specific
+    reviewer. This includes both 'queued' (free) and 'pending' (priority)
+    submissions.
+    """
     return db.query(models.Submission).filter(
         models.Submission.reviewer_id == reviewer_id,
-        models.Submission.status == 'pending'
+        or_(
+            models.Submission.status == 'queued',
+            models.Submission.status == 'pending'
+        )
     ).order_by(models.Submission.submitted_at.asc()).all()
 
 def get_played_queue(db: Session, reviewer_id: int) -> list[models.Submission]:
