@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
 
 interface Reviewer {
   id: number;
-  user: {
+  user?: { // Marking user as optional to handle potential malformed data
     username: string;
   };
 }
@@ -17,26 +17,25 @@ const Header = () => {
   const navigate = useNavigate();
   const { reviewerId } = useParams<{ reviewerId: string }>();
 
-  // A memoized value to safely check if the user is an admin
   const isAdmin = user && Array.isArray(user.roles) && user.roles.includes("admin");
 
   useEffect(() => {
     const fetchReviewers = async () => {
-      // Only fetch reviewers if the user is an admin
       if (isAdmin) {
         try {
           const response = await api.get<Reviewer[]>("/admin/reviewers");
-          setReviewers(response.data);
+          // Filter out any reviewers that are missing the 'user' object
+          const validReviewers = response.data.filter(r => r.user);
+          setReviewers(validReviewers);
         } catch (error) {
           console.error("Failed to fetch reviewers:", error);
         }
       }
     };
     fetchReviewers();
-  }, [isAdmin]); // Dependency array ensures this runs only when admin status changes
+  }, [isAdmin]);
 
   useEffect(() => {
-    // Only perform this logic if there are reviewers to check against
     if (reviewers.length > 0) {
       const isValidReviewer = reviewers.some(
         (r) => r.id.toString() === reviewerId
@@ -57,26 +56,36 @@ const Header = () => {
   return (
     <header className="bg-gray-800 p-4 shadow-md">
       <div className="max-w-7xl mx-auto flex justify-between items-center">
-        <h1 className="text-xl font-bold text-white">Universe Bot</h1>
+        <Link to="/hub" className="text-xl font-bold text-white">
+          Universe Bot
+        </Link>
         <div className="flex items-center space-x-4">
-          {/* Use the safe isAdmin check for conditional rendering */}
           {isAdmin && (
-            <div className="relative">
-              <select
-                value={selectedReviewer}
-                onChange={(e) => navigate(`/dashboard/${e.target.value}`)}
-                className="bg-gray-700 text-white p-2 rounded"
+            <>
+              <Link
+                to="/admin"
+                className="text-white hover:bg-gray-700 px-3 py-2 rounded-md text-sm font-medium"
               >
-                <option value="" disabled>
-                  Select a Reviewer
-                </option>
-                {reviewers.map((reviewer) => (
-                  <option key={reviewer.id} value={reviewer.id}>
-                    {reviewer.user.username}
+                Admin
+              </Link>
+              <div className="relative">
+                <select
+                  value={selectedReviewer}
+                  onChange={(e) => navigate(`/dashboard/${e.target.value}`)}
+                  className="bg-gray-700 text-white p-2 rounded"
+                >
+                  <option value="" disabled>
+                    Select a Reviewer
                   </option>
-                ))}
-              </select>
-            </div>
+                  {reviewers.map((reviewer) => (
+                    // The 'user' object is now guaranteed to exist due to the filter
+                    <option key={reviewer.id} value={reviewer.id}>
+                      {reviewer.user!.username}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
           )}
           {user && (
             <button
