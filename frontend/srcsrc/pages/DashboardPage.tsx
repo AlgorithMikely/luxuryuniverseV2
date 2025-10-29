@@ -5,6 +5,8 @@ import { useSocket } from "../context/SocketContext";
 import { useQueueStore } from "../stores/queueStore";
 import { useParams } from "react-router-dom";
 import Header from "../components/Header";
+import AudioPlayer from "react-h5-audio-player";
+import "react-h5-audio-player/lib/styles.css";
 
 interface Reviewer {
   id: number;
@@ -26,6 +28,7 @@ const DashboardPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [history, setHistory] = useState<Submission[]>([]);
   const [currentReviewerName, setCurrentReviewerName] = useState<string>("");
+  const [currentTrack, setCurrentTrack] = useState<Submission | null>(null);
   const { user } = useAuthStore();
   const socket = useSocket();
   const { queue, setQueue } = useQueueStore();
@@ -38,14 +41,17 @@ const DashboardPage = () => {
     const fetchQueue = async () => {
       if (reviewerId) {
         setIsLoading(true);
-        const response = await api.get<Submission[]>(`/${reviewerId}/queue`);
+        const response = await api.get(`/${reviewerId}/queue`);
         setQueue(response.data);
+        if (response.data.length > 0) {
+          setCurrentTrack(response.data[0]);
+        }
         setIsLoading(false);
       }
     };
     const fetchHistory = async () => {
       if (reviewerId) {
-        const response = await api.get<Submission[]>(`/${reviewerId}/queue/history`);
+        const response = await api.get(`/${reviewerId}/queue/history`);
         setHistory(response.data);
       }
     };
@@ -59,7 +65,7 @@ const DashboardPage = () => {
       // Use the safe isAdmin check here
       if (isAdmin) {
         try {
-          const response = await api.get<Reviewer[]>("/admin/reviewers");
+          const response = await api.get("/admin/reviewers");
           const currentReviewer = response.data.find(
             (r: Reviewer) => r.id === parseInt(reviewerId || "")
           );
@@ -84,9 +90,14 @@ const DashboardPage = () => {
   useEffect(() => {
     if (!socket) return;
 
-    socket.on("queue_updated", (newQueueData: Submission[]) => {
+    socket.on("queue_updated", (newQueueData: any[]) => {
       console.log("Queue was updated by server!");
       setQueue(newQueueData);
+      if (newQueueData.length > 0) {
+        setCurrentTrack(newQueueData[0]);
+      } else {
+        setCurrentTrack(null);
+      }
     });
 
     return () => {
@@ -102,20 +113,30 @@ const DashboardPage = () => {
 
   const handleSpotlight = async (submissionId: number, spotlight: boolean) => {
     if (reviewerId) {
-      await api.post(
+      const response = await api.post(
         `/${reviewerId}/queue/submission/${submissionId}/spotlight`,
         null,
         { params: { spotlight } }
+      );
+      // Update the local state with the returned submission
+      const updatedSubmission = response.data;
+      setQueue(
+        queue.map((s) => (s.id === updatedSubmission.id ? updatedSubmission : s))
       );
     }
   };
 
   const handleBookmark = async (submissionId: number, bookmark: boolean) => {
     if (reviewerId) {
-      await api.post(
+      const response = await api.post(
         `/${reviewerId}/queue/submission/${submissionId}/bookmark`,
         null,
         { params: { bookmark } }
+      );
+      // Update the local state with the returned submission
+      const updatedSubmission = response.data;
+      setQueue(
+        queue.map((s) => (s.id === updatedSubmission.id ? updatedSubmission : s))
       );
     }
   };
@@ -124,7 +145,15 @@ const DashboardPage = () => {
     if (submission.title && submission.artist) {
       return `${submission.title} - ${submission.artist}`;
     }
-    return submission.track_url;
+    // Fallback to filename if title and artist are not available
+    try {
+      const url = new URL(submission.track_url);
+      const pathnameParts = url.pathname.split('/');
+      return pathnameParts[pathnameParts.length - 1] || submission.track_url;
+    } catch (error) {
+      // If the URL is malformed, just return the original URL
+      return submission.track_url;
+    }
   };
 
   if (!user) {
@@ -140,9 +169,15 @@ const DashboardPage = () => {
           {currentReviewerName}'s Reviewer Dashboard
         </h1>
           <div className="mb-4">
+            <AudioPlayer
+              src={currentTrack ? currentTrack.track_url : ""}
+              header={currentTrack ? getTrackDisplayName(currentTrack) : "No song in queue"}
+              onPlay={e => console.log("onPlay")}
+              // other props here
+            />
             <button
               onClick={handleNextTrack}
-              className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded w-full sm:w-auto"
+              className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded w-full sm:w-auto mt-4"
             >
               Next Track
             </button>
@@ -153,7 +188,7 @@ const DashboardPage = () => {
               <div className="text-center p-4">Loading queue...</div>
             ) : (
               <ul className="space-y-2">
-                {queue.map((item) => (
+                {queue.map((item: Submission) => (
                   <li key={item.id} className="p-3 bg-gray-800 rounded-lg shadow flex justify-between items-center">
                     <a
                       href={item.track_url}
@@ -189,7 +224,7 @@ const DashboardPage = () => {
           <div className="mt-8">
             <h2 className="text-2xl font-bold mb-2">Recently Played</h2>
             <ul className="space-y-2">
-              {history.map((item) => (
+              {history.map((item: Submission) => (
                 <li key={item.id} className="p-3 bg-gray-800 rounded-lg shadow">
                   <a
                     href={item.track_url}
