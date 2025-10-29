@@ -102,20 +102,30 @@ const DashboardPage = () => {
 
   const handleSpotlight = async (submissionId: number, spotlight: boolean) => {
     if (reviewerId) {
-      await api.post(
+      const response = await api.post(
         `/${reviewerId}/queue/submission/${submissionId}/spotlight`,
         null,
         { params: { spotlight } }
+      );
+      // Update the local state with the returned submission
+      const updatedSubmission = response.data;
+      setQueue(
+        queue.map((s) => (s.id === updatedSubmission.id ? updatedSubmission : s))
       );
     }
   };
 
   const handleBookmark = async (submissionId: number, bookmark: boolean) => {
     if (reviewerId) {
-      await api.post(
+      const response = await api.post(
         `/${reviewerId}/queue/submission/${submissionId}/bookmark`,
         null,
         { params: { bookmark } }
+      );
+      // Update the local state with the returned submission
+      const updatedSubmission = response.data;
+      setQueue(
+        queue.map((s) => (s.id === updatedSubmission.id ? updatedSubmission : s))
       );
     }
   };
