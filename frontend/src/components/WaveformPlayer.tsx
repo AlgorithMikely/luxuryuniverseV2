@@ -33,7 +33,6 @@ const WaveformPlayer: React.FC<WaveformPlayerProps> = ({ src, header }) => {
         barWidth: 3,
         barRadius: 3,
         height: 100,
-        responsive: true,
       });
 
       const proxyUrl = `/api/proxy/audio?url=${encodeURIComponent(src)}`;
