@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
 class UserBase(BaseModel):
     discord_id: str
@@ -25,6 +25,11 @@ class ReviewerProfile(BaseModel):
 
 class UserProfile(User):
     reviewer_profile: ReviewerProfile | None = None
+
+# This schema represents the comprehensive user object returned on authentication,
+# including the user's assigned roles.
+class AuthenticatedUser(UserProfile):
+    roles: List[str] = []
 
 class Token(BaseModel):
     access_token: str

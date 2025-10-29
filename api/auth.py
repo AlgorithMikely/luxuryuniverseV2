@@ -1,5 +1,4 @@
 import httpx
-import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
@@ -11,9 +10,6 @@ from database import get_db
 from services import user_service, queue_service
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 
 @router.get("/login")
 async def login():
@@ -62,22 +58,8 @@ async def callback(code: str, db: Session = Depends(get_db)):
     reviewer = queue_service.get_reviewer_by_user_id(db, user.id)
     if reviewer:
         roles.append("reviewer")
-
-    # --- DIAGNOSTIC LOGGING START ---
-    user_id_str = str(user.discord_id)
-    admin_ids = settings.ADMIN_DISCORD_IDS
-    is_admin = user_id_str in admin_ids
-
-    logging.info(f"--- Admin Check ---")
-    logging.info(f"User Discord ID: {user_id_str} (Type: {type(user_id_str)})")
-    logging.info(f"Admin Discord IDs from settings: {admin_ids} (Type: {type(admin_ids)})")
-    if admin_ids:
-        logging.info(f"First Admin ID Type: {type(admin_ids[0])}")
-    logging.info(f"Is Admin: {is_admin}")
-    logging.info(f"-------------------")
-    # --- DIAGNOSTIC LOGGING END ---
-
-    if is_admin:
+    # Check if the user is an admin by comparing string versions of the IDs
+    if str(user.discord_id) in settings.ADMIN_DISCORD_IDS:
         roles.append("admin")
 
     # Create a JWT for the user

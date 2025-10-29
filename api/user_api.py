@@ -9,12 +9,19 @@ from services import economy_service, user_service, queue_service
 
 router = APIRouter(prefix="/user", tags=["User"])
 
-@router.get("/me", response_model=schemas.UserProfile)
+@router.get("/me", response_model=schemas.AuthenticatedUser)
 async def get_me(
     current_user: schemas.TokenData = Depends(security.get_current_user),
     db: Session = Depends(get_db),
 ):
+    """
+    Fetches the authenticated user's profile information, including their roles.
+    """
     user = user_service.get_user_with_reviewer_profile(db, current_user.discord_id)
+
+    # The roles are sourced directly from the validated JWT, ensuring consistency.
+    user.roles = current_user.roles
+
     return user
 
 @router.get("/me/balance")
