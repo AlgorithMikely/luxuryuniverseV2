@@ -53,7 +53,7 @@ class Submission(Base):
     reviewer_id = Column(Integer, ForeignKey("reviewers.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     track_url = Column(String, nullable=False)
-    status = Column(String, default="queued", nullable=False)  # queued, pending, playing, played
+    status = Column(String, default="pending", nullable=False)  # pending, playing, played
     submitted_at = Column(DateTime, default=datetime.datetime.utcnow)
     played_at = Column(DateTime, nullable=True)
     is_spotlighted = Column(Boolean, default=False, nullable=False)

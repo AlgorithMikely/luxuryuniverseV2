@@ -6,7 +6,6 @@ import AuthCallbackPage from "./pages/AuthCallbackPage";
 import DashboardPage from "./pages/DashboardPage";
 import DashboardRedirect from "./components/DashboardRedirect";
 import UserHubPage from "./pages/UserHubPage";
-import VerificationPage from "./pages/VerificationPage";
 import ErrorPage from "./pages/ErrorPage";
 import { Toaster } from "react-hot-toast";
 import { ErrorBoundary } from "react-error-boundary";
@@ -18,7 +17,6 @@ function App() {
       <ErrorBoundary FallbackComponent={ErrorPage}>
         <BrowserRouter>
           <Routes>
-            <Route path="/verify" element={<VerificationPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
             <Route

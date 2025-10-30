@@ -58,9 +58,6 @@ async def callback(code: str, db: Session = Depends(get_db)):
     reviewer = queue_service.get_reviewer_by_user_id(db, user.id)
     if reviewer:
         roles.append("reviewer")
-    # Check if the user is an admin by comparing string versions of the IDs
-    if str(user.discord_id) in settings.ADMIN_DISCORD_IDS:
-        roles.append("admin")
 
     # Create a JWT for the user
     jwt_token = security.create_access_token(data={"sub": user.discord_id, "roles": roles})

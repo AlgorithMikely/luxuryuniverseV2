@@ -3,8 +3,7 @@ import { create } from 'zustand';
 interface Submission {
   id: number;
   track_url: string;
-  title: string | null;
-  artist: string | null;
+  status: string;
   is_spotlighted: boolean;
   is_bookmarked: boolean;
 }
@@ -14,7 +13,7 @@ interface QueueState {
   setQueue: (queue: Submission[]) => void;
 }
 
-export const useQueueStore = create<QueueState>((set) => ({
+export const useQueueStore = create<QueueState>()((set) => ({
   queue: [],
   setQueue: (queue) => set({ queue }),
 }));

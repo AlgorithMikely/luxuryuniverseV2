@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 from typing import Optional
 import models
 from config import settings
@@ -135,8 +135,5 @@ def remove_moderator(db: Session, reviewer_id: int, moderator_user_id: int) -> b
     return True
 
 def get_all_reviewers(db: Session) -> list[models.Reviewer]:
-    """
-    Retrieves all reviewers and eagerly loads their associated user data
-    to prevent missing `user` objects in the response.
-    """
-    return db.query(models.Reviewer).options(joinedload(models.Reviewer.user)).all()
+    """Retrieves all reviewers."""
+    return db.query(models.Reviewer).all()

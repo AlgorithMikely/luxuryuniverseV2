@@ -8,13 +8,11 @@ class Settings(BaseSettings):
     @field_validator('ADMIN_DISCORD_IDS', mode='before')
     def split_string(cls, v: Any) -> List[str]:
         if isinstance(v, str):
-            return [id.strip() for id in v.split(',') if id.strip()]
+            return [id.strip() for id in v.split(',')]
         if isinstance(v, (int, float)):
-            return [str(v)]
+             return [str(v)]
         if isinstance(v, list):
-            # Ensure all elements in the list are strings
-            return [str(item).strip() for item in v]
-        # Return an empty list if the input is not a recognized type
+            return v
         return []
     # Core settings
     DISCORD_TOKEN: str = "your_discord_token_here"
@@ -47,9 +45,9 @@ class Settings(BaseSettings):
     DISCORD_REDIRECT_URI: str
     FRONTEND_URL: str = "http://localhost:5173"
 
-
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
+    model_config = {
+        "env_file": ".env",
+        "extra": "ignore"
+    }
 
 settings = Settings()
