@@ -3,9 +3,14 @@ import { create } from 'zustand';
 interface Submission {
   id: number;
   track_url: string;
-  status: string;
+  status: "pending" | "playing" | "played";
   is_spotlighted: boolean;
   is_bookmarked: boolean;
+  track_title?: string;
+  track_artist?: string;
+  submitted_by: {
+    username: string;
+  };
 }
 
 interface QueueState {
