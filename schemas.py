@@ -48,6 +48,7 @@ class Submission(BaseModel):
     is_spotlighted: bool
     is_bookmarked: bool
     submitted_by: User = Field(validation_alias='user')
+    reviewers: List[SubmissionReviewer] = []
     model_config = ConfigDict(from_attributes=True)
 
 class UserSubmissionsResponse(BaseModel):
