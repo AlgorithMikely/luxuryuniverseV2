@@ -54,18 +54,18 @@ class Submission(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     track_url = Column(String, nullable=False)
     status = Column(String, default="pending", nullable=False)  # pending, playing, played
-    submitted_at = Column(DateTime, default=datetime.datetime.utcnow)
+    submitted_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.UTC))
     played_at = Column(DateTime, nullable=True)
     is_spotlighted = Column(Boolean, default=False, nullable=False)
     is_bookmarked = Column(Boolean, default=False, nullable=False)
 
     reviewer = relationship("Reviewer", back_populates="submissions")
-    user = relationship("User", back_populates="submissions")
+    user = relationship("User", back_populates="submissions", lazy="joined")
 
     __table_args__ = (Index("ix_submission_reviewer_id_status", "reviewer_id", "status"),)
 
-    artist = Column(String, nullable=True)
-    title = Column(String, nullable=True)
+    track_artist = Column(String, nullable=True)
+    track_title = Column(String, nullable=True)
     submission_count = Column(Integer, default=1, nullable=False)
     reviewers = relationship("SubmissionReviewer", back_populates="submission")
 

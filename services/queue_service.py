@@ -1,11 +1,12 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 import models
 from typing import Optional
 import event_service
 import datetime
 import asyncio
+import schemas
 
-def create_submission(db: Session, reviewer_id: int, user_id: int, track_url: str, artist: str = None, title: str = None) -> models.Submission:
+def create_submission(db: Session, reviewer_id: int, user_id: int, track_url: str, track_artist: str = None, track_title: str = None) -> models.Submission:
     # Check if a submission with the same track_url exists
     existing_submission = db.query(models.Submission).filter(models.Submission.track_url == track_url).first()
 
@@ -27,8 +28,8 @@ def create_submission(db: Session, reviewer_id: int, user_id: int, track_url: st
             user_id=user_id,
             track_url=track_url,
             status='pending',
-            artist=artist,
-            title=title
+            track_artist=track_artist,
+            track_title=track_title
         )
         db.add(new_submission)
         db.commit()
@@ -45,13 +46,17 @@ def create_submission(db: Session, reviewer_id: int, user_id: int, track_url: st
     return new_submission
 
 def get_pending_queue(db: Session, reviewer_id: int) -> list[models.Submission]:
-    return db.query(models.Submission).filter(
+    return db.query(models.Submission).options(
+        joinedload(models.Submission.user)
+    ).filter(
         models.Submission.reviewer_id == reviewer_id,
-        models.Submission.status == 'pending'
+        models.Submission.status.in_(['pending', 'playing'])
     ).order_by(models.Submission.submitted_at.asc()).all()
 
 def get_played_queue(db: Session, reviewer_id: int) -> list[models.Submission]:
-    return db.query(models.Submission).filter(
+    return db.query(models.Submission).options(
+        joinedload(models.Submission.user)
+    ).filter(
         models.Submission.reviewer_id == reviewer_id,
         models.Submission.status == 'played'
     ).order_by(models.Submission.played_at.desc()).all()
@@ -68,7 +73,8 @@ async def spotlight_submission(db: Session, reviewer_id: int, submission_id: int
         db.refresh(submission)
 
         new_queue = get_pending_queue(db, reviewer_id)
-        await event_service.emit_queue_update(reviewer_id, [s.__dict__ for s in new_queue])
+        queue_data = [schemas.Submission.model_validate(s).model_dump() for s in new_queue]
+        await event_service.emit_queue_update(reviewer_id, queue_data)
 
     return submission
 
@@ -84,7 +90,8 @@ async def bookmark_submission(db: Session, reviewer_id: int, submission_id: int,
         db.refresh(submission)
 
         new_queue = get_pending_queue(db, reviewer_id)
-        await event_service.emit_queue_update(reviewer_id, [s.__dict__ for s in new_queue])
+        queue_data = [schemas.Submission.model_validate(s).model_dump() for s in new_queue]
+        await event_service.emit_queue_update(reviewer_id, queue_data)
 
     return submission
 
@@ -97,7 +104,9 @@ def set_queue_status(db: Session, reviewer_id: int, status: str):
     return reviewer
 
 async def advance_queue(db: Session, reviewer_id: int) -> Optional[models.Submission]:
-    submission = db.query(models.Submission).filter(
+    submission = db.query(models.Submission).options(
+        joinedload(models.Submission.user)
+    ).filter(
         models.Submission.reviewer_id == reviewer_id,
         models.Submission.status == 'pending'
     ).order_by(models.Submission.submitted_at.asc()).first()
@@ -110,7 +119,8 @@ async def advance_queue(db: Session, reviewer_id: int) -> Optional[models.Submis
 
         # Emit a queue update
         new_queue = get_pending_queue(db, reviewer_id)
-        await event_service.emit_queue_update(reviewer_id, [s.__dict__ for s in new_queue])
+        queue_data = [schemas.Submission.model_validate(s).model_dump() for s in new_queue]
+        await event_service.emit_queue_update(reviewer_id, queue_data)
 
     return submission
 
@@ -144,7 +154,9 @@ def get_submissions_by_user(db: Session, user_id: int) -> list[models.Submission
     )
 
 def advance_queue_and_get_user(db: Session, reviewer_id: int) -> Optional[tuple[models.Submission, str]]:
-    submission = db.query(models.Submission).filter(
+    submission = db.query(models.Submission).options(
+        joinedload(models.Submission.user)
+    ).filter(
         models.Submission.reviewer_id == reviewer_id,
         models.Submission.status == 'pending'
     ).order_by(models.Submission.submitted_at.asc()).first()
@@ -159,7 +171,8 @@ def advance_queue_and_get_user(db: Session, reviewer_id: int) -> Optional[tuple[
         new_queue = get_pending_queue(db, reviewer_id)
 
         async def emit_event():
-            await event_service.emit_queue_update(reviewer_id, [s.__dict__ for s in new_queue])
+            queue_data = [schemas.Submission.model_validate(s).model_dump() for s in new_queue]
+            await event_service.emit_queue_update(reviewer_id, queue_data)
 
         # Run the async function in a separate thread to avoid blocking
         import threading

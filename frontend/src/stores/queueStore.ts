@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-interface Submission {
+export interface Submission {
   id: number;
   track_url: string;
   status: "pending" | "playing" | "played";

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from typing import List
 
 class UserBase(BaseModel):
@@ -39,19 +39,20 @@ class SubmissionReviewer(BaseModel):
     reviewer: Reviewer
     model_config = ConfigDict(from_attributes=True)
 
-class SubmissionDetail(BaseModel):
+class Submission(BaseModel):
     id: int
     track_url: str
     status: str
-    artist: str | None = None
-    title: str | None = None
-    submission_count: int
-    reviewers: List[SubmissionReviewer]
+    track_artist: str | None = None
+    track_title: str | None = None
+    is_spotlighted: bool
+    is_bookmarked: bool
+    submitted_by: User = Field(validation_alias='user')
     model_config = ConfigDict(from_attributes=True)
 
 class UserSubmissionsResponse(BaseModel):
     user: User
-    submissions: List["SubmissionDetail"]
+    submissions: List["Submission"]
     model_config = ConfigDict(from_attributes=True)
 
 UserSubmissionsResponse.model_rebuild()

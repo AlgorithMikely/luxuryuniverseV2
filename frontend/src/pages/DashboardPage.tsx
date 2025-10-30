@@ -2,26 +2,13 @@ import { useEffect, useState, useRef } from "react";
 import api from "../services/api";
 import { useAuthStore } from "../stores/authStore";
 import { useSocket } from "../context/SocketContext";
-import { useQueueStore } from "../stores/queueStore";
+import { useQueueStore, Submission } from "../stores/queueStore";
 import { useParams, useNavigate } from "react-router-dom";
 import WaveSurfer from "wavesurfer.js";
 
 interface Reviewer {
   id: number;
   user: {
-    username: string;
-  };
-}
-
-interface Submission {
-  id: number;
-  track_url: string;
-  is_spotlighted: boolean;
-  is_bookmarked: boolean;
-  status: "pending" | "playing" | "played";
-  track_title?: string;
-  track_artist?: string;
-  submitted_by: {
     username: string;
   };
 }

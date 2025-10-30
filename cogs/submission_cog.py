@@ -67,8 +67,8 @@ class PassiveSubmissionCog(commands.Cog):
             with self.bot.SessionLocal() as db:
                 # 1. Emit the queue update event
                 new_queue_models = queue_service.get_pending_queue(db, reviewer.id)
-                new_queue_schemas = [schemas.SubmissionDetail.from_orm(s) for s in new_queue_models]
-                await event_service.emit_queue_update(reviewer.id, [s.dict() for s in new_queue_schemas])
+                new_queue_schemas = [schemas.Submission.model_validate(s) for s in new_queue_models]
+                await event_service.emit_queue_update(reviewer.id, [s.model_dump() for s in new_queue_schemas])
 
                 # 2. Copy file/link to the files channel
                 if reviewer.files_and_links_channel_id:
