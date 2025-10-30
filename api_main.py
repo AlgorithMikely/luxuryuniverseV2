@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 import socketio
 from api import auth, reviewer_api, user_api, admin_api
 from api.proxy_api import router as proxy_router
@@ -6,6 +7,14 @@ import socket_handlers
 from sio_instance import sio
 
 app = FastAPI(title="Universe Bot API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 socket_app = socketio.ASGIApp(sio)
 
