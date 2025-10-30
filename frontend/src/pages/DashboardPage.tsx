@@ -64,9 +64,7 @@ const DashboardPage = () => {
       waveColor: "rgb(209 213 219)",
       progressColor: "rgb(168 85 247)",
       height: 100,
-      cursorWidth: 1,
       barWidth: 3,
-      barRadius: 3,
       responsive: true,
     });
     wavesurferRef.current = wavesurfer;
