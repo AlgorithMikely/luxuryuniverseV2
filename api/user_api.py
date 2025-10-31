@@ -16,6 +16,10 @@ async def get_me(
 ):
     user = user_service.get_user_with_reviewer_profile(db, current_user.discord_id)
 
+    moderated_reviewers = []
+    if "admin" in current_user.roles:
+        moderated_reviewers = user_service.get_all_reviewers(db)
+
     # Manually construct the UserProfile to include roles from the JWT
     user_profile = schemas.UserProfile(
         id=user.id,
@@ -23,7 +27,8 @@ async def get_me(
         username=user.username,
         avatar=user.avatar,
         reviewer_profile=user.reviewer_profile,
-        roles=current_user.roles
+        roles=current_user.roles,
+        moderated_reviewers=moderated_reviewers
     )
     return user_profile
 

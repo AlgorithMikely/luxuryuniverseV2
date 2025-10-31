@@ -22,6 +22,7 @@ class ReviewerProfile(BaseModel):
 class UserProfile(User):
     reviewer_profile: ReviewerProfile | None = None
     roles: List[str] = []
+    moderated_reviewers: List["Reviewer"] = []
 
 class Token(BaseModel):
     access_token: str
@@ -53,7 +54,7 @@ class Submission(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class UserSubmissionsResponse(BaseModel):
-    user: User
+    user: UserProfile
     submissions: List["Submission"]
     model_config = ConfigDict(from_attributes=True)
 

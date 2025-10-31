@@ -22,7 +22,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     }
 
     console.log('Initializing socket connection...');
-    const newSocket = io({
+    const newSocket = io('http://localhost:8000', {
       auth: { token },
       transports: ['websocket', 'polling'],
     });
