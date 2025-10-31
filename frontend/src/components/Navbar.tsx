@@ -7,7 +7,7 @@ interface Reviewer {
   id: number;
   user: {
     username: string;
-    avatar_url: string;
+    avatar: string | null;
   };
 }
 
@@ -63,7 +63,7 @@ const Navbar = () => {
           className="flex items-center space-x-2 focus:outline-none"
         >
           <img
-            src={user.avatar_url}
+            src={user.avatar || ""}
             alt="User Avatar"
             className="w-10 h-10 rounded-full"
           />
