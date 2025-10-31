@@ -7,5 +7,6 @@ origins = [
 ]
 
 sio = socketio.AsyncServer(
-    async_mode="asgi"
+    async_mode="asgi",
+    cors_allowed_origins=origins
 )

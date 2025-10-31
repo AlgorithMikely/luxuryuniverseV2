@@ -27,7 +27,14 @@ const mockSubmitter = {
 
 const HistoryPanel = () => {
   const [activeTab, setActiveTab] = useState("recently");
-  const recentlyPlayed = useQueueStore((state) => state.recentlyPlayed);
+  const { recentlyPlayed, queue } = useQueueStore((state) => ({
+    recentlyPlayed: state.recentlyPlayed,
+    queue: state.queue,
+  }));
+
+  const bookmarked = queue.filter((item) => item.is_bookmarked);
+  const spotlighted = queue.filter((item) => item.is_spotlighted);
+
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -45,10 +52,10 @@ const HistoryPanel = () => {
       case "bookmarked":
         return (
            <ul className="space-y-2">
-            {mockBookmarked.map((item) => (
+            {bookmarked.map((item) => (
               <li key={item.id} className="text-sm p-2 bg-gray-700 rounded-md">
-                <p className="font-semibold">{item.title}</p>
-                <p className="text-gray-400">{item.artist}</p>
+                <p className="font-semibold">{item.track_title || 'Untitled'}</p>
+                <p className="text-gray-400">{item.track_artist || 'Unknown Artist'}</p>
               </li>
             ))}
           </ul>
@@ -56,10 +63,10 @@ const HistoryPanel = () => {
       case "spotlighted":
         return (
            <ul className="space-y-2">
-            {mockSpotlighted.map((item) => (
+            {spotlighted.map((item) => (
               <li key={item.id} className="text-sm p-2 bg-gray-700 rounded-md">
-                <p className="font-semibold">{item.title}</p>
-                <p className="text-gray-400">{item.artist}</p>
+                <p className="font-semibold">{item.track_title || 'Untitled'}</p>
+                <p className="text-gray-400">{item.track_artist || 'Unknown Artist'}</p>
               </li>
             ))}
           </ul>
