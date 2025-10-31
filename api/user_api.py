@@ -15,7 +15,17 @@ async def get_me(
     db: Session = Depends(get_db),
 ):
     user = user_service.get_user_with_reviewer_profile(db, current_user.discord_id)
-    return user
+
+    # Manually construct the UserProfile to include roles from the JWT
+    user_profile = schemas.UserProfile(
+        id=user.id,
+        discord_id=user.discord_id,
+        username=user.username,
+        avatar=user.avatar,
+        reviewer_profile=user.reviewer_profile,
+        roles=current_user.roles
+    )
+    return user_profile
 
 @router.get("/me/balance")
 async def get_my_balance(

@@ -12,6 +12,11 @@ async def check_is_reviewer(
     current_user: schemas.TokenData = Depends(security.get_current_user),
     db: Session = Depends(get_db)
 ):
+    # Admins have access to all reviewer queues
+    if "admin" in current_user.roles:
+        return current_user
+
+    # If not admin, check if they are a reviewer and accessing their own queue
     if "reviewer" not in current_user.roles:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a reviewer")
 

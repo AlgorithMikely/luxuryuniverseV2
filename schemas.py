@@ -21,6 +21,7 @@ class ReviewerProfile(BaseModel):
 
 class UserProfile(User):
     reviewer_profile: ReviewerProfile | None = None
+    roles: List[str] = []
 
 class Token(BaseModel):
     access_token: str
