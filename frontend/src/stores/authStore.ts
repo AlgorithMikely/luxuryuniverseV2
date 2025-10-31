@@ -26,7 +26,7 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       token: null,
-      user: { roles: [] }, // Start with a default user object
+      user: null,
       roles: [],
       setToken: async (token) => {
         console.log("setToken called with token:", token);
