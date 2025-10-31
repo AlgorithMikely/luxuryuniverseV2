@@ -7,16 +7,10 @@ import {
   BackwardIcon,
   HeartIcon,
   StarIcon,
+  MusicalNoteIcon,
 } from "@heroicons/react/24/solid";
 import { SpeakerWaveIcon, SpeakerXMarkIcon } from "@heroicons/react/24/outline";
-
-// Mock submission for now
-const mockSubmission = {
-  track_url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-  track_title: "A Great Song",
-  track_artist: "An Amazing Artist",
-  album_art_url: "https://i.scdn.co/image/ab67616d0000b273f412df037803304530f40f2d",
-};
+import { useQueueStore } from "../stores/queueStore";
 
 const WebPlayer = () => {
   const waveformRef = useRef<HTMLDivElement | null>(null);
@@ -27,40 +21,64 @@ const WebPlayer = () => {
   const [currentTime, setCurrentTime] = useState("0:00");
   const [duration, setDuration] = useState("0:00");
 
+  const currentTrack = useQueueStore((state) => state.currentTrack);
+  const playNext = useQueueStore((state) => state.playNext);
+  const toggleBookmark = useQueueStore((state) => state.toggleBookmark);
+  const toggleSpotlight = useQueueStore((state) => state.toggleSpotlight);
+
+
   useEffect(() => {
     if (!waveformRef.current) return;
 
-    wavesurferRef.current = WaveSurfer.create({
-      container: waveformRef.current,
-      waveColor: "rgb(107 114 128)",
-      progressColor: "rgb(168 85 247)",
-      height: 64,
-      barWidth: 2,
-      barGap: 1,
-      cursorWidth: 2,
-      cursorColor: "white",
-      url: mockSubmission.track_url,
-    });
+    // Destroy previous instance if it exists
+    if (wavesurferRef.current) {
+      wavesurferRef.current.destroy();
+      wavesurferRef.current = null;
+    }
 
-    const ws = wavesurferRef.current;
+    if (currentTrack) {
+        const proxiedUrl = `/api/proxy/audio?url=${encodeURIComponent(currentTrack.track_url)}`;
 
-    ws.on("play", () => setIsPlaying(true));
-    ws.on("pause", () => setIsPlaying(false));
-    ws.on("ready", () => {
-      const totalDuration = ws.getDuration();
-      setDuration(formatTime(totalDuration));
-    });
-    ws.on("audioprocess", () => {
-      const time = ws.getCurrentTime();
-      setCurrentTime(formatTime(time));
-    });
+        wavesurferRef.current = WaveSurfer.create({
+            container: waveformRef.current,
+            waveColor: "rgb(107 114 128)",
+            progressColor: "rgb(168 85 247)",
+            height: 64,
+            barWidth: 2,
+            barGap: 1,
+            cursorWidth: 2,
+            cursorColor: "white",
+            url: proxiedUrl,
+        });
+
+        const ws = wavesurferRef.current;
+
+        ws.on("play", () => setIsPlaying(true));
+        ws.on("pause", () => setIsPlaying(false));
+        ws.on("ready", () => {
+            const totalDuration = ws.getDuration();
+            setDuration(formatTime(totalDuration));
+            ws.play(); // Autoplay when ready
+        });
+        ws.on("audioprocess", () => {
+            const time = ws.getCurrentTime();
+            setCurrentTime(formatTime(time));
+        });
+        ws.on('finish', () => {
+          playNext(); // Autoplay next song when current one finishes
+        });
+    }
 
     return () => {
-      ws.destroy();
+      // This cleanup runs when the component unmounts OR before the effect runs again.
+      if (wavesurferRef.current) {
+        wavesurferRef.current.destroy();
+      }
     };
-  }, []);
+  }, [currentTrack, playNext]);
 
   const formatTime = (seconds: number) => {
+    if (isNaN(seconds)) return "0:00";
     const minutes = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${minutes}:${secs < 10 ? "0" : ""}${secs}`;
@@ -68,6 +86,22 @@ const WebPlayer = () => {
 
   const handlePlayPause = () => {
     wavesurferRef.current?.playPause();
+  };
+
+  const handleNext = () => {
+    playNext();
+  };
+
+  const handleBookmark = () => {
+    if (currentTrack) {
+        toggleBookmark(currentTrack.id, !currentTrack.is_bookmarked);
+    }
+  };
+
+  const handleSpotlight = () => {
+      if (currentTrack) {
+          toggleSpotlight(currentTrack.id, !currentTrack.is_spotlighted);
+      }
   };
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -86,18 +120,24 @@ const WebPlayer = () => {
     }
   };
 
+  if (!currentTrack) {
+    return (
+        <footer className="bg-gray-800 border-t border-gray-700 p-4 flex items-center justify-center h-28">
+            <p className="text-gray-500">Select a track from the queue to start playing.</p>
+        </footer>
+    )
+  }
+
   return (
-    <footer className="bg-gray-800 border-t border-gray-700 p-4 grid grid-cols-3 items-center">
+    <footer className="bg-gray-800 border-t border-gray-700 p-4 grid grid-cols-3 items-center h-28">
       {/* Left side: Track Info */}
       <div className="flex items-center space-x-4">
-        <img
-          src={mockSubmission.album_art_url}
-          alt="Album Art"
-          className="w-16 h-16 rounded-md"
-        />
+        <div className="w-16 h-16 rounded-md bg-gray-700 flex items-center justify-center">
+            <MusicalNoteIcon className="h-8 w-8 text-gray-400"/>
+        </div>
         <div>
-          <p className="font-bold">{mockSubmission.track_title}</p>
-          <p className="text-sm text-gray-400">{mockSubmission.track_artist}</p>
+          <p className="font-bold">{currentTrack.track_title || 'Untitled'}</p>
+          <p className="text-sm text-gray-400">{currentTrack.track_artist || 'Unknown Artist'}</p>
         </div>
       </div>
 
@@ -117,7 +157,7 @@ const WebPlayer = () => {
               <PlayIcon className="h-8 w-8" />
             )}
           </button>
-          <button className="text-gray-400 hover:text-white">
+          <button onClick={handleNext} aria-label="Next Track" className="text-gray-400 hover:text-white">
             <ForwardIcon className="h-6 w-6" />
           </button>
         </div>
@@ -130,10 +170,10 @@ const WebPlayer = () => {
 
       {/* Right side: Volume & Actions */}
       <div className="flex items-center justify-end space-x-4">
-         <button className="text-gray-400 hover:text-white">
+         <button onClick={handleBookmark} aria-label="Bookmark" className={`${currentTrack.is_bookmarked ? 'text-pink-500' : 'text-gray-400'} hover:text-white`}>
             <HeartIcon className="h-6 w-6" />
           </button>
-          <button className="text-gray-400 hover:text-white">
+          <button onClick={handleSpotlight} aria-label="Spotlight" className={`${currentTrack.is_spotlighted ? 'text-yellow-400' : 'text-gray-400'} hover:text-white`}>
             <StarIcon className="h-6 w-6" />
           </button>
         <div className="flex items-center space-x-2 w-32">

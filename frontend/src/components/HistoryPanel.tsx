@@ -5,11 +5,8 @@ import {
   StarIcon,
   UserCircleIcon,
 } from "@heroicons/react/24/solid";
+import { useQueueStore } from "../stores/queueStore";
 
-const mockRecentlyPlayed = [
-  { id: 1, title: "Yesterday's Jam", artist: "The Boops" },
-  { id: 2, title: "Old News Blues", artist: "DJ Regret" },
-];
 
 const mockBookmarked = [
   { id: 3, title: "Save For Later", artist: "Procrastinators" },
@@ -30,16 +27,17 @@ const mockSubmitter = {
 
 const HistoryPanel = () => {
   const [activeTab, setActiveTab] = useState("recently");
+  const recentlyPlayed = useQueueStore((state) => state.recentlyPlayed);
 
   const renderTabContent = () => {
     switch (activeTab) {
       case "recently":
         return (
           <ul className="space-y-2">
-            {mockRecentlyPlayed.map((item) => (
+            {recentlyPlayed.map((item) => (
               <li key={item.id} className="text-sm p-2 bg-gray-700 rounded-md">
-                <p className="font-semibold">{item.title}</p>
-                <p className="text-gray-400">{item.artist}</p>
+                <p className="font-semibold">{item.track_title || 'Untitled'}</p>
+                <p className="text-gray-400">{item.track_artist || 'Unknown Artist'}</p>
               </li>
             ))}
           </ul>

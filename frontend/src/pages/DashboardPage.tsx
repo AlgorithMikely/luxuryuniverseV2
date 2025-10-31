@@ -3,17 +3,26 @@ import api from "../services/api";
 import { useAuthStore } from "../stores/authStore";
 import { useSocket } from "../context/SocketContext";
 import { useQueueStore, Submission } from "../stores/queueStore";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import WaveSurfer from "wavesurfer.js";
-import Navbar from "../components/Navbar";
+
+interface Reviewer {
+  id: number;
+  user: {
+    username: string;
+  };
+}
 
 const DashboardPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [history, setHistory] = useState<Submission[]>([]);
+  const [reviewers, setReviewers] = useState<Reviewer[]>([]);
+  const [currentReviewerName, setCurrentReviewerName] = useState<string>("");
   const { user } = useAuthStore();
   const socket = useSocket();
   const { queue, setQueue } = useQueueStore();
   const { reviewerId } = useParams();
+  const navigate = useNavigate();
 
   const waveformRef = useRef<HTMLDivElement | null>(null);
   const wavesurferRef = useRef<WaveSurfer | null>(null);
@@ -79,6 +88,26 @@ const DashboardPage = () => {
   }, [nowPlaying, reviewerId]);
 
   useEffect(() => {
+    const fetchReviewers = async () => {
+      if (user?.roles.includes("admin")) {
+        try {
+          const response = await api.get("/admin/reviewers");
+          setReviewers(response.data);
+          const currentReviewer = response.data.find(
+            (r: Reviewer) => r.id === parseInt(reviewerId || "")
+          );
+          if (currentReviewer) {
+            setCurrentReviewerName(currentReviewer.user.username);
+          }
+        } catch (error) {
+          console.error("Failed to fetch reviewers:", error);
+        }
+      }
+    };
+    fetchReviewers();
+  }, [user, reviewerId]);
+
+  useEffect(() => {
     if (!socket) return;
     socket.on("queue_updated", (newQueueData: any[]) => {
       console.log("Queue was updated by server!");
@@ -126,21 +155,33 @@ const DashboardPage = () => {
   }
 
   if (isLoading) {
-    return (
-      <div className="bg-gray-900 text-white min-h-screen">
-        <Navbar />
-        <div className="text-center p-8">Loading dashboard...</div>
-      </div>
-    );
+    return <div className="text-center p-8">Loading dashboard...</div>;
   }
 
   return (
-    <div className="bg-gray-900 text-white min-h-screen">
-      <Navbar />
-      <div className="p-4 sm:p-8">
-        <div className="max-w-4xl mx-auto">
-          {/* Now Playing Section */}
-          <div className="bg-gray-800 rounded-lg shadow-lg p-6 mb-8">
+    <div className="bg-gray-900 text-white min-h-screen p-4 sm:p-8">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold mb-4">
+          {currentReviewerName || user.username}'s Dashboard
+        </h1>
+        {user.roles.includes("admin") && reviewers.length > 0 && (
+          <div className="mb-4">
+            <select
+              value={reviewerId}
+              onChange={(e) => navigate(`/dashboard/${e.target.value}`)}
+              className="bg-gray-800 text-white p-2 rounded-md border border-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            >
+              {reviewers.map((reviewer) => (
+                <option key={reviewer.id} value={reviewer.id}>
+                  {reviewer.user.username}'s Queue
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Now Playing Section */}
+        <div className="bg-gray-800 rounded-lg shadow-lg p-6 mb-8">
           <h2 className="text-2xl font-bold mb-4">Now Playing</h2>
           {nowPlaying ? (
             <div>
@@ -210,22 +251,21 @@ const DashboardPage = () => {
           )}
         </div>
 
-          {/* Recently Played */}
-          <div className="mt-8">
-            <h2 className="text-2xl font-bold mb-2">Recently Played</h2>
-            {history.length > 0 ? (
-              <ul className="space-y-2">
-                {history.map((item: Submission) => (
-                  <li key={item.id} className="p-3 bg-gray-800 rounded-lg shadow opacity-70">
-                    <span className="font-semibold">{item.track_title || "Untitled"}</span>
-                    <span className="text-gray-400 text-sm ml-2">- {item.track_artist || "Unknown"}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-               <p className="text-gray-400">No tracks have been played yet.</p>
-            )}
-          </div>
+        {/* Recently Played */}
+        <div className="mt-8">
+          <h2 className="text-2xl font-bold mb-2">Recently Played</h2>
+          {history.length > 0 ? (
+            <ul className="space-y-2">
+              {history.map((item: Submission) => (
+                <li key={item.id} className="p-3 bg-gray-800 rounded-lg shadow opacity-70">
+                  <span className="font-semibold">{item.track_title || "Untitled"}</span>
+                  <span className="text-gray-400 text-sm ml-2">- {item.track_artist || "Unknown"}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+             <p className="text-gray-400">No tracks have been played yet.</p>
+          )}
         </div>
       </div>
     </div>

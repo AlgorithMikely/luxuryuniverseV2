@@ -3,21 +3,25 @@ import {
   TagIcon,
   ChatBubbleBottomCenterTextIcon,
   LockClosedIcon,
+  MusicalNoteIcon,
 } from "@heroicons/react/24/solid";
 import { useState } from "react";
-
-const mockNowPlaying = {
-  album_art_url: "https://i.scdn.co/image/ab67616d0000b273f412df037803304530f40f2d",
-  title: "A Great Song",
-  artist: "An Amazing Artist",
-  album: "The Best Album Ever",
-  submitted_by: "@SubmitterA",
-  source: "Discord", // Can be 'Discord', 'YouTube', 'Spotify' etc.
-};
+import { useQueueStore } from "../stores/queueStore";
 
 const ReviewHub = () => {
   const [rating, setRating] = useState(0);
   const [status, setStatus] = useState("Pending");
+  const currentTrack = useQueueStore((state) => state.currentTrack);
+
+  if (!currentTrack) {
+    return (
+        <div className="w-1/2 bg-gray-900 p-6 h-full flex flex-col items-center justify-center text-center">
+            <MusicalNoteIcon className="h-24 w-24 text-gray-700 mb-4" />
+            <h3 className="text-2xl font-bold text-gray-400">Nothing Playing</h3>
+            <p className="text-gray-500">Select a track from the queue to start your review.</p>
+        </div>
+    );
+  }
 
   return (
     <div className="w-1/2 bg-gray-900 p-6 overflow-y-auto h-full">
@@ -26,23 +30,17 @@ const ReviewHub = () => {
       <div className="flex flex-col lg:flex-row space-y-6 lg:space-y-0 lg:space-x-6">
         {/* Left Side: Art & Metadata */}
         <div className="lg:w-1/2">
-          <img
-            src={mockNowPlaying.album_art_url}
-            alt="Album Art"
-            className="w-full rounded-lg shadow-lg mb-4"
-          />
+            <div className="w-full aspect-square bg-gray-800 rounded-lg shadow-lg mb-4 flex items-center justify-center">
+                <MusicalNoteIcon className="h-32 w-32 text-gray-600"/>
+            </div>
           <div className="space-y-2">
-            <h3 className="text-3xl font-bold">{mockNowPlaying.title}</h3>
-            <p className="text-xl text-gray-400">{mockNowPlaying.artist}</p>
-            <p className="text-md text-gray-500">
-              from <strong>{mockNowPlaying.album}</strong>
-            </p>
+            <h3 className="text-3xl font-bold">{currentTrack.track_title || 'Untitled'}</h3>
+            <p className="text-xl text-gray-400">{currentTrack.track_artist || 'Unknown Artist'}</p>
             <p className="text-sm text-gray-400">
               Submitted by{" "}
               <span className="font-semibold text-purple-400">
-                {mockNowPlaying.submitted_by}
-              </span>{" "}
-              via {mockNowPlaying.source}
+                {currentTrack.submitted_by.username}
+              </span>
             </p>
           </div>
         </div>
