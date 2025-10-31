@@ -3,7 +3,7 @@ import { SocketProvider } from "./context/SocketContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import LoginPage from "./pages/LoginPage";
 import AuthCallbackPage from "./pages/AuthCallbackPage";
-import DashboardPage from "./pages/DashboardPage";
+import ReviewerDashboard from "./pages/ReviewerDashboard";
 import DashboardRedirect from "./components/DashboardRedirect";
 import UserHubPage from "./pages/UserHubPage";
 import ErrorPage from "./pages/ErrorPage";
@@ -23,7 +23,7 @@ function App() {
               path="/dashboard/:reviewerId"
               element={
                 <ProtectedRoute>
-                  <DashboardPage />
+                  <ReviewerDashboard />
                 </ProtectedRoute>
               }
             />
