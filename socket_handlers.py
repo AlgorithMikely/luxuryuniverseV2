@@ -12,13 +12,13 @@ async def connect(sid, environ, auth):
         raise ConnectionRefusedError("Authentication failed")
 
     try:
-        token_data = security.verify_token(auth["token"], HTTPException(status_code=401))
+        discord_id = security.verify_token(auth["token"], HTTPException(status_code=401))
     except HTTPException:
         raise ConnectionRefusedError("Authentication failed")
 
     def db_operations():
         with SessionLocal() as db:
-            user = user_service.get_user_by_discord_id(db, token_data.discord_id)
+            user = user_service.get_user_by_discord_id(db, discord_id)
             if not user:
                 raise ConnectionRefusedError("User not found")
 

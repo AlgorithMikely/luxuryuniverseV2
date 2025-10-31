@@ -9,6 +9,8 @@ export interface User {
   } | null;
   moderated_reviewers?: Array<{
     id: number;
-    username: string;
+    user: {
+      username: string;
+    };
   }>;
 }

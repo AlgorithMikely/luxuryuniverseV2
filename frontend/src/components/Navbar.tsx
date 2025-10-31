@@ -13,25 +13,12 @@ interface Reviewer {
 
 const Navbar = () => {
   const { user, logout } = useAuthStore();
-  const [reviewers, setReviewers] = useState<Reviewer[]>([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const navigate = useNavigate();
   const { reviewerId } = useParams();
 
-  useEffect(() => {
-    const fetchReviewers = async () => {
-      // Ensure user and user.roles exist before checking for 'admin'
-      if (user?.roles?.includes("admin")) {
-        try {
-          const response = await api.get("/admin/reviewers");
-          setReviewers(response.data);
-        } catch (error) {
-          console.error("Failed to fetch reviewers:", error);
-        }
-      }
-    };
-    fetchReviewers();
-  }, [user]);
+  // Admin's list of reviewers is now part of the user object
+  const reviewers = user?.moderated_reviewers || [];
 
   const handleLogout = () => {
     logout();
