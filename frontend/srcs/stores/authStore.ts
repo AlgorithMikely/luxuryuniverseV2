@@ -29,23 +29,16 @@ export const useAuthStore = create<AuthState>()(
       user: { roles: [] }, // Start with a default user object
       roles: [],
       setToken: async (token) => {
-        console.log("setToken called with token:", token);
+        const decoded = jwtDecode<{ sub: string; roles: string[] }>(token);
         try {
-          const decoded = jwtDecode<{ sub: string; roles: string[] }>(token);
-          console.log("Decoded token:", decoded);
-          console.log("Making API call to /user/me");
           const response = await api.get('/user/me');
-          console.log("API call successful, user data:", response.data);
           set({ token, user: response.data, roles: decoded.roles });
         } catch (error) {
           console.error("Failed to fetch user profile:", error);
           set({ token: null, user: null, roles: [] });
         }
       },
-      logout: () => {
-        console.log("Logout called");
-        set({ token: null, user: null, roles: [] });
-      }
+      logout: () => set({ token: null, user: null, roles: [] }),
     }),
     {
       name: 'auth-storage',
