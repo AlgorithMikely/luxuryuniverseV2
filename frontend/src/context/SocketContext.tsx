@@ -17,6 +17,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     if (token) {
       // Connect to the backend URL, letting socket.io handle the path
       const newSocket = io("http://localhost:8000", {
+        path: "/socket.io/",
         auth: { token },
       });
 

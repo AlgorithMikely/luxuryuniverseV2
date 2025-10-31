@@ -8,15 +8,22 @@ from sio_instance import sio
 
 app = FastAPI(title="Universe Bot API")
 
+# Define allowed origins
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-socket_app = socketio.ASGIApp(sio)
+socket_app = socketio.ASGIApp(sio, socketio_path="socket.io",
+                              cors_allowed_origins=origins)
 
 # Include API routers under the /api prefix
 app.include_router(auth.router, prefix="/api")
