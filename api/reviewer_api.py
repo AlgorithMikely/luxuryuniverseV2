@@ -17,8 +17,6 @@ async def check_is_reviewer(
         return current_user
 
     # If not admin, check if they are a reviewer and accessing their own queue
-    if "reviewer" not in current_user.roles:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a reviewer")
 
     user = user_service.get_user_by_discord_id(db, current_user.discord_id)
     reviewer = queue_service.get_reviewer_by_user_id(db, user.id)

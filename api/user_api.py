@@ -50,6 +50,21 @@ async def get_my_submissions(
     current_user: schemas.TokenData = Depends(security.get_current_user),
     db: Session = Depends(get_db),
 ):
-    user = user_service.get_user_by_discord_id(db, current_user.discord_id)
+    user = user_service.get_user_with_reviewer_profile(db, current_user.discord_id)
     submissions = queue_service.get_submissions_by_user(db, user_id=user.id)
-    return schemas.UserSubmissionsResponse(user=user, submissions=submissions)
+
+    moderated_reviewers = []
+    if "admin" in current_user.roles:
+        moderated_reviewers = user_service.get_all_reviewers(db)
+
+    user_profile = schemas.UserProfile(
+        id=user.id,
+        discord_id=user.discord_id,
+        username=user.username,
+        avatar=user.avatar,
+        reviewer_profile=user.reviewer_profile,
+        roles=current_user.roles,
+        moderated_reviewers=moderated_reviewers,
+    )
+
+    return schemas.UserSubmissionsResponse(user=user_profile, submissions=submissions)
