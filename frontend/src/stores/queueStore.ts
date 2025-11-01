@@ -44,6 +44,7 @@ interface QueueState {
   setReviewerId: (id: number) => void;
   setQueue: (queue: Submission[]) => void;
   setCurrentTrack: (track: Submission) => void;
+  updateReview: (submissionId: number, reviewData: Partial<Submission>) => void;
   playNext: () => void;
   toggleBookmark: (submissionId: number, bookmark: boolean) => Promise<void>;
   toggleSpotlight: (submissionId: number, spotlight: boolean) => Promise<void>;
@@ -65,6 +66,19 @@ export const useQueueStore = create<QueueState>()(
       queue: state.queue.map((s) =>
         s.id === track.id ? { ...s, status: "playing" } : s
       ),
+    }));
+  },
+  updateReview: (submissionId, reviewData) => {
+    set((state) => ({
+      queue: state.queue.map((s) =>
+        s.id === submissionId ? { ...s, ...reviewData } : s
+      ),
+      recentlyPlayed: state.recentlyPlayed.map((s) =>
+        s.id === submissionId ? { ...s, ...reviewData } : s
+      ),
+      currentTrack: state.currentTrack?.id === submissionId
+        ? { ...state.currentTrack, ...reviewData }
+        : state.currentTrack,
     }));
   },
   playNext: () => {

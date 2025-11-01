@@ -19,10 +19,11 @@ const ReviewHub = () => {
   const [publicReview, setPublicReview] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { currentTrack, reviewerId, playNext } = useQueueStore((state) => ({
+  const { currentTrack, reviewerId, playNext, updateReview } = useQueueStore((state) => ({
     currentTrack: state.currentTrack,
     reviewerId: state.reviewerId,
     playNext: state.playNext,
+    updateReview: state.updateReview,
   }));
   const toggleBookmark = useQueueStore((state) => state.toggleBookmark);
   const toggleSpotlight = useQueueStore((state) => state.toggleSpotlight);
@@ -52,6 +53,9 @@ const ReviewHub = () => {
       };
 
       await api.post(`/${reviewerId}/queue/submission/${currentTrack.id}/review`, reviewData);
+
+      // Manually update the review in the global store before playing next
+      updateReview(currentTrack.id, reviewData);
 
       // Reset form state after successful submission
       setRating(0);
