@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 import jwtDecode from 'jwt-decode';
 import api from '../services/api';
 
-interface User {
+export interface User {
   id: number;
   discord_id: string;
   username: string;
