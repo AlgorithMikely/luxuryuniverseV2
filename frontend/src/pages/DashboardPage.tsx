@@ -1,36 +1,28 @@
-import { useEffect, useState } from "react";
-import api from "../services/api";
+import { useEffect } from "react";
 import { useAuthStore } from "../stores/authStore";
 import { useSocket } from "../context/SocketContext";
 import { useQueueStore } from "../stores/queueStore";
+import { DashboardProvider, useDashboard } from "../context/DashboardContext";
+import Navbar from "../components/Navbar";
+import QueuePanel from "../components/QueuePanel";
+import ReviewHub from "../components/ReviewHub";
+import HistoryPanel from "../components/HistoryPanel";
+import SavedPanel from "../components/SavedPanel";
+import PicksPanel from "../components/PicksPanel";
+import UsersPanel from "../components/UsersPanel";
+import WebPlayer from "../components/WebPlayer";
+import api from "../services/api";
 
-interface Submission {
-  track_url: string;
-}
-
-const DashboardPage = () => {
-  const [isLoading, setIsLoading] = useState(true);
+const DashboardContent = () => {
   const { user } = useAuthStore();
   const socket = useSocket();
-  const { queue, setQueue } = useQueueStore();
-
-  useEffect(() => {
-    const fetchQueue = async () => {
-      if (user && user.reviewer_profile) {
-        setIsLoading(true);
-        const response = await api.get(`/${user.reviewer_profile.id}/queue`);
-        setQueue(response.data);
-        setIsLoading(false);
-      }
-    };
-    fetchQueue();
-  }, [user, setQueue]);
+  const { setQueue, setHistory, setSaved, setPicks } = useQueueStore();
+  const { activePanel } = useDashboard();
 
   useEffect(() => {
     if (!socket) return;
 
     socket.on("queue_updated", (newQueueData: any[]) => {
-      console.log("Queue was updated by server!");
       setQueue(newQueueData);
     });
 
@@ -39,9 +31,38 @@ const DashboardPage = () => {
     };
   }, [socket, setQueue]);
 
-  const handleNextTrack = async () => {
-    if (user && user.reviewer_profile) {
-      await api.post(`/${user.reviewer_profile.id}/queue/next`);
+  useEffect(() => {
+    const fetchData = async () => {
+      if (user && user.reviewer_profile) {
+        const [queue, history, saved, picks] = await Promise.all([
+          api.get(`/${user.reviewer_profile.id}/queue`),
+          api.get(`/${user.reviewer_profile.id}/history`),
+          api.get(`/${user.reviewer_profile.id}/saved`),
+          api.get(`/${user.reviewer_profile.id}/picks`),
+        ]);
+        setQueue(queue.data);
+        setHistory(history.data);
+        setSaved(saved.data);
+        setPicks(picks.data);
+      }
+    };
+    fetchData();
+  }, [user, setQueue, setHistory, setSaved, setPicks]);
+
+  const renderPanel = () => {
+    switch (activePanel) {
+      case "queue":
+        return <QueuePanel />;
+      case "history":
+        return <HistoryPanel />;
+      case "saved":
+        return <SavedPanel />;
+      case "picks":
+        return <PicksPanel />;
+      case "users":
+        return <UsersPanel />;
+      default:
+        return <QueuePanel />;
     }
   };
 
@@ -50,34 +71,30 @@ const DashboardPage = () => {
   }
 
   return (
-    <div className="bg-gray-900 text-white min-h-screen p-4 sm:p-8">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-4">Reviewer Dashboard</h1>
-        <div className="mb-4">
-          <button
-            onClick={handleNextTrack}
-            className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded w-full sm:w-auto"
-          >
-            Next Track
-          </button>
+    <div className="bg-gray-900 text-white min-h-screen flex flex-col">
+      <Navbar />
+      <div className="flex flex-grow">
+        <div className="w-1/4 p-4 border-r border-gray-700">
+          {renderPanel()}
         </div>
-        <div>
-          <h2 className="text-2xl font-bold mb-2">Queue</h2>
-          {isLoading ? (
-            <div className="text-center p-4">Loading queue...</div>
-          ) : (
-            <ul className="space-y-2">
-              {queue.map((item: Submission, index) => (
-                <li key={index} className="p-3 bg-gray-800 rounded-lg shadow">
-                  {item.track_url}
-                </li>
-              ))}
-            </ul>
-          )}
+        <div className="w-1/2 flex flex-col">
+          <ReviewHub />
+          <div className="p-4 border-t border-gray-700">
+            <WebPlayer />
+          </div>
+        </div>
+        <div className="w-1/4 p-4 border-l border-gray-700">
+          {/* User details or other info */}
         </div>
       </div>
     </div>
   );
 };
+
+const DashboardPage = () => (
+  <DashboardProvider>
+    <DashboardContent />
+  </DashboardProvider>
+);
 
 export default DashboardPage;
