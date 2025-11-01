@@ -33,17 +33,24 @@ const DashboardPage = () => {
 
   useEffect(() => {
     const fetchInitialData = async () => {
-      if (!reviewerId) return;
+      if (!reviewerId) {
+        console.log("DashboardPage: reviewerId is missing, aborting fetch.");
+        return;
+      }
+      console.log(`DashboardPage: Starting to fetch data for reviewerId: ${reviewerId}`);
       setIsLoading(true);
       try {
         const [queueRes, historyRes] = await Promise.all([
           api.get(`/${reviewerId}/queue`),
           api.get(`/${reviewerId}/queue/history`),
         ]);
+        console.log("DashboardPage: Queue response received:", queueRes.data);
         setQueue(queueRes.data);
+        console.log("DashboardPage: History response received:", historyRes.data);
         setHistory(historyRes.data);
+        console.log("DashboardPage: Data fetching and state setting complete.");
       } catch (error) {
-        console.error("Failed to fetch initial data:", error);
+        console.error("DashboardPage: Failed to fetch initial data:", error);
       }
       setIsLoading(false);
     };
