@@ -67,6 +67,13 @@ class Submission(Base):
     track_artist = Column(String, nullable=True)
     track_title = Column(String, nullable=True)
     submission_count = Column(Integer, default=1, nullable=False)
+
+    # Review fields
+    rating = Column(Integer, nullable=True)
+    tags = Column(String, nullable=True)
+    private_notes = Column(String, nullable=True)
+    public_review = Column(String, nullable=True)
+
     reviewers = relationship("SubmissionReviewer", back_populates="submission")
 
 

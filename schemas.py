@@ -58,4 +58,11 @@ class UserSubmissionsResponse(BaseModel):
     submissions: List["Submission"]
     model_config = ConfigDict(from_attributes=True)
 
+class ReviewCreate(BaseModel):
+    rating: int | None = None
+    status: str
+    tags: str | None = None
+    private_notes: str | None = None
+    public_review: str | None = None
+
 UserSubmissionsResponse.model_rebuild()

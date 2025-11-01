@@ -27,9 +27,10 @@ const mockSubmitter = {
 
 const HistoryPanel = () => {
   const [activeTab, setActiveTab] = useState("recently");
-  const { recentlyPlayed, queue } = useQueueStore((state) => ({
+  const { recentlyPlayed, queue, setCurrentTrack } = useQueueStore((state) => ({
     recentlyPlayed: state.recentlyPlayed,
     queue: state.queue,
+    setCurrentTrack: state.setCurrentTrack,
   }));
 
   const bookmarked = queue.filter((item) => item.is_bookmarked);
@@ -42,7 +43,11 @@ const HistoryPanel = () => {
         return (
           <ul className="space-y-2">
             {recentlyPlayed.map((item) => (
-              <li key={item.id} className="text-sm p-2 bg-gray-700 rounded-md">
+              <li
+                key={item.id}
+                className="text-sm p-2 bg-gray-700 rounded-md cursor-pointer hover:bg-gray-600 transition-colors"
+                onClick={() => setCurrentTrack(item)}
+              >
                 <p className="font-semibold">{item.track_title || 'Untitled'}</p>
                 <p className="text-gray-400">{item.track_artist || 'Unknown Artist'}</p>
               </li>

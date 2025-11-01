@@ -99,6 +99,22 @@ async def bookmark_submission(db: Session, reviewer_id: int, submission_id: int,
 
     return submission
 
+def update_submission_review(db: Session, reviewer_id: int, submission_id: int, review_data: schemas.ReviewCreate) -> Optional[models.Submission]:
+    submission = db.query(models.Submission).filter(
+        models.Submission.id == submission_id,
+        models.Submission.reviewer_id == reviewer_id
+    ).first()
+
+    if submission:
+        submission.rating = review_data.rating
+        submission.status = review_data.status
+        submission.tags = review_data.tags
+        submission.private_notes = review_data.private_notes
+        submission.public_review = review_data.public_review
+        db.commit()
+        db.refresh(submission)
+    return submission
+
 def set_queue_status(db: Session, reviewer_id: int, status: str):
     reviewer = db.query(models.Reviewer).filter(models.Reviewer.id == reviewer_id).first()
     if reviewer:

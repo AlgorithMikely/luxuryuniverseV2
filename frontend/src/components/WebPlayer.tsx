@@ -58,14 +58,14 @@ const WebPlayer = () => {
         ws.on("ready", () => {
             const totalDuration = ws.getDuration();
             setDuration(formatTime(totalDuration));
-            ws.play(); // Autoplay when ready
+            // ws.play(); // Autoplay when ready - DISABLED per new requirements
         });
         ws.on("audioprocess", () => {
             const time = ws.getCurrentTime();
             setCurrentTime(formatTime(time));
         });
         ws.on('finish', () => {
-          playNext(); // Autoplay next song when current one finishes
+          // playNext(); // Autoplay is now handled by the review submission process
         });
     }
 
@@ -142,26 +142,18 @@ const WebPlayer = () => {
       </div>
 
       {/* Center: Player Controls & Waveform */}
-      <div className="flex flex-col items-center justify-center">
-        <div className="flex items-center space-x-6">
-          <button className="text-gray-400 hover:text-white">
-            <BackwardIcon className="h-6 w-6" />
-          </button>
-          <button
-            onClick={handlePlayPause}
-            className="bg-purple-600 p-3 rounded-full text-white hover:bg-purple-700"
-          >
-            {isPlaying ? (
-              <PauseIcon className="h-8 w-8" />
-            ) : (
-              <PlayIcon className="h-8 w-8" />
-            )}
-          </button>
-          <button onClick={handleNext} aria-label="Next Track" className="text-gray-400 hover:text-white">
-            <ForwardIcon className="h-6 w-6" />
-          </button>
-        </div>
-        <div className="w-full flex items-center space-x-2 mt-2">
+      <div className="flex items-center space-x-4">
+        <button
+          onClick={handlePlayPause}
+          className="bg-purple-600 p-2 rounded-full text-white hover:bg-purple-700"
+        >
+          {isPlaying ? (
+            <PauseIcon className="h-6 w-6" />
+          ) : (
+            <PlayIcon className="h-6 w-6" />
+          )}
+        </button>
+        <div className="w-full flex items-center space-x-2">
             <span className="text-xs text-gray-400 w-12 text-right">{currentTime}</span>
             <div ref={waveformRef} className="flex-grow h-16"></div>
             <span className="text-xs text-gray-400 w-12">{duration}</span>

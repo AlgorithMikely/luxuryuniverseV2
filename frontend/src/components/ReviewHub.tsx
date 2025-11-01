@@ -4,14 +4,61 @@ import {
   ChatBubbleBottomCenterTextIcon,
   LockClosedIcon,
   MusicalNoteIcon,
+  HeartIcon,
 } from "@heroicons/react/24/solid";
 import { useState } from "react";
 import { useQueueStore } from "../stores/queueStore";
 
+import api from "../services/api"; // Import the api service
+
 const ReviewHub = () => {
   const [rating, setRating] = useState(0);
   const [status, setStatus] = useState("Pending");
-  const currentTrack = useQueueStore((state) => state.currentTrack);
+  const [tags, setTags] = useState("");
+  const [privateNotes, setPrivateNotes] = useState("");
+  const [publicReview, setPublicReview] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const { currentTrack, reviewerId, playNext } = useQueueStore((state) => ({
+    currentTrack: state.currentTrack,
+    reviewerId: state.reviewerId,
+    playNext: state.playNext,
+  }));
+  const toggleBookmark = useQueueStore((state) => state.toggleBookmark);
+  const toggleSpotlight = useQueueStore((state) => state.toggleSpotlight);
+
+  const handleSubmitReview = async () => {
+    if (!currentTrack || !reviewerId) return;
+
+    setIsSubmitting(true);
+    try {
+      const reviewData = {
+        rating,
+        status,
+        tags,
+        private_notes: privateNotes,
+        public_review: publicReview,
+      };
+
+      await api.post(`/${reviewerId}/queue/submission/${currentTrack.id}/review`, reviewData);
+
+      // Reset form state after successful submission
+      setRating(0);
+      setStatus("Pending");
+      setTags("");
+      setPrivateNotes("");
+      setPublicReview("");
+
+      // The endpoint will trigger the queue advance, which will update the store via websocket
+      // and load the next track.
+
+    } catch (error) {
+      console.error("Failed to submit review:", error);
+      // Optionally, show an error message to the user
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   if (!currentTrack) {
     return (
@@ -90,6 +137,8 @@ const ReviewHub = () => {
               <input
                 type="text"
                 id="tags"
+                value={tags}
+                onChange={(e) => setTags(e.target.value)}
                 placeholder="e.g., indie, high-energy, vocal-heavy"
                 className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm"
               />
@@ -103,6 +152,8 @@ const ReviewHub = () => {
               <textarea
                 id="private_notes"
                 rows={4}
+                value={privateNotes}
+                onChange={(e) => setPrivateNotes(e.target.value)}
                 placeholder="Your eyes only..."
                 className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm"
               ></textarea>
@@ -116,13 +167,43 @@ const ReviewHub = () => {
               <textarea
                 id="public_review"
                 rows={6}
+                value={publicReview}
+                onChange={(e) => setPublicReview(e.target.value)}
                 placeholder="This will be visible to the submitter and community..."
                 className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-sm"
               ></textarea>
             </div>
 
-            <button className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-md transition-colors">
-              Submit Review
+            <div className="flex space-x-2">
+                <button
+                    onClick={() => currentTrack && toggleBookmark(currentTrack.id, !currentTrack.is_bookmarked)}
+                    className={`w-1/2 flex items-center justify-center space-x-2 py-2 px-4 rounded-md transition-colors ${
+                        currentTrack.is_bookmarked
+                            ? 'bg-pink-500 hover:bg-pink-600 text-white'
+                            : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                    }`}
+                >
+                    <HeartIcon className="h-5 w-5"/>
+                    <span>{currentTrack.is_bookmarked ? 'Bookmarked' : 'Bookmark'}</span>
+                </button>
+                <button
+                    onClick={() => currentTrack && toggleSpotlight(currentTrack.id, !currentTrack.is_spotlighted)}
+                    className={`w-1/2 flex items-center justify-center space-x-2 py-2 px-4 rounded-md transition-colors ${
+                        currentTrack.is_spotlighted
+                            ? 'bg-yellow-400 hover:bg-yellow-500 text-gray-900'
+                            : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                    }`}
+                >
+                    <StarIcon className="h-5 w-5"/>
+                    <span>{currentTrack.is_spotlighted ? 'Spotlighted' : 'Spotlight'}</span>
+                </button>
+            </div>
+            <button
+                onClick={handleSubmitReview}
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-md transition-colors"
+                disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Submitting...' : 'Submit Review & Play Next'}
             </button>
           </div>
         </div>

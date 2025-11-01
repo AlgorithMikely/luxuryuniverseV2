@@ -55,6 +55,27 @@ async def spotlight_submission(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
     return submission
 
+@router.post("/queue/submission/{submission_id}/review", response_model=schemas.Submission, dependencies=[Depends(check_is_reviewer)])
+async def review_submission(
+    reviewer_id: int,
+    submission_id: int,
+    review: schemas.ReviewCreate,
+    db: Session = Depends(get_db)
+):
+    submission = queue_service.update_submission_review(
+        db,
+        reviewer_id=reviewer_id,
+        submission_id=submission_id,
+        review_data=review
+    )
+    if not submission:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+
+    # After submitting the review, automatically advance to the next track
+    await queue_service.advance_queue(db, reviewer_id=reviewer_id)
+
+    return submission
+
 @router.get("/queue/history", response_model=list[schemas.Submission], dependencies=[Depends(check_is_reviewer)])
 async def get_queue_history(reviewer_id: int, db: Session = Depends(get_db)):
     return queue_service.get_played_queue(db, reviewer_id=reviewer_id)
