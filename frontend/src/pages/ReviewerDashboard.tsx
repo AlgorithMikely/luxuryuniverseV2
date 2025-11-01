@@ -37,7 +37,9 @@ const ReviewerDashboard = () => {
         <ReviewHub />
         <HistoryPanel />
       </main>
-      <WebPlayer />
+      <div className="flex-shrink-0">
+        <WebPlayer />
+      </div>
     </div>
   );
 };
