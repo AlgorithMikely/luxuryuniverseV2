@@ -3,7 +3,8 @@ import { SocketProvider } from "./context/SocketContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import LoginPage from "./pages/LoginPage";
 import AuthCallbackPage from "./pages/AuthCallbackPage";
-import DashboardPage from "./pages/DashboardPage";
+import DashboardRedirect from "./pages/DashboardPage"; // Renamed to DashboardRedirect
+import ReviewerDashboard from "./pages/ReviewerDashboard"; // Import the new dashboard
 import UserHubPage from "./pages/UserHubPage";
 import ErrorPage from "./pages/ErrorPage";
 import { Toaster } from "react-hot-toast";
@@ -22,7 +23,15 @@ function App() {
               path="/dashboard"
               element={
                 <ProtectedRoute>
-                  <DashboardPage />
+                  <DashboardRedirect />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/:reviewerId" // Add the new parameterized route
+              element={
+                <ProtectedRoute>
+                  <ReviewerDashboard />
                 </ProtectedRoute>
               }
             />
