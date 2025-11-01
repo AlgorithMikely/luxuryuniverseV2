@@ -14,7 +14,8 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     if (token) {
-      const newSocket = io({
+      // Connect to the backend server, which is on port 8000
+      const newSocket = io("http://localhost:8000", {
         path: "/socket.io/",
         auth: { token },
       });
@@ -24,6 +25,10 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         newSocket.disconnect();
       };
     } else {
+      // If there's no token, ensure the socket is disconnected.
+      if (socket) {
+        socket.disconnect();
+      }
       setSocket(null);
     }
   }, [token]);
