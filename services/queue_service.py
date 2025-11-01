@@ -43,7 +43,11 @@ def create_submission(db: Session, reviewer_id: int, user_id: int, track_url: st
         db.add(new_submission_reviewer)
         db.commit()
 
-    return new_submission
+    # Eagerly load the user relationship to ensure it's available for socket events
+    db.refresh(new_submission)
+    return db.query(models.Submission).options(
+        joinedload(models.Submission.user)
+    ).filter(models.Submission.id == new_submission.id).one()
 
 def get_pending_queue(db: Session, reviewer_id: int) -> list[models.Submission]:
     return db.query(models.Submission).options(
