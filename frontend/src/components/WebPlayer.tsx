@@ -22,7 +22,6 @@ const WebPlayer = () => {
       height: 100,
       cursorWidth: 2,
       cursorColor: 'white',
-      responsive: true,
     });
 
     wavesurfer.current.on('play', () => setIsPlaying(true));
