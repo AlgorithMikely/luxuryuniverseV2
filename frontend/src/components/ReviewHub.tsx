@@ -27,6 +27,17 @@ const ReviewHub = () => {
   const toggleBookmark = useQueueStore((state) => state.toggleBookmark);
   const toggleSpotlight = useQueueStore((state) => state.toggleSpotlight);
 
+  useEffect(() => {
+    // When a new track is loaded, populate the form with its review data
+    if (currentTrack) {
+      setRating(currentTrack.rating || 0);
+      setStatus(currentTrack.status || "Pending");
+      setTags(currentTrack.tags || "");
+      setPrivateNotes(currentTrack.private_notes || "");
+      setPublicReview(currentTrack.public_review || "");
+    }
+  }, [currentTrack]);
+
   const handleSubmitReview = async () => {
     if (!currentTrack || !reviewerId) return;
 
@@ -49,8 +60,9 @@ const ReviewHub = () => {
       setPrivateNotes("");
       setPublicReview("");
 
-      // The endpoint will trigger the queue advance, which will update the store via websocket
-      // and load the next track.
+      // The endpoint triggers a queue update via websocket.
+      // Now, we tell the player to load and play the next track from the updated queue.
+      playNext();
 
     } catch (error) {
       console.error("Failed to submit review:", error);

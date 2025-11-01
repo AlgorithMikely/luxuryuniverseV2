@@ -6,12 +6,29 @@ import QueuePanel from "../components/QueuePanel";
 import ReviewHub from "../components/ReviewHub";
 import HistoryPanel from "../components/HistoryPanel";
 import { useQueueStore } from "../stores/queueStore";
+import { useSocketStore } from "../stores/socketStore";
 import api from "../services/api";
 
 const ReviewerDashboard = () => {
   const { reviewerId } = useParams<{ reviewerId: string }>();
-  const setQueue = useQueueStore((state) => state.setQueue);
-  const setReviewerId = useQueueStore((state) => state.setReviewerId);
+  const { setQueue, setReviewerId } = useQueueStore();
+  const socket = useSocketStore((state) => state.socket);
+
+  useEffect(() => {
+    if (socket) {
+      const handleQueueUpdate = (data: any) => {
+        console.log("Queue update received!", data);
+        setQueue(data);
+      };
+
+      socket.on("queue_updated", handleQueueUpdate);
+
+      // Clean up the event listener when the component unmounts
+      return () => {
+        socket.off("queue_updated", handleQueueUpdate);
+      };
+    }
+  }, [socket, setQueue]);
 
   useEffect(() => {
     const fetchQueue = async () => {

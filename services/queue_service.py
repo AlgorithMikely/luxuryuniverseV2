@@ -99,8 +99,10 @@ async def bookmark_submission(db: Session, reviewer_id: int, submission_id: int,
 
     return submission
 
-def update_submission_review(db: Session, reviewer_id: int, submission_id: int, review_data: schemas.ReviewCreate) -> Optional[models.Submission]:
-    submission = db.query(models.Submission).filter(
+async def update_submission_review(db: Session, reviewer_id: int, submission_id: int, review_data: schemas.ReviewCreate) -> Optional[models.Submission]:
+    submission = db.query(models.Submission).options(
+        joinedload(models.Submission.user)
+    ).filter(
         models.Submission.id == submission_id,
         models.Submission.reviewer_id == reviewer_id
     ).first()
@@ -113,6 +115,12 @@ def update_submission_review(db: Session, reviewer_id: int, submission_id: int, 
         submission.public_review = review_data.public_review
         db.commit()
         db.refresh(submission)
+
+        # Emit queue update after review is submitted
+        new_queue = get_pending_queue(db, reviewer_id)
+        queue_data = [schemas.Submission.model_validate(s).model_dump() for s in new_queue]
+        await event_service.emit_queue_update(reviewer_id, queue_data)
+
     return submission
 
 def set_queue_status(db: Session, reviewer_id: int, status: str):
@@ -143,6 +151,27 @@ async def advance_queue(db: Session, reviewer_id: int) -> Optional[models.Submis
         await event_service.emit_queue_update(reviewer_id, queue_data)
 
     return submission
+
+async def set_next_track_playing(db: Session, reviewer_id: int) -> Optional[models.Submission]:
+    """Finds the next pending submission and sets its status to 'playing'."""
+    next_submission = db.query(models.Submission).options(
+        joinedload(models.Submission.user)
+    ).filter(
+        models.Submission.reviewer_id == reviewer_id,
+        models.Submission.status == 'pending'
+    ).order_by(models.Submission.submitted_at.asc()).first()
+
+    if next_submission:
+        next_submission.status = 'playing'
+        db.commit()
+        db.refresh(next_submission)
+
+        # Emit a queue update to reflect the new 'playing' track
+        new_queue = get_pending_queue(db, reviewer_id)
+        queue_data = [schemas.Submission.model_validate(s).model_dump() for s in new_queue]
+        await event_service.emit_queue_update(reviewer_id, queue_data)
+
+    return next_submission
 
 def get_reviewer_by_user_id(db: Session, user_id: int) -> Optional[models.Reviewer]:
     return db.query(models.Reviewer).filter(models.Reviewer.user_id == user_id).first()

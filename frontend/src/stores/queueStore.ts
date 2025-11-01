@@ -20,6 +20,13 @@ export interface Submission {
   track_title?: string;
   track_artist?: string;
   submitted_by: User;
+
+  // Review fields
+  rating?: number;
+  tags?: string;
+  private_notes?: string;
+  public_review?: string;
+
   reviewers: Array<{
     reviewer: {
       id: number;

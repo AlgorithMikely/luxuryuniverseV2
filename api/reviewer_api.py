@@ -62,7 +62,7 @@ async def review_submission(
     review: schemas.ReviewCreate,
     db: Session = Depends(get_db)
 ):
-    submission = queue_service.update_submission_review(
+    submission = await queue_service.update_submission_review(
         db,
         reviewer_id=reviewer_id,
         submission_id=submission_id,
@@ -71,8 +71,8 @@ async def review_submission(
     if not submission:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
 
-    # After submitting the review, automatically advance to the next track
-    await queue_service.advance_queue(db, reviewer_id=reviewer_id)
+    # After submitting the review, set the next track to 'playing'
+    await queue_service.set_next_track_playing(db, reviewer_id=reviewer_id)
 
     return submission
 
