@@ -10,6 +10,7 @@ export interface User {
 }
 
 // Based on schemas.py Submission model
+// Based on the full data structure seen in logs
 export interface Submission {
   id: number;
   track_url: string;
@@ -19,6 +20,12 @@ export interface Submission {
   track_title?: string;
   track_artist?: string;
   submitted_by: User;
+  reviewers: Array<{
+    reviewer: {
+      id: number;
+      user: User;
+    };
+  }>;
 }
 
 interface QueueState {
