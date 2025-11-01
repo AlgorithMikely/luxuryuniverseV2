@@ -6,7 +6,7 @@ import {
   MusicalNoteIcon,
   HeartIcon,
 } from "@heroicons/react/24/solid";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQueueStore } from "../stores/queueStore";
 
 import api from "../services/api"; // Import the api service
