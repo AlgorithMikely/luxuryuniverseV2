@@ -1,13 +1,24 @@
 from pydantic_settings import BaseSettings
-from pydantic import model_validator
-from typing import Optional, Dict, Any
+from pydantic import model_validator, field_validator
+from typing import Optional, Dict, Any, List
 
 class Settings(BaseSettings):
+    ADMIN_DISCORD_IDS: List[str] = []
+
+    @field_validator('ADMIN_DISCORD_IDS', mode='before')
+    def split_string(cls, v: Any) -> List[str]:
+        if isinstance(v, str):
+            return [id.strip() for id in v.split(',')]
+        if isinstance(v, (int, float)):
+             return [str(v)]
+        if isinstance(v, list):
+            return v
+        return []
     # Core settings
     DISCORD_TOKEN: str = "your_discord_token_here"
     SECRET_KEY: str = "a_very_secret_key"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 129600 # 90 days
 
     # Database settings
     POSTGRES_SERVER: str = "localhost"
@@ -34,9 +45,9 @@ class Settings(BaseSettings):
     DISCORD_REDIRECT_URI: str
     FRONTEND_URL: str = "http://localhost:5173"
 
-
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
+    model_config = {
+        "env_file": ".env",
+        "extra": "ignore"
+    }
 
 settings = Settings()

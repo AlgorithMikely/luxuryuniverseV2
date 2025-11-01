@@ -11,6 +11,7 @@ class UniverseBot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.SessionLocal: sessionmaker = SessionLocal
+        self.settings = settings
 
     async def setup_hook(self):
         # This is called when the bot is preparing to start
@@ -19,6 +20,8 @@ class UniverseBot(commands.Bot):
         await self.load_extension("cogs.submission_cog")
         await self.load_extension("cogs.queue_cog")
         await self.load_extension("cogs.economy_cog")
+        await self.load_extension("cogs.reviewer_cog")
+        await self.load_extension("cogs.moderator_cog")
         print("Cogs loaded.")
 
     async def on_ready(self):

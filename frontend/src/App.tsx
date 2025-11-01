@@ -1,17 +1,35 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { SocketProvider } from "./context/SocketContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import LoginPage from "./pages/LoginPage";
 import AuthCallbackPage from "./pages/AuthCallbackPage";
-import DashboardPage from "./pages/DashboardPage";
+import ReviewerDashboard from "./pages/ReviewerDashboard";
+import DashboardRedirect from "./components/DashboardRedirect";
 import UserHubPage from "./pages/UserHubPage";
 import ErrorPage from "./pages/ErrorPage";
 import { Toaster } from "react-hot-toast";
 import { ErrorBoundary } from "react-error-boundary";
+import { useEffect } from "react";
+import { useAuthStore } from "./stores/authStore";
+import { useSocketStore } from "./stores/socketStore";
 
 function App() {
+  const token = useAuthStore((state) => state.token);
+  const initializeSocket = useSocketStore((state) => state.initializeSocket);
+  const disconnectSocket = useSocketStore((state) => state.disconnectSocket);
+
+  useEffect(() => {
+    if (token) {
+      initializeSocket(token);
+    } else {
+      disconnectSocket();
+    }
+    return () => {
+      disconnectSocket();
+    };
+  }, [token, initializeSocket, disconnectSocket]);
+
   return (
-    <SocketProvider>
+    <>
       <Toaster />
       <ErrorBoundary FallbackComponent={ErrorPage}>
         <BrowserRouter>
@@ -19,26 +37,34 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
             <Route
-              path="/dashboard"
+              path="/dashboard/:reviewerId"
               element={
                 <ProtectedRoute>
-                  <DashboardPage />
+                  <ReviewerDashboard />
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/hub"
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <DashboardRedirect />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/" element={<LoginPage />} />
+            <Route
+              path="*"
               element={
                 <ProtectedRoute>
                   <UserHubPage />
                 </ProtectedRoute>
               }
             />
-            <Route path="/" element={<LoginPage />} />
           </Routes>
         </BrowserRouter>
       </ErrorBoundary>
-    </SocketProvider>
+    </>
   );
 }
 

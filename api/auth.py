@@ -47,8 +47,10 @@ async def callback(code: str, db: Session = Depends(get_db)):
         discord_user = user_response.json()
 
     # Create or update the user in the database
+    avatar_hash = discord_user.get("avatar")
+    avatar_url = f"https://cdn.discordapp.com/avatars/{discord_user['id']}/{avatar_hash}.png" if avatar_hash else None
     user = user_service.get_or_create_user(
-        db, discord_id=discord_user["id"], username=discord_user["username"]
+        db, discord_id=discord_user["id"], username=discord_user["username"], avatar=avatar_url
     )
 
     # Determine the user's roles

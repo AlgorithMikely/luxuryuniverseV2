@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
+from typing import List
 
 import schemas
 import security
 from database import get_db
-from services import economy_service, user_service
+from services import economy_service, user_service, queue_service
 
 router = APIRouter(prefix="/user", tags=["User"])
 
@@ -14,22 +15,56 @@ async def get_me(
     db: Session = Depends(get_db),
 ):
     user = user_service.get_user_with_reviewer_profile(db, current_user.discord_id)
-    return user
+
+    moderated_reviewers = []
+    if "admin" in current_user.roles:
+        moderated_reviewers = user_service.get_all_reviewers(db)
+
+    # Manually construct the UserProfile to include roles from the JWT
+    user_profile = schemas.UserProfile(
+        id=user.id,
+        discord_id=user.discord_id,
+        username=user.username,
+        avatar=user.avatar,
+        reviewer_profile=user.reviewer_profile,
+        roles=current_user.roles,
+        moderated_reviewers=moderated_reviewers
+    )
+    return user_profile
 
 @router.get("/me/balance")
 async def get_my_balance(
-    reviewer_id: int = Query(...),
+    reviewer_id: int = Query(None),
     current_user: schemas.TokenData = Depends(security.get_current_user),
     db: Session = Depends(get_db),
 ):
     user = user_service.get_user_by_discord_id(db, current_user.discord_id)
-    balance = economy_service.get_balance(db, reviewer_id=reviewer_id, user_id=user.id)
+    if reviewer_id:
+        balance = economy_service.get_balance(db, reviewer_id=reviewer_id, user_id=user.id)
+    else:
+        balance = economy_service.get_total_balance(db, user_id=user.id)
     return {"balance": balance}
 
-@router.get("/me/submissions")
+@router.get("/me/submissions", response_model=schemas.UserSubmissionsResponse)
 async def get_my_submissions(
     current_user: schemas.TokenData = Depends(security.get_current_user),
     db: Session = Depends(get_db),
 ):
-    user = user_service.get_user_by_discord_id(db, current_user.discord_id)
-    return queue_service.get_submissions_by_user(db, user_id=user.id)
+    user = user_service.get_user_with_reviewer_profile(db, current_user.discord_id)
+    submissions = queue_service.get_submissions_by_user(db, user_id=user.id)
+
+    moderated_reviewers = []
+    if "admin" in current_user.roles:
+        moderated_reviewers = user_service.get_all_reviewers(db)
+
+    user_profile = schemas.UserProfile(
+        id=user.id,
+        discord_id=user.discord_id,
+        username=user.username,
+        avatar=user.avatar,
+        reviewer_profile=user.reviewer_profile,
+        roles=current_user.roles,
+        moderated_reviewers=moderated_reviewers,
+    )
+
+    return schemas.UserSubmissionsResponse(user=user_profile, submissions=submissions)

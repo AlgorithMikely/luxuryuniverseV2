@@ -43,6 +43,10 @@ def get_balance(db: Session, reviewer_id: int, user_id: int) -> int:
     ).first()
     return wallet.balance if wallet else 0
 
+def get_total_balance(db: Session, user_id: int) -> int:
+    wallets = db.query(models.Wallet).filter(models.Wallet.user_id == user_id).all()
+    return sum(wallet.balance for wallet in wallets)
+
 def get_economy_config(db: Session, reviewer_id: int) -> dict:
     configs = db.query(models.EconomyConfig).filter(
         models.EconomyConfig.reviewer_id == reviewer_id

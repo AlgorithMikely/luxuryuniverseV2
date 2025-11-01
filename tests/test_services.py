@@ -37,24 +37,38 @@ def test_get_or_create_user(db_session: Session):
 @pytest.mark.anyio
 async def test_create_submission(db_session: Session):
     user = user_service.get_or_create_user(db_session, "123", "testuser")
-    reviewer = Reviewer(user_id=user.id, discord_channel_id="456", tiktok_handle="test")
+    reviewer = Reviewer(
+        user_id=user.id,
+        submission_channel_id="456",
+        queue_channel_id="456q",
+        reviewer_role_id="456r",
+        tiktok_handle="test"
+    )
     db_session.add(reviewer)
     db_session.commit()
 
-    submission = await queue_service.create_submission(db_session, reviewer.id, user.id, "http://test.com")
+    submission = await queue_service.create_submission(db_session, reviewer.id, user.id, "http://test.com", track_artist="artist", track_title="title")
     assert submission.reviewer_id == reviewer.id
     assert submission.user_id == user.id
     assert submission.track_url == "http://test.com"
+    assert submission.track_artist == "artist"
+    assert submission.track_title == "title"
 
 @pytest.mark.anyio
 async def test_get_pending_queue(db_session: Session):
     user = user_service.get_or_create_user(db_session, "123", "testuser")
-    reviewer = Reviewer(user_id=user.id, discord_channel_id="456", tiktok_handle="test")
+    reviewer = Reviewer(
+        user_id=user.id,
+        submission_channel_id="456",
+        queue_channel_id="456q",
+        reviewer_role_id="456r",
+        tiktok_handle="test"
+    )
     db_session.add(reviewer)
     db_session.commit()
 
-    await queue_service.create_submission(db_session, reviewer.id, user.id, "http://test.com")
-    await queue_service.create_submission(db_session, reviewer.id, user.id, "http://test2.com")
+    await queue_service.create_submission(db_session, reviewer.id, user.id, "http://test.com", track_artist="artist1", track_title="title1")
+    await queue_service.create_submission(db_session, reviewer.id, user.id, "http://test2.com", track_artist="artist2", track_title="title2")
 
     queue = queue_service.get_pending_queue(db_session, reviewer.id)
     assert len(queue) == 2
@@ -63,16 +77,28 @@ async def test_get_pending_queue(db_session: Session):
 @pytest.mark.anyio
 async def test_reviewer_isolation(db_session: Session):
     user1 = user_service.get_or_create_user(db_session, "1", "user1")
-    reviewer1 = Reviewer(user_id=user1.id, discord_channel_id="1", tiktok_handle="reviewer1")
+    reviewer1 = Reviewer(
+        user_id=user1.id,
+        submission_channel_id="1",
+        queue_channel_id="1q",
+        reviewer_role_id="1r",
+        tiktok_handle="reviewer1"
+    )
     db_session.add(reviewer1)
 
     user2 = user_service.get_or_create_user(db_session, "2", "user2")
-    reviewer2 = Reviewer(user_id=user2.id, discord_channel_id="2", tiktok_handle="reviewer2")
+    reviewer2 = Reviewer(
+        user_id=user2.id,
+        submission_channel_id="2",
+        queue_channel_id="2q",
+        reviewer_role_id="2r",
+        tiktok_handle="reviewer2"
+    )
     db_session.add(reviewer2)
     db_session.commit()
 
-    await queue_service.create_submission(db_session, reviewer1.id, user1.id, "reviewer1_track")
-    await queue_service.create_submission(db_session, reviewer2.id, user2.id, "reviewer2_track")
+    await queue_service.create_submission(db_session, reviewer1.id, user1.id, "reviewer1_track", track_artist="artist1", track_title="title1")
+    await queue_service.create_submission(db_session, reviewer2.id, user2.id, "reviewer2_track", track_artist="artist2", track_title="title2")
 
     queue1 = queue_service.get_pending_queue(db_session, reviewer1.id)
     assert len(queue1) == 1
@@ -84,7 +110,13 @@ async def test_reviewer_isolation(db_session: Session):
 
 def test_set_queue_status(db_session: Session):
     user = user_service.get_or_create_user(db_session, "123", "testuser")
-    reviewer = Reviewer(user_id=user.id, discord_channel_id="456", tiktok_handle="test")
+    reviewer = Reviewer(
+        user_id=user.id,
+        submission_channel_id="456",
+        queue_channel_id="456q",
+        reviewer_role_id="456r",
+        tiktok_handle="test"
+    )
     db_session.add(reviewer)
     db_session.commit()
 
@@ -94,12 +126,18 @@ def test_set_queue_status(db_session: Session):
 @pytest.mark.anyio
 async def test_advance_queue(db_session: Session):
     user = user_service.get_or_create_user(db_session, "123", "testuser")
-    reviewer = Reviewer(user_id=user.id, discord_channel_id="456", tiktok_handle="test")
+    reviewer = Reviewer(
+        user_id=user.id,
+        submission_channel_id="456",
+        queue_channel_id="456q",
+        reviewer_role_id="456r",
+        tiktok_handle="test"
+    )
     db_session.add(reviewer)
     db_session.commit()
 
-    await queue_service.create_submission(db_session, reviewer.id, user.id, "track1")
-    await queue_service.create_submission(db_session, reviewer.id, user.id, "track2")
+    await queue_service.create_submission(db_session, reviewer.id, user.id, "track1", track_artist="artist1", track_title="title1")
+    await queue_service.create_submission(db_session, reviewer.id, user.id, "track2", track_artist="artist2", track_title="title2")
 
     submission = await queue_service.advance_queue(db_session, reviewer.id)
     assert submission.status == "played"

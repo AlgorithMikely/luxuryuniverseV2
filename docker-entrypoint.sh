@@ -7,6 +7,9 @@ until pg_isready -h db -p 5432 -U "${POSTGRES_USER:-user}"; do
   sleep 2
 done
 
+# Ensure DATABASE_URL is set for Alembic
+export DATABASE_URL="postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-app}"
+
 echo "Database is up - running migrations"
 poetry run alembic upgrade head
 

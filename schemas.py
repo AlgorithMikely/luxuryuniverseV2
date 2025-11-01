@@ -1,29 +1,28 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from typing import List
 
 class UserBase(BaseModel):
     discord_id: str
     username: str
+    avatar: str | None = None
 
 class UserCreate(UserBase):
     pass
 
 class User(UserBase):
     id: int
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ReviewerProfile(BaseModel):
     id: int
     tiktok_handle: str | None = None
     discord_channel_id: str
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class UserProfile(User):
     reviewer_profile: ReviewerProfile | None = None
+    roles: List[str] = []
+    moderated_reviewers: List["Reviewer"] = []
 
 class Token(BaseModel):
     access_token: str
@@ -32,3 +31,38 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     discord_id: str | None = None
     roles: List[str] = []
+
+class Reviewer(BaseModel):
+    id: int
+    user: User
+    model_config = ConfigDict(from_attributes=True)
+
+class SubmissionReviewer(BaseModel):
+    reviewer: Reviewer
+    model_config = ConfigDict(from_attributes=True)
+
+class Submission(BaseModel):
+    id: int
+    track_url: str
+    status: str
+    track_artist: str | None = None
+    track_title: str | None = None
+    is_spotlighted: bool
+    is_bookmarked: bool
+    submitted_by: User = Field(validation_alias='user')
+    reviewers: List[SubmissionReviewer] = []
+    model_config = ConfigDict(from_attributes=True)
+
+class UserSubmissionsResponse(BaseModel):
+    user: UserProfile
+    submissions: List["Submission"]
+    model_config = ConfigDict(from_attributes=True)
+
+class ReviewCreate(BaseModel):
+    rating: int | None = None
+    status: str
+    tags: str | None = None
+    private_notes: str | None = None
+    public_review: str | None = None
+
+UserSubmissionsResponse.model_rebuild()

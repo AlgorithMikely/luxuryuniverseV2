@@ -32,3 +32,8 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
 anyio_backend = "asyncio"
+
+[dependency-groups]
+dev = [
+    "trio (>=0.31.0,<0.32.0)"
+]

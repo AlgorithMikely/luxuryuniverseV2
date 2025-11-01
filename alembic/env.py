@@ -18,9 +18,19 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
+import os
 from models import Base
 from config import settings
-config.set_main_option('sqlalchemy.url', str(settings.SQLALCHEMY_DATABASE_URI))
+
+# Use environment variable for database URL if it's set, otherwise use local SQLite for migrations.
+# This allows `alembic revision` to run locally without a running Postgres DB.
+if os.environ.get('DATABASE_URL'):
+    config.set_main_option('sqlalchemy.url', os.environ.get('DATABASE_URL'))
+else:
+    # Default to a local SQLite database for offline migration generation
+    # This is a common pattern to avoid needing a live DB for simple schema changes.
+    config.set_main_option('sqlalchemy.url', 'sqlite:///./local_migrations.db')
+
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
