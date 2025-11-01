@@ -25,6 +25,10 @@ class ReviewerProfile(BaseModel):
 class UserProfile(User):
     reviewer_profile: ReviewerProfile | None = None
 
+class ReviewerCreate(BaseModel):
+    discord_id: str
+    discord_channel_id: str
+
 class Token(BaseModel):
     access_token: str
     token_type: str

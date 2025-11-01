@@ -1,11 +1,24 @@
 import { Navigate } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
 
-const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
-  const { token } = useAuthStore();
+interface ProtectedRouteProps {
+  children: JSX.Element;
+  adminOnly?: boolean;
+}
+
+const ProtectedRoute = ({ children, adminOnly = false }: ProtectedRouteProps) => {
+  const { user, token, isLoading } = useAuthStore();
+
+  if (isLoading) {
+    return null; // or a loading spinner
+  }
 
   if (!token) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (adminOnly && (!user || !user.roles.includes("admin"))) {
+    return <Navigate to="/hub" replace />; // Redirect to a safe page if not an admin
   }
 
   return children;
