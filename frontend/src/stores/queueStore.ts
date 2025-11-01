@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import api from '../services/api';
 
 // Based on schemas.py User model
@@ -48,42 +49,54 @@ interface QueueState {
   toggleSpotlight: (submissionId: number, spotlight: boolean) => Promise<void>;
 }
 
-export const useQueueStore = create<QueueState>()((set, get) => ({
-  queue: [],
-  currentTrack: null,
+export const useQueueStore = create<QueueState>()(
+  persist(
+    (set, get) => ({
+      queue: [],
+      currentTrack: null,
   recentlyPlayed: [],
   reviewerId: null,
   setReviewerId: (id) => set({ reviewerId: id }),
   setQueue: (queue) => set({ queue }),
   setCurrentTrack: (track) => {
-    const { currentTrack } = get();
+    const { currentTrack, recentlyPlayed } = get();
     // If there was a track playing, move it to recently played
     if (currentTrack) {
+      const finalStatus = currentTrack.status === 'playing' ? 'played' : currentTrack.status;
       set((state) => ({
         recentlyPlayed: [
-          { ...currentTrack, status: "played" },
-          ...state.recentlyPlayed,
+          { ...currentTrack, status: finalStatus },
+          ...state.recentlyPlayed.filter(t => t.id !== currentTrack.id) // Remove duplicates
         ],
       }));
     }
-    // Set the new track as current and update its status in the queue
+
+    // Set the new track as current, and remove it from recently played if it was there
     set((state) => ({
       currentTrack: { ...track, status: "playing" },
+      recentlyPlayed: state.recentlyPlayed.filter(t => t.id !== track.id),
       queue: state.queue.map((s) =>
         s.id === track.id ? { ...s, status: "playing" } : s
       ),
     }));
   },
   playNext: () => {
-    const { queue, currentTrack } = get();
-    // Move the current track to recently played
+    const { queue, currentTrack, recentlyPlayed } = get();
+    // Move the current track to recently played, updating if it's already there
     if (currentTrack) {
-      set((state) => ({
-        recentlyPlayed: [
-          { ...currentTrack, status: "played" },
-          ...state.recentlyPlayed,
-        ],
-      }));
+      const finalStatus = currentTrack.status === 'playing' ? 'played' : currentTrack.status;
+      const updatedTrack = { ...currentTrack, status: finalStatus };
+
+      const existingIndex = recentlyPlayed.findIndex(t => t.id === currentTrack.id);
+
+      let updatedRecentlyPlayed = [...recentlyPlayed];
+      if (existingIndex > -1) {
+        updatedRecentlyPlayed[existingIndex] = updatedTrack;
+      } else {
+        updatedRecentlyPlayed = [updatedTrack, ...recentlyPlayed];
+      }
+
+      set({ recentlyPlayed: updatedRecentlyPlayed });
     }
 
     // Find the next pending track in the queue
@@ -145,4 +158,10 @@ export const useQueueStore = create<QueueState>()((set, get) => ({
       }
     }
   },
-}));
+    }),
+    {
+      name: 'queue-storage', // unique name
+      partialize: (state) => ({ recentlyPlayed: state.recentlyPlayed }), // only persist the 'recentlyPlayed' field
+    }
+  )
+);

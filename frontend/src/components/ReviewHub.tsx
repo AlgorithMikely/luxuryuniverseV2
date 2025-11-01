@@ -36,7 +36,7 @@ const ReviewHub = () => {
       setPrivateNotes(currentTrack.private_notes || "");
       setPublicReview(currentTrack.public_review || "");
     }
-  }, [currentTrack]);
+  }, [currentTrack?.id]);
 
   const handleSubmitReview = async () => {
     if (!currentTrack || !reviewerId) return;

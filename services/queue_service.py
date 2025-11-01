@@ -62,7 +62,7 @@ def get_played_queue(db: Session, reviewer_id: int) -> list[models.Submission]:
         joinedload(models.Submission.user)
     ).filter(
         models.Submission.reviewer_id == reviewer_id,
-        models.Submission.status == 'played'
+        models.Submission.status.in_(['played', 'Reviewed', 'Rejected'])
     ).order_by(models.Submission.played_at.desc()).all()
 
 async def spotlight_submission(db: Session, reviewer_id: int, submission_id: int, spotlight: bool) -> Optional[models.Submission]:

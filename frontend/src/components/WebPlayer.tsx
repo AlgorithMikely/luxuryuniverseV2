@@ -75,7 +75,7 @@ const WebPlayer = () => {
         wavesurferRef.current.destroy();
       }
     };
-  }, [currentTrack, playNext]);
+  }, [currentTrack?.id]);
 
   const formatTime = (seconds: number) => {
     if (isNaN(seconds)) return "0:00";
