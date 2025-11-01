@@ -37,33 +37,37 @@ async def proxy_stream(url: str = Query(...)):
     Proxies an audio stream from a given URL, forwarding essential headers
     like Content-Type and Content-Length to ensure the browser can decode the audio.
     """
-    async with httpx.AsyncClient() as client:
-        try:
-            # First, make a HEAD request to get the headers without downloading the body.
-            head_response = await client.head(url, headers=HEADERS, timeout=10.0)
-            head_response.raise_for_status()
+    client = httpx.AsyncClient()
+    try:
+        # First, make a HEAD request to get the headers without downloading the body.
+        head_response = await client.head(url, headers=HEADERS, timeout=10.0)
+        head_response.raise_for_status()
 
-            content_type = head_response.headers.get("Content-Type", "application/octet-stream")
-            content_length = head_response.headers.get("Content-Length")
+        content_type = head_response.headers.get("Content-Type", "application/octet-stream")
+        content_length = head_response.headers.get("Content-Length")
 
-            headers = {
-                "Content-Type": content_type,
-                "Content-Disposition": "inline", # Important for playback in browser
-            }
-            if content_length:
-                headers["Content-Length"] = content_length
+        headers = {
+            "Content-Type": content_type,
+            "Content-Disposition": "inline", # Important for playback in browser
+        }
+        if content_length:
+            headers["Content-Length"] = content_length
 
-            # Now, create the streaming response with the correct headers.
-            return StreamingResponse(
-                _stream_generator(client, url),
-                status_code=200,
-                headers=headers
-            )
+        # Now, create the streaming response with the correct headers.
+        return StreamingResponse(
+            _stream_generator(client, url),
+            status_code=200,
+            headers=headers,
+            background=client.aclose  # Ensure client is closed after stream completes
+        )
 
-        except httpx.HTTPStatusError as e:
-            raise HTTPException(status_code=e.response.status_code, detail="Upstream server returned an error.")
-        except httpx.RequestError as e:
-            raise HTTPException(status_code=502, detail=f"Could not connect to upstream server: {e}")
-        except Exception as e:
-            logging.error(f"An unexpected error occurred during proxy HEAD request for URL: {url}. Error: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail="An internal error occurred.")
+    except httpx.HTTPStatusError as e:
+        await client.aclose()
+        raise HTTPException(status_code=e.response.status_code, detail="Upstream server returned an error.")
+    except httpx.RequestError as e:
+        await client.aclose()
+        raise HTTPException(status_code=502, detail=f"Could not connect to upstream server: {e}")
+    except Exception as e:
+        await client.aclose()
+        logging.error(f"An unexpected error occurred during proxy HEAD request for URL: {url}. Error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred.")
