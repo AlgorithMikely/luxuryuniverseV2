@@ -7,13 +7,13 @@ import {
   HeartIcon,
 } from "@heroicons/react/24/solid";
 import { useState, useEffect } from "react";
-import { useQueueStore } from "../stores/queueStore";
+import { useQueueStore, Submission } from "../stores/queueStore";
 
 import api from "../services/api"; // Import the api service
 
 const ReviewHub = () => {
   const [rating, setRating] = useState(0);
-  const [status, setStatus] = useState("Pending");
+  const [status, setStatus] = useState<Submission['status']>("pending");
   const [tags, setTags] = useState("");
   const [privateNotes, setPrivateNotes] = useState("");
   const [publicReview, setPublicReview] = useState("");
@@ -32,7 +32,7 @@ const ReviewHub = () => {
     // When a new track is loaded, populate the form with its review data
     if (currentTrack) {
       setRating(currentTrack.rating || 0);
-      setStatus(currentTrack.status || "Pending");
+      setStatus(currentTrack.status || "pending");
       setTags(currentTrack.tags || "");
       setPrivateNotes(currentTrack.private_notes || "");
       setPublicReview(currentTrack.public_review || "");
@@ -59,7 +59,7 @@ const ReviewHub = () => {
 
       // Reset form state after successful submission
       setRating(0);
-      setStatus("Pending");
+      setStatus("pending");
       setTags("");
       setPrivateNotes("");
       setPublicReview("");
@@ -135,13 +135,13 @@ const ReviewHub = () => {
               <select
                 id="status"
                 value={status}
-                onChange={(e) => setStatus(e.target.value)}
+                onChange={(e) => setStatus(e.target.value as Submission['status'])}
                 className="bg-gray-700 border border-gray-600 rounded-md px-3 py-1 text-sm"
               >
-                <option>Pending</option>
-                <option>In Progress</option>
-                <option>Reviewed</option>
-                <option>Rejected</option>
+                <option value="pending">Pending</option>
+                <option value="playing">In Progress</option>
+                <option value="played">Reviewed</option>
+                <option value="rejected">Rejected</option>
               </select>
             </div>
 
