@@ -47,7 +47,7 @@ async def test_create_submission(db_session: Session):
     db_session.add(reviewer)
     db_session.commit()
 
-    submission = queue_service.create_submission(db_session, reviewer.id, user.id, "http://test.com", track_artist="artist", track_title="title")
+    submission = await queue_service.create_submission(db_session, reviewer.id, user.id, "http://test.com", track_artist="artist", track_title="title")
     assert submission.reviewer_id == reviewer.id
     assert submission.user_id == user.id
     assert submission.track_url == "http://test.com"
@@ -67,8 +67,8 @@ async def test_get_pending_queue(db_session: Session):
     db_session.add(reviewer)
     db_session.commit()
 
-    queue_service.create_submission(db_session, reviewer.id, user.id, "http://test.com", track_artist="artist1", track_title="title1")
-    queue_service.create_submission(db_session, reviewer.id, user.id, "http://test2.com", track_artist="artist2", track_title="title2")
+    await queue_service.create_submission(db_session, reviewer.id, user.id, "http://test.com", track_artist="artist1", track_title="title1")
+    await queue_service.create_submission(db_session, reviewer.id, user.id, "http://test2.com", track_artist="artist2", track_title="title2")
 
     queue = queue_service.get_pending_queue(db_session, reviewer.id)
     assert len(queue) == 2
@@ -97,8 +97,8 @@ async def test_reviewer_isolation(db_session: Session):
     db_session.add(reviewer2)
     db_session.commit()
 
-    queue_service.create_submission(db_session, reviewer1.id, user1.id, "reviewer1_track", track_artist="artist1", track_title="title1")
-    queue_service.create_submission(db_session, reviewer2.id, user2.id, "reviewer2_track", track_artist="artist2", track_title="title2")
+    await queue_service.create_submission(db_session, reviewer1.id, user1.id, "reviewer1_track", track_artist="artist1", track_title="title1")
+    await queue_service.create_submission(db_session, reviewer2.id, user2.id, "reviewer2_track", track_artist="artist2", track_title="title2")
 
     queue1 = queue_service.get_pending_queue(db_session, reviewer1.id)
     assert len(queue1) == 1
@@ -136,8 +136,8 @@ async def test_advance_queue(db_session: Session):
     db_session.add(reviewer)
     db_session.commit()
 
-    queue_service.create_submission(db_session, reviewer.id, user.id, "track1", track_artist="artist1", track_title="title1")
-    queue_service.create_submission(db_session, reviewer.id, user.id, "track2", track_artist="artist2", track_title="title2")
+    await queue_service.create_submission(db_session, reviewer.id, user.id, "track1", track_artist="artist1", track_title="title1")
+    await queue_service.create_submission(db_session, reviewer.id, user.id, "track2", track_artist="artist2", track_title="title2")
 
     submission = await queue_service.advance_queue(db_session, reviewer.id)
     assert submission.status == "played"

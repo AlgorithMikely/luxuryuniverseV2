@@ -12,23 +12,13 @@ class PassiveSubmissionCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    def _process_submission(self, author_id, author_name, author_avatar, reviewer_id, submission_url: str):
-        """Synchronous function to handle blocking operations, with its own db session."""
-        # Step 1: Validate the URL *before* any database operations.
+    def _validate_url(self, submission_url: str) -> dict:
+        """Synchronous function to handle blocking URL validation."""
         with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True}) as ydl:
             info_dict = ydl.extract_info(submission_url, download=False)
             if not info_dict:
                 raise ValueError("Invalid link")
-
-        # Step 2: If validation succeeds, then open a database session.
-        with self.bot.SessionLocal() as db:
-            user = user_service.get_or_create_user(db, str(author_id), author_name, str(author_avatar))
-
-            artist = info_dict.get('artist')
-            title = info_dict.get('title')
-
-            # This is a purely synchronous call
-            queue_service.create_submission(db, reviewer_id, user.id, submission_url, artist, title)
+            return info_dict
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -52,25 +42,20 @@ class PassiveSubmissionCog(commands.Cog):
             return
 
         try:
-            # Pass primitive types to the thread-safe function
-            await asyncio.to_thread(
-                self._process_submission,
-                message.author.id,
-                message.author.name,
-                message.author.avatar,
-                reviewer.id,
-                submission_url
-            )
+            # Run blocking IO in a separate thread
+            info_dict = await asyncio.to_thread(self._validate_url, submission_url)
 
             # --- All async operations happen after the blocking code is done ---
-            # We need a new session for these async-context db calls
             with self.bot.SessionLocal() as db:
-                # 1. Emit the queue update event
-                new_queue_models = queue_service.get_pending_queue(db, reviewer.id)
-                new_queue_schemas = [schemas.Submission.model_validate(s) for s in new_queue_models]
-                await event_service.emit_queue_update(reviewer.id, [s.model_dump() for s in new_queue_schemas])
+                # 1. Create the user and submission
+                user = user_service.get_or_create_user(
+                    db, str(message.author.id), message.author.name, str(message.author.avatar)
+                )
+                await queue_service.create_submission(
+                    db, reviewer.id, user.id, submission_url, info_dict.get('artist'), info_dict.get('title')
+                )
 
-                # 2. Copy file/link to the files channel
+                # 2. Copy file/link to the files channel (no db session needed)
                 if reviewer.files_and_links_channel_id:
                     files_and_links_channel = self.bot.get_channel(int(reviewer.files_and_links_channel_id))
                     if files_and_links_channel:

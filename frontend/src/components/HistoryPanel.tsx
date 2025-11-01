@@ -33,8 +33,9 @@ const HistoryPanel = () => {
     setCurrentTrack: state.setCurrentTrack,
   }));
 
-  const bookmarked = queue.filter((item) => item.is_bookmarked);
-  const spotlighted = queue.filter((item) => item.is_spotlighted);
+  const allTracks = [...queue, ...recentlyPlayed];
+  const bookmarked = allTracks.filter((item) => item.is_bookmarked);
+  const spotlighted = allTracks.filter((item) => item.is_spotlighted);
 
 
   const renderTabContent = () => {

@@ -6,7 +6,7 @@ import datetime
 import asyncio
 import schemas
 
-def create_submission(db: Session, reviewer_id: int, user_id: int, track_url: str, track_artist: str = None, track_title: str = None) -> models.Submission:
+async def create_submission(db: Session, reviewer_id: int, user_id: int, track_url: str, track_artist: str = None, track_title: str = None) -> models.Submission:
     # Check if a submission with the same track_url exists
     existing_submission = db.query(models.Submission).filter(models.Submission.track_url == track_url).first()
 
@@ -45,6 +45,12 @@ def create_submission(db: Session, reviewer_id: int, user_id: int, track_url: st
 
     # Eagerly load the user relationship to ensure it's available for socket events
     db.refresh(new_submission)
+
+    # After creating the submission, emit a queue update
+    new_queue = get_pending_queue(db, reviewer_id)
+    queue_data = [schemas.Submission.model_validate(s).model_dump() for s in new_queue]
+    await event_service.emit_queue_update(reviewer_id, queue_data)
+
     return db.query(models.Submission).options(
         joinedload(models.Submission.user)
     ).filter(models.Submission.id == new_submission.id).one()

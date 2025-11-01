@@ -59,44 +59,25 @@ export const useQueueStore = create<QueueState>()(
   setReviewerId: (id) => set({ reviewerId: id }),
   setQueue: (queue) => set({ queue }),
   setCurrentTrack: (track) => {
-    const { currentTrack, recentlyPlayed } = get();
-    // If there was a track playing, move it to recently played
-    if (currentTrack) {
-      const finalStatus = currentTrack.status === 'playing' ? 'played' : currentTrack.status;
-      set((state) => ({
-        recentlyPlayed: [
-          { ...currentTrack, status: finalStatus },
-          ...state.recentlyPlayed.filter(t => t.id !== currentTrack.id) // Remove duplicates
-        ],
-      }));
-    }
-
-    // Set the new track as current, and remove it from recently played if it was there
+    // Set the new track as current and update its status in the queue
     set((state) => ({
       currentTrack: { ...track, status: "playing" },
-      recentlyPlayed: state.recentlyPlayed.filter(t => t.id !== track.id),
       queue: state.queue.map((s) =>
         s.id === track.id ? { ...s, status: "playing" } : s
       ),
     }));
   },
   playNext: () => {
-    const { queue, currentTrack, recentlyPlayed } = get();
-    // Move the current track to recently played, updating if it's already there
+    const { queue, currentTrack } = get();
+    // Move the current track to recently played
     if (currentTrack) {
       const finalStatus = currentTrack.status === 'playing' ? 'played' : currentTrack.status;
-      const updatedTrack = { ...currentTrack, status: finalStatus };
-
-      const existingIndex = recentlyPlayed.findIndex(t => t.id === currentTrack.id);
-
-      let updatedRecentlyPlayed = [...recentlyPlayed];
-      if (existingIndex > -1) {
-        updatedRecentlyPlayed[existingIndex] = updatedTrack;
-      } else {
-        updatedRecentlyPlayed = [updatedTrack, ...recentlyPlayed];
-      }
-
-      set({ recentlyPlayed: updatedRecentlyPlayed });
+      set((state) => ({
+        recentlyPlayed: [
+          { ...currentTrack, status: finalStatus },
+          ...state.recentlyPlayed.filter(t => t.id !== currentTrack.id), // Prevent duplicates while maintaining order
+        ],
+      }));
     }
 
     // Find the next pending track in the queue

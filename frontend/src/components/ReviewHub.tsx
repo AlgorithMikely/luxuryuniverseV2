@@ -215,7 +215,11 @@ const ReviewHub = () => {
                 className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-md transition-colors"
                 disabled={isSubmitting}
             >
-              {isSubmitting ? 'Submitting...' : 'Submit Review & Play Next'}
+              {isSubmitting
+                ? 'Submitting...'
+                : ['played', 'Reviewed', 'Rejected'].includes(currentTrack.status)
+                ? 'Update Review & Load Next Track'
+                : 'Submit Review & Play Next'}
             </button>
           </div>
         </div>
