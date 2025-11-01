@@ -1,5 +1,3 @@
-import logging
-import json
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 from sqlalchemy.orm import Session
 import schemas
@@ -8,8 +6,6 @@ from database import get_db
 from services import queue_service, user_service
 
 router = APIRouter(prefix="/{reviewer_id}", tags=["Reviewer"])
-
-logging.basicConfig(level=logging.INFO)
 
 async def check_is_reviewer(
     reviewer_id: int = Path(...),
@@ -30,14 +26,9 @@ async def check_is_reviewer(
 
     return current_user
 
-@router.get("/queue", dependencies=[Depends(check_is_reviewer)])
+@router.get("/queue", response_model=list[schemas.Submission], dependencies=[Depends(check_is_reviewer)])
 async def get_queue(reviewer_id: int, db: Session = Depends(get_db)):
-    logging.info(f"--- Fetching queue for reviewer_id: {reviewer_id} ---")
     queue = queue_service.get_pending_queue(db, reviewer_id=reviewer_id)
-    # Manually serialize to inspect the data
-    queue_data = [schemas.Submission.model_validate(s).model_dump(mode='json') for s in queue]
-    logging.info(json.dumps(queue_data, indent=2))
-    logging.info("----------------------------------------------------")
     return queue
 
 @router.post("/queue/next", dependencies=[Depends(check_is_reviewer)])
@@ -64,7 +55,7 @@ async def spotlight_submission(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
     return submission
 
-@router.get("/queue/history", dependencies=[Depends(check_is_reviewer)])
+@router.get("/queue/history", response_model=list[schemas.Submission], dependencies=[Depends(check_is_reviewer)])
 async def get_queue_history(reviewer_id: int, db: Session = Depends(get_db)):
     return queue_service.get_played_queue(db, reviewer_id=reviewer_id)
 

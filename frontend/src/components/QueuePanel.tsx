@@ -42,10 +42,7 @@ const QueueItem = ({ submission }: { submission: Submission }) => {
 
 const QueuePanel = () => {
   const queue = useQueueStore((state) => state.queue);
-  console.log("QueuePanel: Rendering with full queue:", queue);
   const pendingQueue = queue.filter((s) => s.status === "pending");
-  console.log("QueuePanel: Filtered to pending queue:", pendingQueue);
-
 
   return (
     <div className="w-1/4 bg-gray-800 p-4 overflow-y-auto h-full flex flex-col">

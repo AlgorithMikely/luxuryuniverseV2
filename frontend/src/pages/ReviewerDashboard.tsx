@@ -15,23 +15,17 @@ const ReviewerDashboard = () => {
 
   useEffect(() => {
     const fetchQueue = async () => {
-      console.log(`ReviewerDashboard: Fetching queue for reviewerId: ${reviewerId}`);
       try {
         const response = await api.get(`/${reviewerId}/queue`);
-        console.log("ReviewerDashboard: Queue data received:", response.data);
         setQueue(response.data);
-        console.log("ReviewerDashboard: Queue data set in store.");
       } catch (error) {
-        console.error("ReviewerDashboard: Failed to fetch queue:", error);
+        console.error("Failed to fetch queue:", error);
       }
     };
 
     if (reviewerId) {
-      console.log(`ReviewerDashboard: Reviewer ID is present: ${reviewerId}. Setting ID and fetching queue.`);
       setReviewerId(parseInt(reviewerId, 10));
       fetchQueue();
-    } else {
-        console.log("ReviewerDashboard: Reviewer ID is not present, skipping fetch.");
     }
   }, [reviewerId, setQueue, setReviewerId]);
 
