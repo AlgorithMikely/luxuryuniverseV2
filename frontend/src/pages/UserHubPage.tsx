@@ -3,6 +3,7 @@ import api from "../services/api";
 import { useAuthStore } from "../stores/authStore";
 import { useSocketStore } from "../stores/socketStore";
 import toast from "react-hot-toast";
+import Navbar from "../components/Navbar";
 
 interface Submission {
   track_url: string;
@@ -26,7 +27,7 @@ const UserHubPage = () => {
           api.get("/user/me/submissions"),
         ]);
         setBalance(balanceRes.data.balance);
-        setSubmissions(submissionsRes.data);
+        setSubmissions(submissionsRes.data.submissions);
         setIsLoading(false);
       };
       fetchInitialData();
@@ -52,9 +53,11 @@ const UserHubPage = () => {
   }
 
   return (
-    <div className="bg-gray-900 text-white min-h-screen p-4 sm:p-8">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-4">Your Hub</h1>
+    <div className="bg-gray-900 text-white min-h-screen">
+      <Navbar />
+      <div className="p-4 sm:p-8">
+        <div className="max-w-4xl mx-auto">
+          <h1 className="text-3xl font-bold mb-4">Your Hub</h1>
         <div className="mb-4 p-4 bg-gray-800 rounded-lg shadow">
           <h2 className="text-2xl font-bold">Balance: {balance} Luxury Coins</h2>
         </div>
@@ -68,6 +71,7 @@ const UserHubPage = () => {
               </li>
             ))}
           </ul>
+        </div>
         </div>
       </div>
     </div>

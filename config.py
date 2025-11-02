@@ -1,6 +1,6 @@
 from pydantic_settings import BaseSettings
 from pydantic import model_validator
-from typing import Optional, Dict, Any
+from typing import Optional
 
 class Settings(BaseSettings):
     # Core settings
@@ -10,23 +10,21 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     # Database settings
-    POSTGRES_SERVER: str = "localhost"
+    POSTGRES_SERVER: str = "db"
     POSTGRES_PORT: int = 5432
     POSTGRES_USER: str = "user"
     POSTGRES_PASSWORD: str = "password"
     POSTGRES_DB: str = "universe_bot"
     SQLALCHEMY_DATABASE_URI: Optional[str] = None
 
-    @model_validator(mode='before')
-    def assemble_db_connection(cls, v: Any) -> Dict[str, Any]:
-        if isinstance(v, dict):
-            # Forcibly use the correct internal Docker host and port.
-            # This ensures the backend can always connect to the db container.
-            v['SQLALCHEMY_DATABASE_URI'] = (
-                f"postgresql://{v.get('POSTGRES_USER', 'user')}:{v.get('POSTGRES_PASSWORD', 'password')}"
-                f"@db:5432/{v.get('POSTGRES_DB', 'universe_bot')}"
+    @model_validator(mode='after')
+    def assemble_db_connection(self) -> 'Settings':
+        if self.SQLALCHEMY_DATABASE_URI is None:
+            self.SQLALCHEMY_DATABASE_URI = (
+                f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+                f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
             )
-        return v
+        return self
 
     # Discord OAuth2 Settings
     DISCORD_CLIENT_ID: str
