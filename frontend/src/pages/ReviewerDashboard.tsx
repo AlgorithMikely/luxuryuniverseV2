@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQueueStore } from '../stores/queueStore';
 import { useAuthStore } from '../stores/authStore';
-import { useSocket } from '../context/SocketContext';
+import { useSocketStore } from '../stores/socketStore'; // Import the new store
 import api from '../services/api';
 
 // Import the panel components
@@ -10,7 +10,7 @@ import QueuePanel from '../components/QueuePanel';
 import ReviewHub from '../components/ReviewHub';
 import HistoryPanel from '../components/HistoryPanel';
 import WebPlayer from '../components/WebPlayer';
-import Navbar from '../components/Navbar'; // Assuming a Navbar component exists
+import Navbar from '../components/Navbar';
 
 const ReviewerDashboard = () => {
   const { reviewerId } = useParams<{ reviewerId: string }>();
@@ -21,7 +21,7 @@ const ReviewerDashboard = () => {
     handleQueueUpdate,
   } = useQueueStore();
   const { user } = useAuthStore();
-  const socket = useSocket();
+  const { socket } = useSocketStore(); // Use the Zustand store
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -41,26 +41,30 @@ const ReviewerDashboard = () => {
     fetchInitialData();
   }, [reviewerId, setQueue, setRecentlyPlayed]);
 
+  // The socket connection and event listeners are now managed globally in App.tsx
+  // We just need to react to socket events here.
   useEffect(() => {
-    if (!socket) return;
-
-    socket.on('connect', () => setSocketStatus('connected'));
-    socket.on('disconnect', () => setSocketStatus('disconnected'));
-    socket.on('queue_updated', (data) => handleQueueUpdate(data.queue));
-
-    if (socket.connected) {
-      setSocketStatus('connected');
-    } else {
-      setSocketStatus('connecting');
-      socket.connect();
+    if (!socket) {
+      setSocketStatus('disconnected');
+      return;
     }
 
+    // Set initial status based on the global socket state
+    setSocketStatus(socket.connected ? 'connected' : 'connecting');
+
+    // The 'connect' and 'disconnect' events are handled here to update the UI
+    const handleConnect = () => setSocketStatus('connected');
+    const handleDisconnect = () => setSocketStatus('disconnected');
+
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
+    socket.on('queue_updated', handleQueueUpdate); // handleQueueUpdate now expects the data directly
+
+    // Cleanup listeners on component unmount
     return () => {
-      if (socket) {
-        socket.off('connect');
-        socket.off('disconnect');
-        socket.off('queue_updated');
-      }
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
+      socket.off('queue_updated', handleQueueUpdate);
     };
   }, [socket, setSocketStatus, handleQueueUpdate]);
 

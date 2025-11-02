@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../services/api";
 import { useAuthStore } from "../stores/authStore";
-import { useSocket } from "../context/SocketContext";
+import { useSocketStore } from "../stores/socketStore";
 import toast from "react-hot-toast";
 
 interface Submission {
@@ -14,7 +14,7 @@ const UserHubPage = () => {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { user } = useAuthStore();
-  const socket = useSocket();
+  const { socket } = useSocketStore();
 
   useEffect(() => {
     if (user) {

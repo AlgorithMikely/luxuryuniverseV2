@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { useAuthStore } from './stores/authStore';
 import { useSocketStore } from './stores/socketStore';
-import { SocketProvider } from "./context/SocketContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import LoginPage from "./pages/LoginPage";
 import AuthCallbackPage from "./pages/AuthCallbackPage";
@@ -94,12 +93,12 @@ function AppContent() {
 
 function App() {
   return (
-    <SocketProvider>
+    <>
       <Toaster />
       <ErrorBoundary FallbackComponent={ErrorPage}>
         <AppContent />
       </ErrorBoundary>
-    </SocketProvider>
+    </>
   );
 }
 
