@@ -71,7 +71,7 @@ const ReviewHub = () => {
         <p className="text-md text-gray-400">
           Submitted by: <span className="font-semibold text-white">{currentTrack.user?.username || 'Unknown User'}</span>
           {currentTrack.user?.tiktok_username && (
-            <span className="ml-2 text-sm text-pink-400">(@{currentTrack.user.tiktok_username})</span>
+            <span className="ml-2 text-sm text-pink-400">(@{currentTrack.user?.tiktok_username})</span>
           )}
         </p>
       </div>
