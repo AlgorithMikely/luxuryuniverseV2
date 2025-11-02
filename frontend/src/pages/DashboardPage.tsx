@@ -4,26 +4,29 @@ import { useAuthStore } from '../stores/authStore';
 
 const DashboardRedirect = () => {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, isLoading } = useAuthStore();
 
   useEffect(() => {
+    // Wait for the user loading to be complete before attempting a redirect.
+    if (isLoading) {
+      return;
+    }
+
     if (user) {
-      // If the user is a reviewer, redirect to their own dashboard.
-      if (user.reviewer_profile) {
-        navigate(`/dashboard/${user.reviewer_profile.id}`);
-      }
-      // If the user is an admin and moderates reviewers, redirect to the first one.
-      else if (user.roles?.includes('admin') && user.moderated_reviewers && user.moderated_reviewers.length > 0) {
+      if (user.roles?.includes('admin') && user.moderated_reviewers && user.moderated_reviewers.length > 0) {
         navigate(`/dashboard/${user.moderated_reviewers[0].id}`);
-      }
-      // Otherwise, redirect to a general user hub.
-      else {
+      } else if (user.reviewer_profile) {
+        navigate(`/dashboard/${user.reviewer_profile.id}`);
+      } else {
         navigate('/hub');
       }
+    } else {
+      // If there's no user and we're not loading, they need to log in.
+      navigate('/login');
     }
-  }, [user, navigate]);
+  }, [user, isLoading, navigate]);
 
-  // Render a loading state while redirecting
+  // Render a loading state while the user data is being fetched.
   return <div>Loading dashboard...</div>;
 };
 

@@ -99,7 +99,7 @@ const ReviewHub = () => {
             onChange={(e) => setRating(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
             min="0"
             max="10"
-            className="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 sm:text-sm text-white"
+            className="mt-1 block w-full bg-gamma-700 border-gray-600 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 sm:text-sm text-white"
           />
         </div>
         <button
