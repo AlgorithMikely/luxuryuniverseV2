@@ -87,7 +87,7 @@ const AdminPage = () => {
           <tbody>
             {reviewers.map((reviewer) => (
               <tr key={reviewer.id}>
-                <td className="p-2">{reviewer.username}</td>
+                <td className="p-2">{reviewer?.username || 'Unknown User'}</td>
                 <td className="p-2">{reviewer.discord_id}</td>
                 <td className="p-2">{reviewer.reviewer_profile?.discord_channel_id}</td>
                 <td className="p-2">
