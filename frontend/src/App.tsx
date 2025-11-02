@@ -49,7 +49,6 @@ function AppContent() {
   }
 
   return (
-    <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
@@ -87,7 +86,6 @@ function AppContent() {
         />
         <Route path="/" element={<LoginPage />} />
       </Routes>
-    </BrowserRouter>
   );
 }
 
@@ -95,9 +93,11 @@ function App() {
   return (
     <>
       <Toaster />
-      <ErrorBoundary FallbackComponent={ErrorPage}>
-        <AppContent />
-      </ErrorBoundary>
+      <BrowserRouter>
+        <ErrorBoundary FallbackComponent={ErrorPage}>
+          <AppContent />
+        </ErrorBoundary>
+      </BrowserRouter>
     </>
   );
 }
