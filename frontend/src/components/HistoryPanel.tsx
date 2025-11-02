@@ -31,7 +31,7 @@ const HistoryPanel = () => {
           >
             <p className="font-semibold truncate">{submission.track_url}</p>
             <p className="text-sm text-gray-400">
-              Submitted by: {submission.user.username}
+              Submitted by: {submission.user?.username || 'Unknown User'}
             </p>
           </li>
         ))}
