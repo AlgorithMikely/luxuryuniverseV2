@@ -22,7 +22,7 @@ class Settings(BaseSettings):
         if self.SQLALCHEMY_DATABASE_URI is None:
             self.SQLALCHEMY_DATABASE_URI = (
                 f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
-                f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+                f"@{self.POSTGRES_SERVER}:5432/{self.POSTGRES_DB}"
             )
         return self
 
