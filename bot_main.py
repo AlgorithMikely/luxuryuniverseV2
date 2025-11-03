@@ -19,6 +19,8 @@ class UniverseBot(commands.Bot):
         await self.load_extension("cogs.submission_cog")
         await self.load_extension("cogs.queue_cog")
         await self.load_extension("cogs.economy_cog")
+        await self.load_extension("cogs.user_cache_cog")
+        await self.load_extension("cogs.channel_creator_cog")
         print("Cogs loaded.")
 
     async def on_ready(self):

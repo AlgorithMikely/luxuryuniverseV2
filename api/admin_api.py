@@ -26,7 +26,7 @@ async def add_reviewer(
         raise HTTPException(status_code=404, detail="User not found")
 
     return user_service.add_reviewer_profile(
-        db, user=db_user, channel_id=reviewer_data.discord_channel_id
+        db, user=db_user, tiktok_handle=reviewer_data.tiktok_handle
     )
 
 @router.delete("/reviewers/{reviewer_id}", status_code=204)
@@ -36,3 +36,8 @@ async def remove_reviewer(reviewer_id: int, db: Session = Depends(get_db)):
     if not success:
         raise HTTPException(status_code=404, detail="Reviewer profile not found")
     return {"ok": True}
+
+@router.get("/discord-users", response_model=list[schemas.DiscordUser])
+async def get_discord_users(db: Session = Depends(get_db)):
+    """Fetch all cached Discord users."""
+    return user_service.get_all_discord_users(db)
