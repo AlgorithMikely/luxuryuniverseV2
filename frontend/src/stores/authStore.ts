@@ -4,8 +4,7 @@ import api from '../services/api';
 
 export interface ReviewerProfile {
     id: number;
-    discord_channel_id: string | null;
-    tiktok_handle: string | null;
+    discord_channel_id: string;
 }
 export interface UserProfile {
   id: number;

@@ -26,7 +26,7 @@ async def add_reviewer(
         raise HTTPException(status_code=404, detail="User not found")
 
     return user_service.add_reviewer_profile(
-        db, user=db_user, tiktok_handle=reviewer_data.tiktok_handle
+        db, user=db_user, channel_id=reviewer_data.discord_channel_id
     )
 
 @router.delete("/reviewers/{reviewer_id}", status_code=204)

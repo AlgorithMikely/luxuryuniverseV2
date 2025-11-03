@@ -38,14 +38,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> schemas.TokenData:
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    token_data = verify_token(token, credentials_exception)
-
-    # Dynamically add admin role if the user's discord_id is in the admin list
-    if token_data.discord_id in settings.ADMIN_DISCORD_IDS:
-        if "admin" not in token_data.roles:
-            token_data.roles.append("admin")
-
-    return token_data
+    return verify_token(token, credentials_exception)
 
 
 def get_current_active_user(

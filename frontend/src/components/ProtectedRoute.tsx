@@ -17,7 +17,7 @@ const ProtectedRoute = ({ children, adminOnly = false }: ProtectedRouteProps) =>
     return <Navigate to="/login" replace />;
   }
 
-  if (adminOnly && !user?.roles?.includes("admin")) {
+  if (adminOnly && (!user || !user.roles.includes("admin"))) {
     return <Navigate to="/hub" replace />; // Redirect to a safe page if not an admin
   }
 

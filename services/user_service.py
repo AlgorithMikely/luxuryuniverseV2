@@ -40,24 +40,12 @@ def get_all_reviewers(db: Session) -> list[models.User]:
     """Retrieves all users with a reviewer profile."""
     return db.query(models.User).join(models.Reviewer).all()
 
-def add_reviewer_profile(db: Session, user: models.User, tiktok_handle: str | None) -> models.User:
+def add_reviewer_profile(db: Session, user: models.User, channel_id: str) -> models.User:
     """Adds a reviewer profile to a user."""
     if user.reviewer_profile:
-        # If the profile already exists, just update the tiktok handle
-        if tiktok_handle:
-            user.reviewer_profile.tiktok_handle = tiktok_handle
-            user.tiktok_username = tiktok_handle
-        db.commit()
-        db.refresh(user)
-        return user
+        return user  # User is already a reviewer
 
-    # Create a new reviewer profile without a channel_id
-    new_reviewer_profile = models.Reviewer(
-        user_id=user.id,
-        tiktok_handle=tiktok_handle,
-        discord_channel_id=None # Will be set by the bot later
-    )
-    user.tiktok_username = tiktok_handle
+    new_reviewer_profile = models.Reviewer(user_id=user.id, discord_channel_id=channel_id)
     db.add(new_reviewer_profile)
     db.commit()
     db.refresh(user)
@@ -72,7 +60,3 @@ def remove_reviewer_profile(db: Session, reviewer_id: int) -> bool:
     db.delete(reviewer_profile)
     db.commit()
     return True
-
-def get_all_discord_users(db: Session) -> list[models.DiscordUserCache]:
-    """Retrieves all users from the Discord user cache."""
-    return db.query(models.DiscordUserCache).all()

@@ -24,12 +24,10 @@ class ReviewerProfile(BaseModel):
 
 class UserProfile(User):
     reviewer_profile: ReviewerProfile | None = None
-    roles: List[str] = []
-    moderated_reviewers: List[ReviewerProfile] = []
 
 class ReviewerCreate(BaseModel):
     discord_id: str
-    tiktok_handle: str | None = None
+    discord_channel_id: str
 
 class Token(BaseModel):
     access_token: str
@@ -38,12 +36,3 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     discord_id: str | None = None
     roles: List[str] = []
-
-
-class DiscordUser(BaseModel):
-    id: int
-    discord_id: str
-    username: str
-
-    class Config:
-        from_attributes = True
