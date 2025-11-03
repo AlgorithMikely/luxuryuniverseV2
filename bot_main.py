@@ -19,6 +19,8 @@ class UniverseBot(commands.Bot):
         await self.load_extension("cogs.submission_cog")
         await self.load_extension("cogs.queue_cog")
         await self.load_extension("cogs.economy_cog")
+        await self.load_extension("cogs.user_cache_cog")
+        await self.load_extension("cogs.channel_creator_cog")
         print("Cogs loaded.")
 
     async def on_ready(self):
@@ -35,6 +37,7 @@ async def main():
     intents = discord.Intents.default()
     intents.message_content = True  # Required for on_message event
     intents.reactions = True      # Required for on_reaction_add event
+    intents.members = True        # Required for fetching all members
 
     bot = UniverseBot(command_prefix="!", intents=intents)
 

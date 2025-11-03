@@ -60,3 +60,7 @@ def remove_reviewer_profile(db: Session, reviewer_id: int) -> bool:
     db.delete(reviewer_profile)
     db.commit()
     return True
+
+def get_all_discord_users(db: Session) -> list[models.DiscordUserCache]:
+    """Retrieves all users from the Discord user cache."""
+    return db.query(models.DiscordUserCache).all()

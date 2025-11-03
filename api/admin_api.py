@@ -41,3 +41,8 @@ async def remove_reviewer(reviewer_id: int, db: Session = Depends(get_db)):
 async def get_discord_users(db: Session = Depends(get_db)):
     """Fetch all cached Discord users."""
     return user_service.get_all_discord_users(db)
+
+@router.get("/discord-users", response_model=list[schemas.DiscordUser])
+async def get_discord_users(db: Session = Depends(get_db)):
+    """Fetch all cached Discord users."""
+    return user_service.get_all_discord_users(db)

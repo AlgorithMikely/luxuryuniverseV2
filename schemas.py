@@ -27,7 +27,7 @@ class UserProfile(User):
 
 class ReviewerCreate(BaseModel):
     discord_id: str
-    discord_channel_id: str
+    tiktok_handle: str | None = None
 
 class Token(BaseModel):
     access_token: str
@@ -42,6 +42,4 @@ class DiscordUser(BaseModel):
     id: int
     discord_id: str
     username: str
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

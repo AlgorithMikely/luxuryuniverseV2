@@ -86,3 +86,10 @@ class Wallet(Base):
 
     user = relationship("User")
     reviewer = relationship("Reviewer")
+
+
+class DiscordUserCache(Base):
+    __tablename__ = "discord_user_cache"
+    id = Column(Integer, primary_key=True, index=True)
+    discord_id = Column(String, unique=True, index=True, nullable=False)
+    username = Column(String, nullable=False)
