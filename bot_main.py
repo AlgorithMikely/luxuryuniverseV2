@@ -37,6 +37,7 @@ async def main():
     intents = discord.Intents.default()
     intents.message_content = True  # Required for on_message event
     intents.reactions = True      # Required for on_reaction_add event
+    intents.members = True        # Required for fetching all members
 
     bot = UniverseBot(command_prefix="!", intents=intents)
 

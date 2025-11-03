@@ -23,7 +23,8 @@ class UserCacheCog(commands.Cog):
             # A set to keep track of user IDs we've already processed
             processed_user_ids = set()
 
-            all_members = self.bot.get_all_members()
+            all_members = list(self.bot.get_all_members())
+            logging.info(f"Found {len(all_members)} total members across all guilds.")
 
             for member in all_members:
                 if member.bot or member.id in processed_user_ids:
@@ -35,15 +36,17 @@ class UserCacheCog(commands.Cog):
                     # Update username if it has changed
                     if cached_user.username != member.name:
                         cached_user.username = member.name
+                        logging.info(f"Updating username for {member.name} ({member.id})")
                 else:
                     # Add new user to the cache
                     new_user = DiscordUserCache(discord_id=str(member.id), username=member.name)
                     db.add(new_user)
+                    logging.info(f"Adding new user to cache: {member.name} ({member.id})")
 
                 processed_user_ids.add(member.id)
 
             db.commit()
-            logging.info(f"User cache updated with {len(processed_user_ids)} users.")
+            logging.info(f"User cache update complete. Processed {len(processed_user_ids)} unique users.")
 
         except Exception as e:
             logging.error(f"Error updating user cache: {e}")
