@@ -3,7 +3,8 @@ import { useAuthStore } from "../stores/authStore";
 
 const Navbar = () => {
   const { user, logout } = useAuthStore();
-  const isAdmin = user?.roles.includes("admin");
+  // Safely check for admin role, ensuring user and user.roles exist.
+  const isAdmin = user?.roles?.includes("admin");
 
   return (
     <nav className="bg-gray-800 p-4">
