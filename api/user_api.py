@@ -14,14 +14,18 @@ async def get_me(
     db_user: models.User = Depends(security.get_current_active_user),
     token: schemas.TokenData = Depends(security.get_current_user),
 ):
-    # Manually construct the UserProfile to include roles from the token
+    # Manually construct the UserProfile and ensure roles are fresh
+    final_roles = token.roles
+    if db_user.discord_id in security.settings.ADMIN_DISCORD_IDS and "admin" not in final_roles:
+        final_roles.append("admin")
+
     user_profile = schemas.UserProfile(
         id=db_user.id,
         discord_id=db_user.discord_id,
         username=db_user.username,
         reviewer_profile=db_user.reviewer_profile,
-        roles=token.roles,
-        moderated_reviewers=user_service.get_all_reviewers(get_db().__next__()) if "admin" in token.roles else [],
+        roles=final_roles,
+        moderated_reviewers=user_service.get_all_reviewers(get_db().__next__()) if "admin" in final_roles else [],
     )
     return user_profile
 
