@@ -1,8 +1,12 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import model_validator
 from typing import Optional, List
 
 class Settings(BaseSettings):
+    # By using SettingsConfigDict, we can specify that environment variables
+    # which are lists of strings should be parsed by splitting on a comma.
+    model_config = SettingsConfigDict(env_file=".env", env_separator=",", extra="ignore")
+
     # Core settings
     DISCORD_TOKEN: str = "your_discord_token_here"
     SECRET_KEY: str = "a_very_secret_key"
@@ -32,10 +36,5 @@ class Settings(BaseSettings):
     DISCORD_CLIENT_SECRET: str
     DISCORD_REDIRECT_URI: str
     FRONTEND_URL: str = "http://localhost:5173"
-
-
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
 
 settings = Settings()
