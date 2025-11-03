@@ -1,6 +1,6 @@
 from pydantic_settings import BaseSettings
 from pydantic import model_validator
-from typing import Optional
+from typing import Optional, List
 
 class Settings(BaseSettings):
     # Core settings
@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "a_very_secret_key"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ADMIN_DISCORD_IDS: List[str] = []
 
     # Database settings
     POSTGRES_SERVER: str = "db"
