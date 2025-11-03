@@ -32,13 +32,28 @@ from sqlalchemy.orm import Session
 from services import user_service
 import models
 
+import logging
+
 def get_current_user(token: str = Depends(oauth2_scheme)) -> schemas.TokenData:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    return verify_token(token, credentials_exception)
+    token_data = verify_token(token, credentials_exception)
+
+    # --- DIAGNOSTIC LOGGING ---
+    logging.warning(f"Loaded ADMIN_DISCORD_IDS: {settings.ADMIN_DISCORD_IDS}")
+    logging.warning(f"Current user discord_id: {token_data.discord_id}")
+    logging.warning(f"Is user an admin? {token_data.discord_id in settings.ADMIN_DISCORD_IDS}")
+    # --- END DIAGNOSTIC LOGGING ---
+
+    # Dynamically add admin role if the user's discord_id is in the admin list
+    if token_data.discord_id in settings.ADMIN_DISCORD_IDS:
+        if "admin" not in token_data.roles:
+            token_data.roles.append("admin")
+
+    return token_data
 
 
 def get_current_active_user(
