@@ -10,13 +10,14 @@ const ProtectedRoute = ({ children, adminOnly = false }: ProtectedRouteProps) =>
   const { user, token, isLoading } = useAuthStore();
 
   if (isLoading) {
-    return null; // or a loading spinner
+    return <div>Loading...</div>; // or a loading spinner
   }
 
   if (!token) {
     return <Navigate to="/login" replace />;
   }
 
+  // Now that isLoading is false, we can safely check the user object.
   if (adminOnly && !user?.roles?.includes("admin")) {
     return <Navigate to="/hub" replace />; // Redirect to a safe page if not an admin
   }
