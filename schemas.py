@@ -36,3 +36,12 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     discord_id: str | None = None
     roles: List[str] = []
+
+
+class DiscordUser(BaseModel):
+    id: int
+    discord_id: str
+    username: str
+
+    class Config:
+        from_attributes = True
