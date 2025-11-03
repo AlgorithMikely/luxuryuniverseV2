@@ -27,6 +27,11 @@ def verify_token(token: str, credentials_exception) -> schemas.TokenData:
         raise credentials_exception
     return token_data
 
+from database import get_db
+from sqlalchemy.orm import Session
+from services import user_service
+import models
+
 def get_current_user(token: str = Depends(oauth2_scheme)) -> schemas.TokenData:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -34,11 +39,3 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> schemas.TokenData:
         headers={"WWW-Authenticate": "Bearer"},
     )
     return verify_token(token, credentials_exception)
-
-def require_admin(current_user: schemas.TokenData = Depends(get_current_user)):
-    if "admin" not in current_user.roles:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to access this resource.",
-        )
-    return current_user

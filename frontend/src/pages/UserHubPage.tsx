@@ -22,15 +22,29 @@ const UserHubPage = () => {
       const reviewerId = user.reviewer_profile?.id || 1; // Default to 1 if not a reviewer
       const fetchInitialData = async () => {
         setIsLoading(true);
-        const [balanceRes, submissionsRes] = await Promise.all([
-          api.get(`/user/me/balance?reviewer_id=${reviewerId}`),
-          api.get("/user/me/submissions"),
-        ]);
-        setBalance(balanceRes.data.balance);
-        setSubmissions(submissionsRes.data.submissions);
-        setIsLoading(false);
+        try {
+          const [balanceRes, submissionsRes] = await Promise.all([
+            api.get(`/user/me/balance?reviewer_id=${reviewerId}`),
+            api.get("/user/me/submissions"),
+          ]);
+          setBalance(balanceRes.data.balance);
+          // Ensure submissions is an array before setting state
+          if (Array.isArray(submissionsRes.data)) {
+            setSubmissions(submissionsRes.data);
+          } else {
+            console.error("Submissions data is not an array:", submissionsRes.data);
+            setSubmissions([]); // Default to an empty array on error
+          }
+        } catch (error) {
+          console.error("Failed to fetch initial data:", error);
+          toast.error("Could not load your data. Please try again later.");
+        } finally {
+          setIsLoading(false);
+        }
       };
       fetchInitialData();
+    } else {
+      setIsLoading(false); // If there's no user, stop loading.
     }
   }, [user]);
 
@@ -63,14 +77,18 @@ const UserHubPage = () => {
         </div>
         <div>
           <h2 className="text-2xl font-bold mb-2">Your Submissions</h2>
-          <ul className="space-y-2">
-          {submissions.map((item, index) => (
-              <li key={index} className="p-3 bg-gray-800 rounded-lg shadow flex justify-between">
-                <span>{item.track_url}</span>
-                <span className="capitalize">{item.status}</span>
-              </li>
-            ))}
-          </ul>
+            {Array.isArray(submissions) && submissions.length > 0 ? (
+              <ul className="space-y-2">
+                {submissions.map((item, index) => (
+                  <li key={index} className="p-3 bg-gray-800 rounded-lg shadow flex justify-between">
+                    <span>{item.track_url}</span>
+                    <span className="capitalize">{item.status}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>You have not made any submissions yet.</p>
+            )}
         </div>
         </div>
       </div>
