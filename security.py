@@ -39,3 +39,22 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> schemas.TokenData:
         headers={"WWW-Authenticate": "Bearer"},
     )
     return verify_token(token, credentials_exception)
+
+
+def get_current_active_user(
+    current_user: schemas.TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> models.User:
+    user = user_service.get_user_by_discord_id(db, discord_id=current_user.discord_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+def require_admin(current_user: schemas.TokenData = Depends(get_current_user)):
+    if "admin" not in current_user.roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access this resource.",
+        )
+    return current_user
