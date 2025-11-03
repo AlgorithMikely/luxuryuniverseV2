@@ -5,6 +5,7 @@ const Navbar = () => {
   const { user, logout } = useAuthStore();
   // Safely check for admin role, ensuring user and user.roles exist.
   const isAdmin = user?.roles?.includes("admin");
+  const isReviewer = user?.reviewer_profile;
 
   return (
     <nav className="bg-gray-800 p-4">
@@ -18,6 +19,17 @@ const Navbar = () => {
               Admin
             </Link>
           )}
+          {isReviewer && (
+            <Link
+              to={`/dashboard/${user?.reviewer_profile?.id}`}
+              className="text-gray-300 hover:text-white"
+            >
+              Reviewer Dashboard
+            </Link>
+          )}
+          <Link to="/dashboard" className="text-gray-300 hover:text-white">
+            Dashboard
+          </Link>
           <Link to="/hub" className="text-gray-300 hover:text-white">
             Hub
           </Link>
