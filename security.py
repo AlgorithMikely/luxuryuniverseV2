@@ -32,8 +32,6 @@ from sqlalchemy.orm import Session
 from services import user_service
 import models
 
-import logging
-
 def get_current_user(token: str = Depends(oauth2_scheme)) -> schemas.TokenData:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
