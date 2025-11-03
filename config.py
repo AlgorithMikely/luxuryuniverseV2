@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import model_validator
+from pydantic import model_validator, field_validator
 from typing import Optional, List
 
 class Settings(BaseSettings):
@@ -13,6 +13,20 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     ADMIN_DISCORD_IDS: List[str] = []
+
+    @field_validator('ADMIN_DISCORD_IDS', mode='before')
+    @classmethod
+    def validate_admin_discord_ids(cls, v):
+        if isinstance(v, str):
+            # If it's a string, split by comma and strip whitespace
+            return [id.strip() for id in v.split(',') if id.strip()]
+        elif isinstance(v, int):
+            # If it's a single integer, convert to string and wrap in list
+            return [str(v)]
+        elif isinstance(v, list):
+            # If it's already a list, ensure all items are strings
+            return [str(item) for item in v]
+        return v
 
     # Database settings
     POSTGRES_SERVER: str = "db"
