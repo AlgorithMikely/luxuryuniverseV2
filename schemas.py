@@ -24,6 +24,8 @@ class ReviewerProfile(BaseModel):
 
 class UserProfile(User):
     reviewer_profile: ReviewerProfile | None = None
+    roles: List[str] = []
+    moderated_reviewers: List[ReviewerProfile] = []
 
 class ReviewerCreate(BaseModel):
     discord_id: str
