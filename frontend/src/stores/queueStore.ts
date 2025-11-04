@@ -12,6 +12,8 @@ interface User {
 export interface Submission {
   id: number;
   track_url: string;
+  track_title?: string | null;
+  archived_url?: string | null;
   status: 'pending' | 'played' | 'saved_for_later' | 'reviewer_pick';
   submitted_at: string;
   user: User; // Embed the user object.
