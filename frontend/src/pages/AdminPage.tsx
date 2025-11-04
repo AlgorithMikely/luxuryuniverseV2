@@ -49,8 +49,15 @@ const AdminPage = () => {
       return;
     }
     try {
-      // HACK: Sending empty object for debugging the 404
-      await api.post('/admin/reviewers', {});
+      const formData = new FormData();
+      formData.append('discord_id', selectedDiscordId);
+      formData.append('tiktok_handle', tiktokHandle);
+
+      await api.post('/admin/reviewers', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
       fetchReviewers(); // Refresh the list
       // Reset form
       if (discordUsers.length > 0) {
