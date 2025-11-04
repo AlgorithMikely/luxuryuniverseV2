@@ -66,3 +66,9 @@ def get_reviewer_by_channel_id(db: Session, channel_id: str) -> Optional[models.
 
 def get_submissions_by_user(db: Session, user_id: int) -> list[models.Submission]:
     return db.query(models.Submission).filter(models.Submission.user_id == user_id).all()
+
+def get_played_queue(db: Session, reviewer_id: int) -> list[models.Submission]:
+    return db.query(models.Submission).options(joinedload(models.Submission.user)).filter(
+        models.Submission.reviewer_id == reviewer_id,
+        models.Submission.status == 'played'
+    ).order_by(models.Submission.submitted_at.desc()).all()

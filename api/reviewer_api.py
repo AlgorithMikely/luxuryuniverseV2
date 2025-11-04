@@ -12,10 +12,17 @@ async def check_is_reviewer(
     current_user: schemas.TokenData = Depends(security.get_current_user),
     db: Session = Depends(get_db)
 ):
+    # Admins have access to all reviewer routes.
+    if "admin" in current_user.roles:
+        return current_user
+
     if "reviewer" not in current_user.roles:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a reviewer")
 
     user = user_service.get_user_by_discord_id(db, current_user.discord_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
     reviewer = queue_service.get_reviewer_by_user_id(db, user.id)
 
     if not reviewer or reviewer.id != reviewer_id:
@@ -33,3 +40,7 @@ async def next_track(reviewer_id: int, db: Session = Depends(get_db)):
     if not submission:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Queue is empty")
     return submission
+
+@router.get("/queue/played", dependencies=[Depends(check_is_reviewer)])
+async def get_played_queue(reviewer_id: int, db: Session = Depends(get_db)):
+    return queue_service.get_played_queue(db, reviewer_id=reviewer_id)
