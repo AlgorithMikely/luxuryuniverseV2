@@ -9,7 +9,7 @@ class PassiveSubmissionCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    async def archive_submission(self, message: discord.Message, content: str):
+    async def archive_submission(self, db, user, message: discord.Message, content: str):
         """Finds the files-and-links channel and sends the submission content."""
         if not message.channel.category:
             return
@@ -19,9 +19,13 @@ class PassiveSubmissionCog(commands.Cog):
         )
 
         if files_and_links_channel:
-            user = message.author
-            tiktok_handle = user_service.get_user_by_discord_id(self.bot.SessionLocal(), str(user.id))
-            tiktok_str = f"(TikTok: {tiktok_handle.tiktok_username})" if tiktok_handle and tiktok_handle.tiktok_username else ""
+            # The user object is now passed in directly.
+            # We can use the existing db session to get related data.
+            # Note: We assume the user object has a 'tiktok_username' attribute if available.
+            # This might require fetching the full user profile if not already loaded.
+            user_profile = user_service.get_user_by_discord_id(db, user.discord_id)
+            tiktok_str = f"(TikTok: {user_profile.tiktok_username})" if user_profile and user_profile.tiktok_username else ""
+
 
             # Handle file attachments
             if message.attachments:
@@ -71,7 +75,7 @@ class PassiveSubmissionCog(commands.Cog):
                     await queue_service.create_submission(db, reviewer.id, user.id, submission_content)
 
                     # Archive and delete
-                    await self.archive_submission(message, submission_content)
+                    await self.archive_submission(db, user, message, submission_content)
                     await message.delete()
 
                 except Exception as e:
