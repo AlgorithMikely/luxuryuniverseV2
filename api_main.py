@@ -12,6 +12,13 @@ app = FastAPI(title="Universe Bot API")
 async def startup_event():
     asyncio.create_task(bot_main_async())
 
+    # Log all registered routes
+    print("--- Registered API Routes ---")
+    for route in app.routes:
+        if hasattr(route, "methods"):
+            print(f"Path: {route.path}, Methods: {route.methods}")
+    print("-----------------------------")
+
 socket_app = socketio.ASGIApp(sio)
 
 # Include API routers under the /api prefix
