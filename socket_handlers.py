@@ -22,7 +22,7 @@ async def connect(sid, environ, auth):
             raise ConnectionRefusedError("Could not get or create user")
 
         # Add user to a room for their own user-specific events
-        sio.enter_room(sid, f"user_room_{user.id}")
+        await sio.enter_room(sid, f"user_room_{user.id}")
 
         # If the user is a reviewer, add them to their reviewer room
         reviewer = queue_service.get_reviewer_by_user_id(db, user.id)
