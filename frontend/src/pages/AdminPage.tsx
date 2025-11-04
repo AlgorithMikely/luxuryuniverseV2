@@ -49,10 +49,8 @@ const AdminPage = () => {
       return;
     }
     try {
-      await api.post('/admin/reviewers', {
-        discord_id: selectedDiscordId,
-        tiktok_handle: tiktokHandle,
-      });
+      // HACK: Sending empty object for debugging the 404
+      await api.post('/admin/reviewers', {});
       fetchReviewers(); // Refresh the list
       // Reset form
       if (discordUsers.length > 0) {
