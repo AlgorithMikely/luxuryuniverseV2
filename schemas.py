@@ -45,3 +45,10 @@ class DiscordUser(BaseModel):
     discord_id: str
     username: str
     model_config = ConfigDict(from_attributes=True)
+
+class Submission(BaseModel):
+    id: int
+    track_url: str
+    status: str
+    user: User
+    model_config = ConfigDict(from_attributes=True)

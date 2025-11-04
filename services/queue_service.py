@@ -1,5 +1,6 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 import models
+import schemas
 from typing import Optional
 import event_service
 
@@ -17,12 +18,14 @@ async def create_submission(db: Session, reviewer_id: int, user_id: int, track_u
 
     # Emit a queue update
     new_queue = get_pending_queue(db, reviewer_id)
-    await event_service.emit_queue_update(reviewer_id, [s.__dict__ for s in new_queue])
+    # Convert SQLAlchemy models to Pydantic models for serialization
+    queue_schemas = [schemas.Submission.model_validate(s) for s in new_queue]
+    await event_service.emit_queue_update(reviewer_id, [s.model_dump() for s in queue_schemas])
 
     return new_submission
 
 def get_pending_queue(db: Session, reviewer_id: int) -> list[models.Submission]:
-    return db.query(models.Submission).filter(
+    return db.query(models.Submission).options(joinedload(models.Submission.user)).filter(
         models.Submission.reviewer_id == reviewer_id,
         models.Submission.status == 'pending'
     ).order_by(models.Submission.submitted_at.asc()).all()
@@ -48,7 +51,10 @@ async def advance_queue(db: Session, reviewer_id: int) -> Optional[models.Submis
 
         # Emit a queue update
         new_queue = get_pending_queue(db, reviewer_id)
-        await event_service.emit_queue_update(reviewer_id, [s.__dict__ for s in new_queue])
+        # Convert SQLAlchemy models to Pydantic models for serialization
+        queue_schemas = [schemas.Submission.model_validate(s) for s in new_queue]
+        await event_service.emit_queue_update(reviewer_id, [s.model_dump() for s in queue_schemas])
+
 
     return submission
 
