@@ -49,14 +49,9 @@ const AdminPage = () => {
       return;
     }
     try {
-      const formData = new FormData();
-      formData.append('discord_id', selectedDiscordId);
-      formData.append('tiktok_handle', tiktokHandle);
-
-      await api.post('/admin/reviewers', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+      await api.post('/admin/reviewers', {
+        discord_id: selectedDiscordId,
+        tiktok_handle: tiktokHandle,
       });
       fetchReviewers(); // Refresh the list
       // Reset form

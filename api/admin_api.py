@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Form
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from bot_instance import bot as bot_instance
 from database import get_db
@@ -17,20 +18,23 @@ async def get_all_reviewers(db: Session = Depends(get_db)):
     """Fetch all users with reviewer profiles."""
     return user_service.get_all_reviewers(db)
 
+# Temporary model for debugging
+class ReviewerCreate(BaseModel):
+    discord_id: str
+    tiktok_handle: str | None = None
+
 @router.post("/reviewers", response_model=schemas.UserProfile)
 async def add_reviewer(
-    discord_id: str = Form(...),
-    tiktok_handle: str = Form(None),
-    db: Session = Depends(get_db),
+    reviewer_data: ReviewerCreate, db: Session = Depends(get_db)
 ):
     """Assign reviewer status to a user."""
-    db_user = user_service.get_user_by_discord_id(db, discord_id)
+    db_user = user_service.get_user_by_discord_id(db, reviewer_data.discord_id)
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
 
     # The bot's background task will detect the new reviewer and create channels.
     return user_service.add_reviewer_profile(
-        db, user=db_user, tiktok_handle=tiktok_handle
+        db, user=db_user, tiktok_handle=reviewer_data.tiktok_handle
     )
 
 @router.delete("/reviewers/{reviewer_id}", status_code=204)
