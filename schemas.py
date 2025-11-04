@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import List
+from typing import Optional
 
 class UserBase(BaseModel):
     discord_id: str
@@ -8,22 +9,27 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     pass
 
+from pydantic import ConfigDict
+
 class User(UserBase):
     id: int
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ReviewerProfile(BaseModel):
     id: int
     tiktok_handle: str | None = None
-    discord_channel_id: str
-
-    class Config:
-        from_attributes = True
+    discord_channel_id: str | None = None
+    model_config = ConfigDict(from_attributes=True)
 
 class UserProfile(User):
     reviewer_profile: ReviewerProfile | None = None
+    roles: List[str] = []
+    moderated_reviewers: List[ReviewerProfile] = []
+
+# In schemas.py, you should have something like:
+class ReviewerCreate(BaseModel):
+    discord_id: str
+    tiktok_handle: Optional[str] = None
 
 class Token(BaseModel):
     access_token: str
@@ -32,3 +38,10 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     discord_id: str | None = None
     roles: List[str] = []
+
+
+class DiscordUser(BaseModel):
+    id: int
+    discord_id: str
+    username: str
+    model_config = ConfigDict(from_attributes=True)

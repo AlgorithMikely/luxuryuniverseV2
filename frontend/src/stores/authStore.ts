@@ -1,43 +1,64 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import jwtDecode from 'jwt-decode';
 import api from '../services/api';
 
-interface User {
+export interface ReviewerProfile {
+    id: number;
+    discord_channel_id: string | null;
+    tiktok_handle: string | null;
+}
+export interface UserProfile {
   id: number;
   discord_id: string;
   username: string;
-  reviewer_profile: {
-    id: number;
-  } | null;
+  reviewer_profile: ReviewerProfile | null;
+  roles: string[];
+  moderated_reviewers?: ReviewerProfile[];
 }
 
 interface AuthState {
   token: string | null;
-  user: User | null;
-  roles: string[];
+  user: UserProfile | null;
+  isLoading: boolean;
   setToken: (token: string) => Promise<void>;
   logout: () => void;
+  checkAuth: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       token: null,
       user: null,
-      roles: [],
+      isLoading: true, // Start with loading true on initialization
       setToken: async (token) => {
-        const decoded = jwtDecode<{ sub: string; roles: string[] }>(token);
-        set({ token, roles: decoded.roles });
+        set({ token, isLoading: true });
         try {
           const response = await api.get('/user/me');
-          set({ user: response.data });
+          set({ user: response.data, isLoading: false });
         } catch (error) {
           console.error("Failed to fetch user profile:", error);
-          set({ token: null, user: null, roles: [] });
+          set({ token: null, user: null, isLoading: false });
         }
       },
-      logout: () => set({ token: null, user: null, roles: [] }),
+      logout: () => {
+        set({ token: null, user: null, isLoading: false });
+      },
+      checkAuth: async () => {
+        const { token } = get();
+        if (token) {
+          set({ isLoading: true });
+          try {
+            const response = await api.get('/user/me');
+            set({ user: response.data, isLoading: false });
+          } catch (error) {
+            console.error("Failed to verify token on load:", error);
+            set({ token: null, user: null, isLoading: false });
+          }
+        } else {
+          set({ isLoading: false });
+        }
+      },
     }),
     {
       name: 'auth-storage',

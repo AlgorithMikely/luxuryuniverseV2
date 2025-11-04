@@ -19,6 +19,8 @@ class UniverseBot(commands.Bot):
         await self.load_extension("cogs.submission_cog")
         await self.load_extension("cogs.queue_cog")
         await self.load_extension("cogs.economy_cog")
+        await self.load_extension("cogs.user_cache_cog")
+        await self.load_extension("cogs.channel_creator_cog")
         print("Cogs loaded.")
 
     async def on_ready(self):
@@ -30,19 +32,18 @@ class UniverseBot(commands.Bot):
         except Exception as e:
             print(f"Failed to sync commands: {e}")
 
+import bot_instance as bot_instance_module
+
 async def main():
     """The main entrypoint for the bot."""
     intents = discord.Intents.default()
     intents.message_content = True  # Required for on_message event
     intents.reactions = True      # Required for on_reaction_add event
+    intents.members = True        # Required for fetching all members
 
     bot = UniverseBot(command_prefix="!", intents=intents)
+    bot_instance_module.bot = bot # Set the bot instance
 
     async with bot:
         await bot.start(settings.DISCORD_TOKEN)
 
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("Bot shut down.")
