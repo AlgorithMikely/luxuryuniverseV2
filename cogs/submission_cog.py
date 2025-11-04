@@ -31,10 +31,10 @@ class PassiveSubmissionCog(commands.Cog):
             if message.attachments:
                 files = [await att.to_file() for att in message.attachments]
                 await files_and_links_channel.send(
-                    f"Submission from {user.name} {tiktok_str}: {content}", files=files
+                    f"Submission from {user.username} {tiktok_str}: {content}", files=files
                 )
             else:
-                await files_and_links_channel.send(f"Submission from {user.name} {tiktok_str}: {content}")
+                await files_and_links_channel.send(f"Submission from {user.username} {tiktok_str}: {content}")
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):

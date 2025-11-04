@@ -28,8 +28,8 @@ const ReviewerDashboard = () => {
       if (!reviewerId) return;
       try {
         const [queueRes, playedRes] = await Promise.all([
-          api.get(`/api/${reviewerId}/queue`),
-          api.get(`/api/${reviewerId}/queue/played`),
+          api.get(`/${reviewerId}/queue`),
+          api.get(`/${reviewerId}/queue/played`),
         ]);
         setQueue(queueRes.data);
         setRecentlyPlayed(playedRes.data);
