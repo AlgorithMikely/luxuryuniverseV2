@@ -41,8 +41,8 @@ class PassiveSubmissionCog(commands.Cog):
         with self.bot.SessionLocal() as db:
             reviewer = queue_service.get_reviewer_by_channel_id(db, message.channel.id)
 
-            # We only care about messages in "submit-music-here" channels
-            if not reviewer or message.channel.name != "submit-music-here" or reviewer.queue_status != "open":
+            # We only care about messages in reviewer channels where the queue is open
+            if not reviewer or reviewer.queue_status != "open":
                 return
 
             submission_content = message.content

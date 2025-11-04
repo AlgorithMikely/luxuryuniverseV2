@@ -126,8 +126,9 @@ const AdminPage = () => {
                   <td className="p-2">{reviewer.reviewer_profile?.tiktok_handle || 'N/A'}</td>
                   <td className="p-2">
                     <button
-                      onClick={() => handleRemoveReviewer(reviewer.reviewer_profile!.id)}
-                      className="btn bg-red-600 p-2 rounded"
+                      onClick={() => reviewer.reviewer_profile && handleRemoveReviewer(reviewer.reviewer_profile.id)}
+                      disabled={!reviewer.reviewer_profile}
+                      className="btn bg-red-600 p-2 rounded disabled:bg-gray-500"
                     >
                       Remove
                     </button>

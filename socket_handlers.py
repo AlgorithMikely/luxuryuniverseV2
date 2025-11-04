@@ -16,12 +16,13 @@ async def connect(sid, environ, auth):
         raise ConnectionRefusedError("Authentication failed")
 
     with SessionLocal() as db:
-        user = user_service.get_user_by_discord_id(db, token_data.discord_id)
+        # Use get_or_create_user to handle new users connecting
+        user = user_service.get_or_create_user(db, token_data.discord_id, "New User") # A default name
         if not user:
-            raise ConnectionRefusedError("User not found")
+            raise ConnectionRefusedError("Could not get or create user")
 
         # Add user to a room for their own user-specific events
-        await sio.enter_room(sid, f"user_room_{user.id}")
+        sio.enter_room(sid, f"user_room_{user.id}")
 
         # If the user is a reviewer, add them to their reviewer room
         reviewer = queue_service.get_reviewer_by_user_id(db, user.id)

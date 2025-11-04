@@ -89,13 +89,28 @@ function AppContent() {
   );
 }
 
+import Navbar from './components/Navbar';
+
+function Layout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col min-h-screen bg-gray-900">
+      <Navbar />
+      <main className="flex-grow container mx-auto px-4 py-8">
+        {children}
+      </main>
+    </div>
+  );
+}
+
 function App() {
   return (
     <>
       <Toaster />
       <BrowserRouter>
         <ErrorBoundary FallbackComponent={ErrorPage}>
-          <AppContent />
+          <Layout>
+            <AppContent />
+          </Layout>
         </ErrorBoundary>
       </BrowserRouter>
     </>
