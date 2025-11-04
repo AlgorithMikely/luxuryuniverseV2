@@ -11,4 +11,4 @@ echo "Database is up - running migrations"
 poetry run alembic upgrade head
 
 echo "Migrations complete - starting server"
-exec poetry run python main.py
+exec poetry run "$@"
