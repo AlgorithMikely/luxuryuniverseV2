@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import List
+from typing import Optional
 
 class UserBase(BaseModel):
     discord_id: str
@@ -25,9 +26,10 @@ class UserProfile(User):
     roles: List[str] = []
     moderated_reviewers: List[ReviewerProfile] = []
 
+# In schemas.py, you should have something like:
 class ReviewerCreate(BaseModel):
     discord_id: str
-    tiktok_handle: str | None = None
+    tiktok_handle: Optional[str] = None
 
 class Token(BaseModel):
     access_token: str
