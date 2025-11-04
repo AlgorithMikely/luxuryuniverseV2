@@ -1,12 +1,16 @@
+import asyncio
 from fastapi import FastAPI
 import socketio
 from api import auth, reviewer_api, user_api, admin_api
 import socket_handlers
 from sio_instance import sio
-
-from fastapi import APIRouter
+from bot_main import main as bot_main_async
 
 app = FastAPI(title="Universe Bot API")
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(bot_main_async())
 
 socket_app = socketio.ASGIApp(sio)
 

@@ -47,8 +47,3 @@ async def main():
     async with bot:
         await bot.start(settings.DISCORD_TOKEN)
 
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("Bot shut down.")
