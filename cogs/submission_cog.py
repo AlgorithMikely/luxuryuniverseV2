@@ -9,32 +9,30 @@ class PassiveSubmissionCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    async def archive_submission(self, db, user, message: discord.Message, content: str):
-        """Finds the files-and-links channel and sends the submission content."""
+async def archive_submission(self, db, user, message: discord.Message, content: str) -> str | None:
+        """Finds the files-and-links channel, sends the submission content, and returns the message URL."""
         if not message.channel.category:
-            return
+            return None
 
         files_and_links_channel = discord.utils.get(
             message.channel.category.channels, name="files-and-links"
         )
 
         if files_and_links_channel:
-            # The user object is now passed in directly.
-            # We can use the existing db session to get related data.
-            # Note: We assume the user object has a 'tiktok_username' attribute if available.
-            # This might require fetching the full user profile if not already loaded.
             user_profile = user_service.get_user_by_discord_id(db, user.discord_id)
             tiktok_str = f"(TikTok: {user_profile.tiktok_username})" if user_profile and user_profile.tiktok_username else ""
 
-
-            # Handle file attachments
+            archive_message = None
             if message.attachments:
                 files = [await att.to_file() for att in message.attachments]
-                await files_and_links_channel.send(
+                archive_message = await files_and_links_channel.send(
                     f"Submission from {user.username} {tiktok_str}: {content}", files=files
                 )
             else:
-                await files_and_links_channel.send(f"Submission from {user.username} {tiktok_str}: {content}")
+                archive_message = await files_and_links_channel.send(f"Submission from {user.username} {tiktok_str}: {content}")
+
+            return archive_message.jump_url if archive_message else None
+        return None
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -53,11 +51,13 @@ class PassiveSubmissionCog(commands.Cog):
             is_valid = False
 
             # --- Validation ---
+            track_title = None
             # 1. Check for URL
             if "http" in submission_content:
                 try:
-                    with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True}) as ydl:
-                        ydl.extract_info(submission_content, download=False)
+                    with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True, 'force_generic_extractor': True}) as ydl:
+                        info = ydl.extract_info(submission_content, download=False)
+                        track_title = info.get('title', 'Unknown Title')
                     is_valid = True
                 except yt_dlp.utils.DownloadError:
                     is_valid = False # Invalid URL
@@ -65,17 +65,26 @@ class PassiveSubmissionCog(commands.Cog):
             # 2. Check for attachments if no valid URL was found
             elif message.attachments:
                 is_valid = True
-                # Use the attachment URL if available, otherwise just use the message content
+                track_title = message.attachments[0].filename
                 submission_content = message.attachments[0].url
 
             # --- Process Valid Submission ---
             if is_valid:
                 try:
                     user = user_service.get_or_create_user(db, str(message.author.id), message.author.name)
-                    await queue_service.create_submission(db, reviewer.id, user.id, submission_content)
 
-                    # Archive and delete
-                    await self.archive_submission(db, user, message, submission_content)
+                    # Archive and get the URL
+                    archived_url = await self.archive_submission(db, user, message, submission_content)
+
+                    await queue_service.create_submission(
+                        db,
+                        reviewer_id=reviewer.id,
+                        user_id=user.id,
+                        track_url=submission_content,
+                        track_title=track_title,
+                        archived_url=archived_url
+                    )
+
                     await message.delete()
 
                 except Exception as e:

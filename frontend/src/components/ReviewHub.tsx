@@ -27,32 +27,35 @@ const ReviewHub = () => {
 
     try {
       const response = await api.post(
-        `/api/${reviewerId}/queue/review/${currentTrack.id}`,
+        `/${reviewerId}/queue/review/${currentTrack.id}`,
         {
+          score: rating === '' ? null : Number(rating),
           notes,
-          rating: rating === '' ? null : Number(rating),
         }
       );
 
       // Update the submission in the global store
-      updateSubmission(response.data.submission);
-
-      // If the action was "submit and play next"
-      if (response.data.next_track) {
-          setCurrentTrack(response.data.next_track);
-          // Manually update the queue list after submission
-          const updatedQueue = queue.filter(track => track.id !== currentTrack.id);
-          setQueue(updatedQueue);
-      } else {
-         // If there's no next track, clear the current track.
-         setCurrentTrack(null);
-      }
-
+      updateSubmission(response.data);
+      handleNextTrack();
 
     } catch (error) {
       console.error('Failed to submit review:', error);
     }
   };
+
+  const handleNextTrack = async () => {
+    if (!reviewerId) return;
+    try {
+        const response = await api.post(`/${reviewerId}/queue/next`);
+        setCurrentTrack(response.data);
+        // Remove the new current track from the queue
+        setQueue(queue.filter(track => track.id !== response.data.id));
+    } catch (error) {
+        console.error('Failed to get next track:', error);
+        // If the queue is empty, clear the current track
+        setCurrentTrack(null);
+    }
+};
 
   if (!currentTrack) {
     return (

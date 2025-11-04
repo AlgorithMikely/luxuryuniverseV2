@@ -4,12 +4,14 @@ import schemas
 from typing import Optional
 import event_service
 
-async def create_submission(db: Session, reviewer_id: int, user_id: int, track_url: str) -> models.Submission:
+async def create_submission(db: Session, reviewer_id: int, user_id: int, track_url: str, track_title: str, archived_url: str) -> models.Submission:
     # ... logic to find or create user ...
     new_submission = models.Submission(
         reviewer_id=reviewer_id,
         user_id=user_id,
         track_url=track_url,
+        track_title=track_title,
+        archived_url=archived_url,
         status='pending'
     )
     db.add(new_submission)
@@ -72,3 +74,15 @@ def get_played_queue(db: Session, reviewer_id: int) -> list[models.Submission]:
         models.Submission.reviewer_id == reviewer_id,
         models.Submission.status == 'played'
     ).order_by(models.Submission.submitted_at.desc()).all()
+
+def review_submission(db: Session, submission_id: int, review: schemas.ReviewCreate) -> models.Submission:
+    submission = db.query(models.Submission).filter(models.Submission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    submission.score = review.score
+    submission.notes = review.notes
+    submission.status = 'reviewed'
+    db.commit()
+    db.refresh(submission)
+    return submission

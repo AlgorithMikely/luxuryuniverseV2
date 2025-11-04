@@ -31,6 +31,10 @@ class ReviewerCreate(BaseModel):
     discord_id: str
     tiktok_handle: Optional[str] = None
 
+class ReviewCreate(BaseModel):
+    score: int
+    notes: Optional[str] = None
+
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -49,6 +53,8 @@ class DiscordUser(BaseModel):
 class Submission(BaseModel):
     id: int
     track_url: str
+    track_title: Optional[str] = None
+    archived_url: Optional[str] = None
     status: str
     user: User
     model_config = ConfigDict(from_attributes=True)

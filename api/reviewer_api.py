@@ -44,3 +44,7 @@ async def next_track(reviewer_id: int, db: Session = Depends(get_db)):
 @router.get("/queue/played", dependencies=[Depends(check_is_reviewer)])
 async def get_played_queue(reviewer_id: int, db: Session = Depends(get_db)):
     return queue_service.get_played_queue(db, reviewer_id=reviewer_id)
+
+@router.post("/queue/review/{submission_id}", dependencies=[Depends(check_is_reviewer)])
+async def review_submission(submission_id: int, review: schemas.ReviewCreate, db: Session = Depends(get_db)):
+    return queue_service.review_submission(db, submission_id, review)

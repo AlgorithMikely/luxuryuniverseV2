@@ -31,9 +31,14 @@ const QueuePanel = () => {
                 onClick={() => handleTrackSelect(submission)}
                 className="p-3 bg-gray-700 rounded-lg cursor-pointer hover:bg-purple-600 transition-colors duration-200"
               >
-                <p className="font-semibold truncate">{submission.track_url}</p>
+                <a href={submission.archived_url || submission.track_url} target="_blank" rel="noopener noreferrer" className="font-semibold truncate hover:underline">
+                  {submission.track_title || submission.track_url}
+                </a>
                 <p className="text-sm text-gray-400">
                   Submitted by: {submission.user?.username || 'Unknown User'}
+                  {submission.user?.tiktok_username && (
+                    <span className="ml-2 text-pink-400">(@{submission.user.tiktok_username})</span>
+                  )}
                 </p>
               </li>
             ))}

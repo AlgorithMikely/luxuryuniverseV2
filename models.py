@@ -46,8 +46,12 @@ class Submission(Base):
     reviewer_id = Column(Integer, ForeignKey("reviewers.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     track_url = Column(String, nullable=False)
+    track_title = Column(String, nullable=True)
+    archived_url = Column(String, nullable=True)
     status = Column(String, default="pending", nullable=False)
     submitted_at = Column(DateTime, default=datetime.datetime.utcnow)
+    score = Column(Integer, nullable=True)
+    notes = Column(String, nullable=True)
 
     reviewer = relationship("Reviewer", back_populates="submissions")
     user = relationship("User", back_populates="submissions")
