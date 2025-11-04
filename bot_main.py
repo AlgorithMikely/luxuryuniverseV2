@@ -32,6 +32,8 @@ class UniverseBot(commands.Bot):
         except Exception as e:
             print(f"Failed to sync commands: {e}")
 
+import bot_instance as bot_instance_module
+
 async def main():
     """The main entrypoint for the bot."""
     intents = discord.Intents.default()
@@ -40,6 +42,7 @@ async def main():
     intents.members = True        # Required for fetching all members
 
     bot = UniverseBot(command_prefix="!", intents=intents)
+    bot_instance_module.bot = bot # Set the bot instance
 
     async with bot:
         await bot.start(settings.DISCORD_TOKEN)

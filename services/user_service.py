@@ -40,12 +40,22 @@ def get_all_reviewers(db: Session) -> list[models.User]:
     """Retrieves all users with a reviewer profile."""
     return db.query(models.User).join(models.Reviewer).all()
 
-def add_reviewer_profile(db: Session, user: models.User, channel_id: str) -> models.User:
+def add_reviewer_profile(
+    db: Session, user: models.User, tiktok_handle: str | None = None
+) -> models.User:
     """Adds a reviewer profile to a user."""
     if user.reviewer_profile:
-        return user  # User is already a reviewer
+        # Update existing profile if tiktok_handle is provided
+        if tiktok_handle:
+            user.reviewer_profile.tiktok_handle = tiktok_handle
+            db.commit()
+            db.refresh(user)
+        return user
 
-    new_reviewer_profile = models.Reviewer(user_id=user.id, discord_channel_id=channel_id)
+    # Create new profile
+    new_reviewer_profile = models.Reviewer(
+        user_id=user.id, tiktok_handle=tiktok_handle
+    )
     db.add(new_reviewer_profile)
     db.commit()
     db.refresh(user)

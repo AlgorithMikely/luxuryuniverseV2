@@ -31,7 +31,7 @@ class Reviewer(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
     tiktok_handle = Column(String, unique=True)
-    discord_channel_id = Column(String, unique=True, nullable=False)
+    discord_channel_id = Column(String, unique=True, nullable=True)
     queue_status = Column(String, default="closed", nullable=False)
 
     user = relationship("User", back_populates="reviewer_profile")
