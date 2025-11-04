@@ -9,6 +9,14 @@ class QueueCog(commands.Cog):
 
     async def _get_reviewer_from_interaction(self, interaction: discord.Interaction):
         with self.bot.SessionLocal() as db:
+            # First, check if the user is an admin.
+            # Admin role is determined by user ID in the bot's config.
+            if interaction.user.id in self.bot.config['ADMIN_DISCORD_IDS']:
+                # For admins, we need to determine the reviewer context from the channel
+                reviewer = queue_service.get_reviewer_by_channel_id(db, interaction.channel_id)
+                return reviewer
+
+            # If not an admin, check if they are a registered reviewer
             user = user_service.get_user_by_discord_id(db, str(interaction.user.id))
             if not user:
                 return None

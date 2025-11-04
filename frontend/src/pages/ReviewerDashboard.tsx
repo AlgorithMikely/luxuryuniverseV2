@@ -74,7 +74,6 @@ const ReviewerDashboard = () => {
 
   return (
     <div className="bg-gray-900 text-white min-h-screen flex flex-col">
-      <Navbar />
       <div className="flex-grow p-4 grid grid-cols-1 lg:grid-cols-12 gap-4 h-full">
         {/* Left Panel: Queue */}
         <div className="lg:col-span-3 h-full">
