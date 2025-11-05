@@ -2,19 +2,23 @@ import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 import socketio
-
+from config import settings
 from api import auth, reviewer_api, user_api, admin_api, proxy_api
 import socket_handlers
 from sio_instance import sio
-from bot_main import main as bot_main_async
-from bot_instance import bot
+from bot_main import bot
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Start the Discord bot and wait for it to be ready
-    bot_task = asyncio.create_task(bot_main_async())
+    # Start the Discord bot in a background task
+    async def start_bot():
+        await bot.start(settings.DISCORD_TOKEN)
+
+    bot_task = asyncio.create_task(start_bot())
     await bot.wait_until_ready()
+
     yield
+
     # Cleanup: close the bot connection
     await bot.close()
 
