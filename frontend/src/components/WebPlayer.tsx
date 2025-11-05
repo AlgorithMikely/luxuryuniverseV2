@@ -36,12 +36,23 @@ const WebPlayer = () => {
 
   useEffect(() => {
     if (wavesurfer.current && currentTrack) {
-      // Use the backend proxy for audio to avoid CORS issues.
       const audioUrl = `/api/proxy/audio?url=${encodeURIComponent(currentTrack.track_url)}`;
-      wavesurfer.current.load(audioUrl);
-      wavesurfer.current.on('ready', () => {
+
+      // Define the ready handler
+      const handleReady = () => {
         wavesurfer.current?.play();
-      });
+      };
+
+      // Add the listener
+      wavesurfer.current.on('ready', handleReady);
+
+      // Load the new track
+      wavesurfer.current.load(audioUrl);
+
+      // Cleanup function to remove the listener
+      return () => {
+        wavesurfer.current?.un('ready', handleReady);
+      };
     }
   }, [currentTrack]);
 

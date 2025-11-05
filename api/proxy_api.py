@@ -29,11 +29,10 @@ async def audio_proxy(request: Request, response: Response):
             response_headers = {
                 "Content-Type": r.headers.get("Content-Type"),
                 "Accept-Ranges": r.headers.get("Accept-Ranges", "bytes"),
-                "Content-Length": r.headers.get("Content-Length"),
                 "Content-Range": r.headers.get("Content-Range"),
             }
-            # Filter out None values to keep headers clean
-            response_headers = {k: v for k, v in response_headers.items() if v is not None}
+            # Filter out None values and Content-Length to force chunked encoding
+            response_headers = {k: v for k, v in response_headers.items() if v is not None and k.lower() != 'content-length'}
 
             # FastAPI's StreamingResponse takes the status_code as an argument
             # The status code from the remote server (e.g., 200 or 206) is crucial.
