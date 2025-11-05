@@ -41,8 +41,8 @@ async def audio_proxy(request: Request, response: Response):
                 try:
                     async for chunk in r.aiter_bytes():
                         yield chunk
-                except httpx.ReadError as e:
-                    logging.warning(f"Audio stream read error: {e}")
+                except httpx.ReadError:
+                    logging.exception("Audio stream read error")
                 finally:
                     await r.aclose()
 

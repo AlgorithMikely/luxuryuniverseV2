@@ -13,7 +13,7 @@ app = FastAPI(title="Universe Bot Main App")
 # Include API routers directly in the main app with /api prefix
 from api import proxy_api
 app.include_router(auth.router, prefix="/api")
-app.include_router(reviewer_api.router, prefix="/api")
+app.include_router(reviewer_api.router, prefix="/api/{reviewer_id}")
 app.include_router(user_api.router, prefix="/api")
 app.include_router(admin_api.router, prefix="/api")
 app.include_router(proxy_api.router, prefix="/api")
