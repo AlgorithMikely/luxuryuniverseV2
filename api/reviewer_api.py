@@ -1,3 +1,4 @@
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 from sqlalchemy.orm import Session
 import schemas
@@ -5,7 +6,7 @@ import security
 from database import get_db
 from services import queue_service, user_service
 
-router = APIRouter(prefix="/{reviewer_id}", tags=["Reviewer"])
+router = APIRouter(tags=["Reviewer"])
 
 async def check_is_reviewer(
     reviewer_id: int = Path(...),
@@ -30,21 +31,21 @@ async def check_is_reviewer(
 
     return current_user
 
-@router.get("/queue", dependencies=[Depends(check_is_reviewer)])
+@router.get("/{reviewer_id}/queue", response_model=List[schemas.Submission], dependencies=[Depends(check_is_reviewer)])
 async def get_queue(reviewer_id: int, db: Session = Depends(get_db)):
     return queue_service.get_pending_queue(db, reviewer_id=reviewer_id)
 
-@router.post("/queue/next", dependencies=[Depends(check_is_reviewer)])
+@router.post("/{reviewer_id}/queue/next", response_model=schemas.Submission, dependencies=[Depends(check_is_reviewer)])
 async def next_track(reviewer_id: int, db: Session = Depends(get_db)):
     submission = await queue_service.advance_queue(db, reviewer_id=reviewer_id)
     if not submission:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Queue is empty")
     return submission
 
-@router.get("/queue/played", dependencies=[Depends(check_is_reviewer)])
+@router.get("/{reviewer_id}/queue/played", response_model=List[schemas.Submission], dependencies=[Depends(check_is_reviewer)])
 async def get_played_queue(reviewer_id: int, db: Session = Depends(get_db)):
     return queue_service.get_played_queue(db, reviewer_id=reviewer_id)
 
-@router.post("/queue/review/{submission_id}", dependencies=[Depends(check_is_reviewer)])
+@router.post("/{reviewer_id}/queue/review/{submission_id}", response_model=schemas.Submission, dependencies=[Depends(check_is_reviewer)])
 async def review_submission(submission_id: int, review: schemas.ReviewCreate, db: Session = Depends(get_db)):
     return queue_service.review_submission(db, submission_id, review)

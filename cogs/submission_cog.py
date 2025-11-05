@@ -9,30 +9,40 @@ class PassiveSubmissionCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-async def archive_submission(self, db, user, message: discord.Message, content: str) -> str | None:
-        """Finds the files-and-links channel, sends the submission content, and returns the message URL."""
+async def archive_submission(self, db, user, message: discord.Message, content: str) -> tuple[str | None, str | None]:
+        """
+        Archives the submission to the 'files-and-links' channel.
+        Returns a tuple of (permanent_media_url, archive_message_url).
+        For URL submissions, permanent_media_url will be None.
+        """
         if not message.channel.category:
-            return None
+            return None, None
 
         files_and_links_channel = discord.utils.get(
             message.channel.category.channels, name="files-and-links"
         )
 
-        if files_and_links_channel:
-            user_profile = user_service.get_user_by_discord_id(db, user.discord_id)
-            tiktok_str = f"(TikTok: {user_profile.tiktok_username})" if user_profile and user_profile.tiktok_username else ""
+        if not files_and_links_channel:
+            return None, None
 
-            archive_message = None
-            if message.attachments:
-                files = [await att.to_file() for att in message.attachments]
-                archive_message = await files_and_links_channel.send(
-                    f"Submission from {user.username} {tiktok_str}: {content}", files=files
-                )
-            else:
-                archive_message = await files_and_links_channel.send(f"Submission from {user.username} {tiktok_str}: {content}")
+        user_profile = user_service.get_user_by_discord_id(db, user.discord_id)
+        tiktok_str = f"(TikTok: {user_profile.tiktok_username})" if user_profile and user_profile.tiktok_username else ""
 
-            return archive_message.jump_url if archive_message else None
-        return None
+        archive_message = None
+        permanent_media_url = None
+
+        if message.attachments:
+            files = [await att.to_file() for att in message.attachments]
+            archive_message = await files_and_links_channel.send(
+                f"Submission from {user.username} {tiktok_str}: {content}", files=files
+            )
+            if archive_message and archive_message.attachments:
+                permanent_media_url = archive_message.attachments[0].url
+        else:
+            archive_message = await files_and_links_channel.send(f"Submission from {user.username} {tiktok_str}: {content}")
+
+        archive_message_url = archive_message.jump_url if archive_message else None
+        return permanent_media_url, archive_message_url
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -73,16 +83,20 @@ async def archive_submission(self, db, user, message: discord.Message, content: 
                 try:
                     user = user_service.get_or_create_user(db, str(message.author.id), message.author.name)
 
-                    # Archive and get the URL
-                    archived_url = await self.archive_submission(db, user, message, submission_content)
+                    # Archive and get the URLs
+                    permanent_media_url, archive_message_url = await self.archive_submission(db, user, message, submission_content)
+
+                    # For file submissions, the permanent_media_url is the track_url.
+                    # For URL submissions, the original content is the track_url.
+                    final_track_url = permanent_media_url or submission_content
 
                     await queue_service.create_submission(
                         db,
                         reviewer_id=reviewer.id,
                         user_id=user.id,
-                        track_url=submission_content,
+                        track_url=final_track_url,
                         track_title=track_title,
-                        archived_url=archived_url
+                        archived_url=archive_message_url
                     )
 
                     await message.delete()

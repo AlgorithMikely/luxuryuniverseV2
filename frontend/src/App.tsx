@@ -49,43 +49,54 @@ function AppContent() {
   }
 
   return (
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/auth/callback" element={<AuthCallbackPage />} />
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
+    <Routes>
+      {/* Public routes that don't have the main layout */}
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/auth/callback" element={<AuthCallbackPage />} />
+      <Route path="/" element={<LoginPage />} />
+
+      {/* Protected routes wrapped in the main layout */}
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <Layout>
               <DashboardRedirect />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/dashboard/:reviewerId"
-          element={
-            <ProtectedRoute>
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard/:reviewerId"
+        element={
+          <ProtectedRoute>
+            <Layout>
               <ReviewerDashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/hub"
-          element={
-            <ProtectedRoute>
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/hub"
+        element={
+          <ProtectedRoute>
+            <Layout>
               <UserHubPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin"
-          element={
-            <ProtectedRoute adminOnly={true}>
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute adminOnly={true}>
+            <Layout>
               <AdminPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route path="/" element={<LoginPage />} />
-      </Routes>
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
   );
 }
 
@@ -108,9 +119,7 @@ function App() {
       <Toaster />
       <BrowserRouter>
         <ErrorBoundary FallbackComponent={ErrorPage}>
-          <Layout>
-            <AppContent />
-          </Layout>
+          <AppContent />
         </ErrorBoundary>
       </BrowserRouter>
     </>

@@ -70,7 +70,7 @@ const ReviewHub = () => {
   return (
     <div className="bg-gray-800 rounded-lg shadow-lg p-6 h-full">
       <div className="mb-4">
-        <h3 className="text-2xl font-bold truncate">{currentTrack.track_url}</h3>
+        <h3 className="text-2xl font-bold truncate">{currentTrack.track_title || currentTrack.track_url}</h3>
         <p className="text-md text-gray-400">
           Submitted by: <span className="font-semibold text-white">{currentTrack.user?.username || 'Unknown User'}</span>
           {currentTrack.user?.tiktok_username && (

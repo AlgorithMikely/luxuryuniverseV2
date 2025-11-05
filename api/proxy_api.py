@@ -16,7 +16,13 @@ async def audio_proxy(request: Request):
             r = await client.send(req, stream=True)
             r.raise_for_status()
 
-            return StreamingResponse(r.aiter_bytes(), headers=r.headers)
+            # selectively forward headers
+            response_headers = {
+                'Content-Type': r.headers.get('Content-Type'),
+                'Content-Length': r.headers.get('Content-Length'),
+            }
+
+            return StreamingResponse(r.aiter_bytes(), headers=response_headers)
 
         except httpx.HTTPStatusError as e:
             raise HTTPException(status_code=e.response.status_code, detail=f"Failed to fetch audio: {e}")

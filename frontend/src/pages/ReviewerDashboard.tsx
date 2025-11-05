@@ -10,7 +10,6 @@ import QueuePanel from '../components/QueuePanel';
 import ReviewHub from '../components/ReviewHub';
 import HistoryPanel from '../components/HistoryPanel';
 import WebPlayer from '../components/WebPlayer';
-import Navbar from '../components/Navbar';
 
 const ReviewerDashboard = () => {
   const { reviewerId } = useParams<{ reviewerId: string }>();
@@ -66,7 +65,7 @@ const ReviewerDashboard = () => {
       socket.off('disconnect', handleDisconnect);
       socket.off('queue_updated', handleQueueUpdate);
     };
-  }, [socket, setSocketStatus, handleQueueUpdate]);
+  }, [socket, setSocketStatus]);
 
   if (!user) {
     return <div>Loading...</div>;
