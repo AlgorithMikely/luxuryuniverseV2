@@ -2,6 +2,7 @@ import io
 import logging
 import re
 import httpx
+import yt_dlp
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from bot_instance import bot
@@ -21,16 +22,17 @@ async def resolve_discord_url(jump_url: str) -> str:
     try:
         channel = bot.get_channel(int(channel_id))
         if not channel:
-            raise HTTPException(status_code=404, detail="Discord channel not found")
+            raise HTTPException(status_code=404, detail=f"Discord channel not found: {channel_id}")
 
         message = await channel.fetch_message(int(message_id))
         if not message.attachments:
-            raise HTTPException(status_code=404, detail="No attachments found on the message")
+            # If there's no attachment, it's likely a URL submission, so return the message content.
+            return message.content
 
         return message.attachments[0].url
     except Exception as e:
-        logging.error(f"Failed to resolve Discord URL: {e}")
-        raise HTTPException(status_code=500, detail="Failed to resolve Discord URL")
+        logging.error(f"Failed to resolve Discord URL ({jump_url}): {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to resolve Discord URL: {e}")
 
 
 @router.get("/audio")
@@ -39,16 +41,23 @@ async def audio_proxy(request: Request):
     if not url:
         raise HTTPException(status_code=400, detail="URL parameter is required")
 
-    # If it's a Discord jump URL, resolve it to a direct media URL first
+    # If it's a Discord jump URL, resolve it first
     if "discord.com/channels" in url:
         try:
             url = await resolve_discord_url(url)
         except HTTPException as e:
-            # Re-raise the exception with the specific error from resolve_discord_url
             raise e
 
-    headers_to_forward = {"User-Agent": "Mozilla/5.0"}
+    # For non-Discord URLs, use yt-dlp to get a direct streamable URL
+    if "discord.com" not in url:
+        try:
+            with yt_dlp.YoutubeDL({'format': 'bestaudio', 'quiet': True}) as ydl:
+                info = ydl.extract_info(url, download=False)
+                url = info['url']
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to extract audio from URL: {e}")
 
+    headers_to_forward = {"User-Agent": "Mozilla/5.0"}
     async with httpx.AsyncClient() as client:
         try:
             r = await client.get(url, headers=headers_to_forward, follow_redirects=True)

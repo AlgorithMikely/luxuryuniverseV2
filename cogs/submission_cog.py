@@ -79,11 +79,15 @@ class PassiveSubmissionCog(commands.Cog):
                     # Archive and get the jump_url
                     jump_url = await self.archive_submission(db, user, message, submission_content)
 
+                    # For file submissions, the jump_url is the track_url.
+                    # For URL submissions, the original content is the track_url.
+                    final_track_url = jump_url if message.attachments else submission_content
+
                     await queue_service.create_submission(
                         db,
                         reviewer_id=reviewer.id,
                         user_id=user.id,
-                        track_url=jump_url, # Use the permanent jump_url
+                        track_url=final_track_url,
                         track_title=track_title,
                         archived_url=jump_url
                     )
