@@ -58,3 +58,21 @@ class Submission(BaseModel):
     status: str
     user: User
     model_config = ConfigDict(from_attributes=True)
+
+class QueueState(BaseModel):
+    queue: List[Submission]
+    open_tiers: List[int]
+
+class ReviewSession(BaseModel):
+    id: int
+    name: str
+    status: str
+    open_queue_tiers: List[int]
+    model_config = ConfigDict(from_attributes=True)
+
+class BotSubmissionCreate(BaseModel):
+    discord_channel_id: str
+    user_id: int
+    track_url: str
+    track_title: str
+    archived_url: str

@@ -68,6 +68,7 @@ class Submission(Base):
     submitted_at = Column(DateTime, default=datetime.datetime.utcnow)
     score = Column(Integer, nullable=True)
     notes = Column(String, nullable=True)
+    skipValue = Column(Integer, default=0, nullable=True)
 
     reviewer = relationship("Reviewer", back_populates="submissions")
     user = relationship("User", back_populates="submissions")
