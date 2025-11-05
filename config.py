@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     DISCORD_TOKEN: str = "your_discord_token_here"
     SECRET_KEY: str = "a_very_secret_key"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
     ADMIN_DISCORD_IDS: List[str] = []
 
     @field_validator('ADMIN_DISCORD_IDS', mode='before')

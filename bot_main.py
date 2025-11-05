@@ -5,6 +5,7 @@ from sqlalchemy.orm import sessionmaker
 
 from config import settings
 from database import SessionLocal
+import bot_instance as bot_instance_module
 
 # Custom Bot class to hold the database session factory
 class UniverseBot(commands.Bot):
@@ -32,18 +33,15 @@ class UniverseBot(commands.Bot):
         except Exception as e:
             print(f"Failed to sync commands: {e}")
 
-import bot_instance as bot_instance_module
+intents = discord.Intents.default()
+intents.message_content = True  # Required for on_message event
+intents.reactions = True      # Required for on_reaction_add event
+intents.members = True        # Required for fetching all members
+
+bot = UniverseBot(command_prefix="!", intents=intents)
+bot_instance_module.bot = bot # Set the bot instance
 
 async def main():
     """The main entrypoint for the bot."""
-    intents = discord.Intents.default()
-    intents.message_content = True  # Required for on_message event
-    intents.reactions = True      # Required for on_reaction_add event
-    intents.members = True        # Required for fetching all members
-
-    bot = UniverseBot(command_prefix="!", intents=intents)
-    bot_instance_module.bot = bot # Set the bot instance
-
     async with bot:
         await bot.start(settings.DISCORD_TOKEN)
-
