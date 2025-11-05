@@ -7,7 +7,7 @@ import socketio
 from api import auth, reviewer_api, user_api, admin_api, proxy_api
 import socket_handlers
 from sio_instance import sio
-from bot_main import bot
+from bot_main import bot, bot_ready # Import the bot and the ready event
 
 # Get the token from an environment variable
 BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
@@ -15,27 +15,38 @@ BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- Code to run ON STARTUP ---
-    print("FastAPI is starting up, logging in Discord bot...")
+    print("FastAPI is starting up, creating bot task...")
 
     if not BOT_TOKEN:
-        print("Error: DISCORD_BOT_TOKEN environment variable is not set.")
-        # Optionally, you could raise an error here to stop startup
-    else:
-        # 1. Create a background task to START the bot
-        asyncio.create_task(bot.start(BOT_TOKEN))
+        print("CRITICAL: DISCORD_BOT_TOKEN environment variable is not set. Bot cannot start.")
+        # Stop the application startup if the token is missing
+        raise ValueError("DISCORD_BOT_TOKEN is not set")
 
-        # 2. NOW, wait for it to be ready
-        await bot.wait_until_ready()
+    # 1. Create a background task to run the bot
+    bot_task = asyncio.create_task(bot.start(BOT_TOKEN))
 
-        print("Discord bot is logged in and ready.")
+    # 2. Wait for the bot to signal that it's ready
+    print("Waiting for Discord bot to log in and be ready...")
+    await bot_ready.wait()
+
+    print("Discord bot is ready. FastAPI application will now start.")
 
     yield  # Your application is now running
 
     # --- Code to run ON SHUTDOWN ---
+    print("FastAPI is shutting down...")
     if bot.is_ready():
-        print("FastAPI is shutting down, logging out Discord bot...")
+        print("Closing Discord bot connection...")
         await bot.close()
-        print("Discord bot has been logged out.")
+        print("Discord bot connection closed.")
+
+    # Ensure the bot task is cancelled
+    if 'bot_task' in locals() and not bot_task.done():
+        bot_task.cancel()
+        try:
+            await bot_task
+        except asyncio.CancelledError:
+            print("Bot task successfully cancelled.")
 
 # Create the main FastAPI app with the lifespan event handler
 app = FastAPI(title="Universe Bot Main App", lifespan=lifespan)

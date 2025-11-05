@@ -7,6 +7,9 @@ from config import settings
 from database import SessionLocal
 import bot_instance as bot_instance_module
 
+# An event to signal when the bot is ready
+bot_ready = asyncio.Event()
+
 # Custom Bot class to hold the database session factory
 class UniverseBot(commands.Bot):
     def __init__(self, *args, **kwargs):
@@ -32,6 +35,9 @@ class UniverseBot(commands.Bot):
             print(f"Synced {len(synced)} commands.")
         except Exception as e:
             print(f"Failed to sync commands: {e}")
+
+        # Signal that the bot is ready
+        bot_ready.set()
 
 intents = discord.Intents.default()
 intents.message_content = True  # Required for on_message event
