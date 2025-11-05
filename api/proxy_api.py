@@ -19,7 +19,6 @@ async def audio_proxy(request: Request):
             # selectively forward headers
             response_headers = {
                 'Content-Type': r.headers.get('Content-Type'),
-                'Content-Length': r.headers.get('Content-Length'),
             }
 
             return StreamingResponse(r.aiter_bytes(), headers=response_headers)
