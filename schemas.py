@@ -32,7 +32,7 @@ class ReviewerCreate(BaseModel):
     tiktok_handle: Optional[str] = None
 
 class ReviewCreate(BaseModel):
-    score: int
+    score: Optional[int] = None
     notes: Optional[str] = None
 
 class Token(BaseModel):

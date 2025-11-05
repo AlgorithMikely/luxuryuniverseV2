@@ -21,7 +21,17 @@ async def audio_proxy(request: Request):
                 'Content-Type': r.headers.get('Content-Type'),
             }
 
-            return StreamingResponse(r.aiter_bytes(), headers=response_headers)
+            async def stream_generator():
+                try:
+                    async for chunk in r.aiter_bytes():
+                        yield chunk
+                except httpx.ReadError as e:
+                    # This can happen if the client closes the connection early
+                    print(f"Audio stream read error: {e}")
+                finally:
+                    await r.aclose()
+
+            return StreamingResponse(stream_generator(), headers=response_headers)
 
         except httpx.HTTPStatusError as e:
             raise HTTPException(status_code=e.response.status_code, detail=f"Failed to fetch audio: {e}")
