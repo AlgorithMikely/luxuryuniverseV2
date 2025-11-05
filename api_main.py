@@ -1,5 +1,6 @@
 import asyncio
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 import socketio
 
 from api import auth, reviewer_api, user_api, admin_api
@@ -10,15 +11,29 @@ from bot_main import main as bot_main_async
 # Create the main FastAPI app
 app = FastAPI(title="Universe Bot Main App")
 
-# Include API routers directly in the main app with /api prefix
-app.include_router(auth.router, prefix="/api")
-app.include_router(reviewer_api.router, prefix="/api")
-app.include_router(user_api.router, prefix="/api")
-app.include_router(admin_api.router, prefix="/api")
+# Create a sub-application for the REST API
+api_app = FastAPI(title="Universe Bot API")
 
-# Create the Socket.IO app and mount it at /socket.io
+api_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],  # Your frontend URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include API routers in the sub-application
+api_app.include_router(auth.router)
+api_app.include_router(reviewer_api.router)
+api_app.include_router(user_api.router)
+api_app.include_router(admin_api.router)
+
+# Create the Socket.IO app
 socket_app = socketio.ASGIApp(sio)
-app.mount("/socket.io", socket_app)
+
+# Mount the sub-applications
+app.mount("/api", api_app)
+app.mount("/", socket_app)
 
 @app.on_event("startup")
 async def startup_event():
