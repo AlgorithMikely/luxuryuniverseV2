@@ -13,8 +13,13 @@ async def check_is_reviewer(
     current_user: schemas.TokenData = Depends(security.get_current_user),
     db: Session = Depends(get_db)
 ):
+    import logging
+    logging.warning(f"Checking reviewer access for reviewer_id: {reviewer_id}")
+    logging.warning(f"Current user: {current_user}")
+
     # Admins have access to all reviewer routes.
     if "admin" in current_user.roles:
+        logging.warning("User is an admin, granting access.")
         return current_user
 
     if "reviewer" not in current_user.roles:
