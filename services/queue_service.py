@@ -5,10 +5,19 @@ from typing import Optional
 import event_service
 
 async def create_submission(db: Session, reviewer_id: int, user_id: int, track_url: str, track_title: str, archived_url: str) -> models.Submission:
-    # ... logic to find or create user ...
+    # Find active session for the reviewer
+    active_session = db.query(models.ReviewSession).filter_by(reviewer_id=reviewer_id, status='active').first()
+    if not active_session:
+        # If no active session, create a new one
+        active_session = models.ReviewSession(reviewer_id=reviewer_id, name="New Session", status='active')
+        db.add(active_session)
+        db.commit()
+        db.refresh(active_session)
+
     new_submission = models.Submission(
         reviewer_id=reviewer_id,
         user_id=user_id,
+        session_id=active_session.id,
         track_url=track_url,
         track_title=track_title,
         archived_url=archived_url,
