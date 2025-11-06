@@ -1,22 +1,23 @@
 import { useState, useEffect } from 'react';
 import { useQueueStore } from '../../stores/queueStore';
 import { useAuthStore } from '../../stores/authStore';
+import { useParams } from 'react-router-dom';
 import api from '../../services/api';
 
 const ReviewHub = () => {
-  const { currentTrack, updateSubmission, setCurrentTrack, setQueue, queue } = useQueueStore();
+  const { currentTrack, updateSubmission, setCurrentTrack, queue } = useQueueStore();
   const { user } = useAuthStore();
   const { reviewerId } = useParams<{ reviewerId: string }>();
 
   // Local state for the review form
   const [notes, setNotes] = useState('');
-  const [rating, setRating] = useState<number | ''>('');
+  const [score, setScore] = useState<number | ''>('');
 
   // When the currentTrack changes, update the form fields
   useEffect(() => {
     if (currentTrack) {
       setNotes(currentTrack.notes || '');
-      setRating(currentTrack.rating || '');
+      setScore(currentTrack.score || '');
     }
   }, [currentTrack]);
 
@@ -28,7 +29,7 @@ const ReviewHub = () => {
       const response = await api.post(
         `/${reviewerId}/queue/review/${currentTrack.id}`,
         {
-          score: rating === '' ? null : Number(rating),
+          score: score === '' ? null : Number(score),
           notes,
         }
       );
@@ -47,8 +48,6 @@ const ReviewHub = () => {
     try {
         const response = await api.post(`/${reviewerId}/queue/next`);
         setCurrentTrack(response.data);
-        // Remove the new current track from the queue
-        setQueue(queue.filter(track => track.id !== response.data.id));
     } catch (error) {
         console.error('Failed to get next track:', error);
         // If the queue is empty, clear the current track
@@ -72,9 +71,6 @@ const ReviewHub = () => {
         <h3 className="text-2xl font-bold truncate">{currentTrack.track_title || currentTrack.track_url}</h3>
         <p className="text-md text-gray-400">
           Submitted by: <span className="font-semibold text-white">{currentTrack.user?.username || 'Unknown User'}</span>
-          {currentTrack.user?.tiktok_username && (
-            <span className="ml-2 text-sm text-pink-400">(@{currentTrack.user?.tiktok_username})</span>
-          )}
         </p>
       </div>
       <form onSubmit={handleSubmitReview} className="space-y-4">
@@ -91,14 +87,14 @@ const ReviewHub = () => {
           />
         </div>
         <div>
-          <label htmlFor="rating" className="block text-sm font-medium text-gray-300">
+          <label htmlFor="score" className="block text-sm font-medium text-gray-300">
             Rating (0-10)
           </label>
           <input
-            id="rating"
+            id="score"
             type="number"
-            value={rating}
-            onChange={(e) => setRating(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+            value={score}
+            onChange={(e) => setScore(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
             min="0"
             max="10"
             className="mt-1 block w-full bg-gamma-700 border-gray-600 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 sm:text-sm text-white"

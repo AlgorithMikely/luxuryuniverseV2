@@ -1,16 +1,11 @@
 import { useState } from 'react';
 import { useQueueStore, Submission } from '../../stores/queueStore';
 
-type Tab = 'recentlyPlayed' | 'savedForLater' | 'reviewerPicks';
+type Tab = 'history' | 'bookmarks';
 
 const HistoryPanel = () => {
-  const {
-    recentlyPlayed,
-    savedForLater,
-    reviewerPicks,
-    setCurrentTrack,
-  } = useQueueStore();
-  const [activeTab, setActiveTab] = useState<Tab>('recentlyPlayed');
+  const { history, bookmarks, setCurrentTrack } = useQueueStore();
+  const [activeTab, setActiveTab] = useState<Tab>('history');
 
   const handleTrackSelect = (track: Submission) => {
     setCurrentTrack(track);
@@ -33,9 +28,6 @@ const HistoryPanel = () => {
             </a>
             <p className="text-sm text-gray-400">
               Submitted by: {submission.user?.username || 'Unknown User'}
-              {submission.user?.tiktok_username && (
-                <span className="ml-2 text-pink-400">(@{submission.user.tiktok_username})</span>
-              )}
             </p>
           </li>
         ))}
@@ -43,31 +35,30 @@ const HistoryPanel = () => {
     );
   };
 
-  const tabs: { id: Tab; label: string, list: Submission[] }[] = [
-      {id: 'recentlyPlayed', label: 'Recently Played', list: recentlyPlayed},
-      {id: 'savedForLater', label: 'Saved', list: savedForLater},
-      {id: 'reviewerPicks', label: 'Picks', list: reviewerPicks}
-  ]
+  const tabs: { id: Tab; label: string; list: Submission[] }[] = [
+    { id: 'history', label: 'History', list: history },
+    { id: 'bookmarks', label: 'Bookmarks', list: bookmarks },
+  ];
 
   return (
     <div className="bg-gray-800 rounded-lg shadow-lg p-4 h-full flex flex-col">
       <div className="flex border-b border-gray-700 mb-4">
-        {tabs.map(tab => (
-           <button
-           key={tab.id}
-           onClick={() => setActiveTab(tab.id)}
-           className={`py-2 px-4 text-sm font-medium ${
-             activeTab === tab.id
-               ? 'text-purple-400 border-b-2 border-purple-400'
-               : 'text-gray-400 hover:text-white'
-           }`}
-         >
-           {tab.label}
-         </button>
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`py-2 px-4 text-sm font-medium ${
+              activeTab === tab.id
+                ? 'text-purple-400 border-b-2 border-purple-400'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            {tab.label}
+          </button>
         ))}
       </div>
       <div className="overflow-y-auto flex-grow">
-          {renderList(tabs.find(t => t.id === activeTab)!.list)}
+        {renderList(tabs.find((t) => t.id === activeTab)!.list)}
       </div>
     </div>
   );
