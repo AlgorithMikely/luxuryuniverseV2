@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../services/api";
 import { useAuthStore } from "../stores/authStore";
-import { useSocketStore } from "../stores/socketStore";
 import toast from "react-hot-toast";
 import Navbar from "../components/Navbar";
 

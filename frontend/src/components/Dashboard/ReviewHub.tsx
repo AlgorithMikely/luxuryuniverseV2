@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useQueueStore } from '../stores/queueStore';
-import { useAuthStore } from '../stores/authStore';
-import { useParams } from 'react-router-dom';
-import api from '../services/api';
+import { useQueueStore } from '../../stores/queueStore';
+import { useAuthStore } from '../../stores/authStore';
+import api from '../../services/api';
 
 const ReviewHub = () => {
   const { currentTrack, updateSubmission, setCurrentTrack, setQueue, queue } = useQueueStore();

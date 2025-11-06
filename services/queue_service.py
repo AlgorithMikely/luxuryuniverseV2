@@ -1,27 +1,14 @@
-import asyncio
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import and_
 import models
 import schemas
 from typing import Optional
 import event_service
 
-def get_active_session(db: Session, reviewer_id: int) -> Optional[models.ReviewSession]:
-    """Retrieves the active review session for a given reviewer."""
-    return db.query(models.ReviewSession).filter_by(reviewer_id=reviewer_id, status='active').first()
-
-def _create_submission_sync(db: Session, reviewer_id: int, user_id: int, track_url: str, track_title: str, archived_url: str) -> models.Submission:
-    active_session = get_active_session(db, reviewer_id)
-    if not active_session:
-        active_session = models.ReviewSession(reviewer_id=reviewer_id, name="New Session", status='active')
-        db.add(active_session)
-        db.commit()
-        db.refresh(active_session)
-
+async def create_submission(db: Session, reviewer_id: int, user_id: int, track_url: str, track_title: str, archived_url: str) -> models.Submission:
+    # ... logic to find or create user ...
     new_submission = models.Submission(
         reviewer_id=reviewer_id,
         user_id=user_id,
-        session_id=active_session.id,
         track_url=track_url,
         track_title=track_title,
         archived_url=archived_url,
@@ -30,51 +17,20 @@ def _create_submission_sync(db: Session, reviewer_id: int, user_id: int, track_u
     db.add(new_submission)
     db.commit()
     db.refresh(new_submission)
-    return new_submission
 
-async def create_submission(db: Session, reviewer_id: int, user_id: int, track_url: str, track_title: str, archived_url: str) -> models.Submission:
-    new_submission = await asyncio.to_thread(
-        _create_submission_sync, db, reviewer_id, user_id, track_url, track_title, archived_url
-    )
-
-    active_session = get_active_session(db, reviewer_id)
-    queue = get_sorted_queue(db, reviewer_id)
-    queue_state = schemas.QueueState(
-        queue=[schemas.Submission.model_validate(s) for s in queue],
-        open_tiers=active_session.open_queue_tiers
-    )
-    await event_service.emit_queue_update(reviewer_id, queue_state.model_dump())
+    # Emit a queue update
+    new_queue = get_pending_queue(db, reviewer_id)
+    # Convert SQLAlchemy models to Pydantic models for serialization
+    queue_schemas = [schemas.Submission.model_validate(s) for s in new_queue]
+    await event_service.emit_queue_update(reviewer_id, [s.model_dump() for s in queue_schemas])
 
     return new_submission
-
-def get_sorted_queue(db: Session, reviewer_id: int) -> list[models.Submission]:
-    """Gets the sorted and filtered queue for a reviewer based on their active session."""
-    active_session = get_active_session(db, reviewer_id)
-    if not active_session:
-        return []
-
-    return db.query(models.Submission).options(joinedload(models.Submission.user)).filter(
-        and_(
-            models.Submission.session_id == active_session.id,
-            models.Submission.skipValue.in_(active_session.open_queue_tiers)
-        )
-    ).order_by(models.Submission.skipValue.desc()).all()
 
 def get_pending_queue(db: Session, reviewer_id: int) -> list[models.Submission]:
-    return get_sorted_queue(db, reviewer_id)
-
-def create_session(db: Session, reviewer_id: int) -> models.ReviewSession:
-    """Creates a new, active review session for a reviewer."""
-    new_session = models.ReviewSession(
-        reviewer_id=reviewer_id,
-        name="New Session",
-        status='active',
-        open_queue_tiers=[0, 5, 10, 15, 20, 25]
-    )
-    db.add(new_session)
-    db.commit()
-    db.refresh(new_session)
-    return new_session
+    return db.query(models.Submission).options(joinedload(models.Submission.user)).filter(
+        models.Submission.reviewer_id == reviewer_id,
+        models.Submission.status == 'pending'
+    ).order_by(models.Submission.submitted_at.asc()).all()
 
 def set_queue_status(db: Session, reviewer_id: int, status: str):
     reviewer = db.query(models.Reviewer).filter(models.Reviewer.id == reviewer_id).first()
@@ -84,7 +40,7 @@ def set_queue_status(db: Session, reviewer_id: int, status: str):
         db.refresh(reviewer)
     return reviewer
 
-def _advance_queue_sync(db: Session, reviewer_id: int) -> Optional[models.Submission]:
+async def advance_queue(db: Session, reviewer_id: int) -> Optional[models.Submission]:
     submission = db.query(models.Submission).filter(
         models.Submission.reviewer_id == reviewer_id,
         models.Submission.status == 'pending'
@@ -94,20 +50,13 @@ def _advance_queue_sync(db: Session, reviewer_id: int) -> Optional[models.Submis
         submission.status = 'played'
         db.commit()
         db.refresh(submission)
-    return submission
 
-async def advance_queue(db: Session, reviewer_id: int) -> Optional[models.Submission]:
-    submission = await asyncio.to_thread(_advance_queue_sync, db, reviewer_id)
+        # Emit a queue update
+        new_queue = get_pending_queue(db, reviewer_id)
+        # Convert SQLAlchemy models to Pydantic models for serialization
+        queue_schemas = [schemas.Submission.model_validate(s) for s in new_queue]
+        await event_service.emit_queue_update(reviewer_id, [s.model_dump() for s in queue_schemas])
 
-    if submission:
-        active_session = get_active_session(db, reviewer_id)
-        if active_session:
-            queue = get_sorted_queue(db, reviewer_id)
-            queue_state = schemas.QueueState(
-                queue=[schemas.Submission.model_validate(s) for s in queue],
-                open_tiers=active_session.open_queue_tiers
-            )
-            await event_service.emit_queue_update(reviewer_id, queue_state.model_dump())
 
     return submission
 

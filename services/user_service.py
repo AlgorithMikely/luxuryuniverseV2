@@ -11,6 +11,7 @@ def get_or_create_user(db: Session, discord_id: str, username: str) -> models.Us
     """
     user = get_user_by_discord_id(db, discord_id)
     if user:
+        # Update username if it has changed
         if user.username != username:
             user.username = username
             db.commit()
@@ -44,12 +45,14 @@ def add_reviewer_profile(
 ) -> models.User:
     """Adds a reviewer profile to a user."""
     if user.reviewer_profile:
+        # Update existing profile if tiktok_handle is provided
         if tiktok_handle:
             user.reviewer_profile.tiktok_handle = tiktok_handle
             db.commit()
             db.refresh(user)
         return user
 
+    # Create new profile
     new_reviewer_profile = models.Reviewer(
         user_id=user.id, tiktok_handle=tiktok_handle
     )

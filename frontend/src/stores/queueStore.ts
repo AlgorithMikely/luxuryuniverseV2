@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
+import io, { Socket } from 'socket.io-client';
 
 // Define the shape of a User, matching the backend schema.
 interface User {
@@ -8,97 +9,130 @@ interface User {
   tiktok_username?: string | null;
 }
 
-// Expand the Submission interface to include all relevant data.
+// Expand the Submission interface to include all relevant data from the backend.
 export interface Submission {
   id: number;
+  session_id: number;
+  user: User;
   track_url: string;
   track_title?: string | null;
   archived_url?: string | null;
-  status: 'pending' | 'played' | 'saved_for_later' | 'reviewer_pick';
+  status: 'pending' | 'played' | 'bookmarked';
   submitted_at: string;
-  user: User; // Embed the user object.
-  // Optional fields for review data
   notes?: string;
-  rating?: number;
-  is_favorite?: boolean;
+  score?: number;
+  skip_count: number;
 }
 
-// Define the state structure for the queue store.
-interface QueueState {
-  // Core data arrays
+// This is the shape of the data received from the 'queue_state' WebSocket event.
+export interface FullQueueState {
   queue: Submission[];
-  recentlyPlayed: Submission[];
-  savedForLater: Submission[];
-  reviewerPicks: Submission[];
+  history: Submission[];
+  bookmarks: Submission[];
+}
 
-  // The currently active track for the web player and review hub
-  currentTrack: Submission | null;
-
-  // Connection status for real-time updates
+// Define the state structure for our new unified store.
+interface UnifiedQueueState {
+  socket: Socket | null;
   socketStatus: 'connected' | 'disconnected' | 'connecting';
 
+  // Core data arrays
+  queue: Submission[];
+  history: Submission[];
+  bookmarks: Submission[];
+  currentTrack: Submission | null;
+
   // --- ACTIONS ---
-
-  // Setters for initializing and updating the main lists
-  setQueue: (queue: Submission[]) => void;
-  setRecentlyPlayed: (played: Submission[]) => void;
-  setSavedForLater: (saved: Submission[]) => void;
-  setReviewerPicks: (picks: Submission[]) => void;
-
-  // Action to set the currently active track
+  connect: (token: string) => void;
+  disconnect: () => void;
   setCurrentTrack: (track: Submission | null) => void;
-
-  // Action to update a single submission's details (e.g., after a review)
-  updateSubmission: (updatedSubmission: Submission) => void;
-
-  // Action to handle real-time queue updates from the socket
-  handleQueueUpdate: (newQueue: Submission[]) => void;
-
-  // Action to update socket connection status
-  setSocketStatus: (status: 'connected' | 'disconnected' | 'connecting') => void;
+  updateSubmission: (updatedSubmission: Submission) => void; // For optimistic UI updates
 }
 
-export const useQueueStore = create<QueueState>()(
+export const useQueueStore = create<UnifiedQueueState>()(
   devtools(
     (set, get) => ({
       // Initial state
-      queue: [],
-      recentlyPlayed: [],
-      savedForLater: [],
-      reviewerPicks: [],
-      currentTrack: null,
+      socket: null,
       socketStatus: 'disconnected',
+      queue: [],
+      history: [],
+      bookmarks: [],
+      currentTrack: null,
 
       // --- ACTION IMPLEMENTATIONS ---
 
-      setQueue: (queue) => set({ queue }),
-      setRecentlyPlayed: (played) => set({ recentlyPlayed: played }),
-      setSavedForLater: (saved) => set({ savedForLater: saved }),
-      setReviewerPicks: (picks) => set({ reviewerPicks: picks }),
+      connect: (token) => {
+        const { socket } = get();
+        if (socket?.connected) {
+          return; // Prevent multiple connections
+        }
+
+        set({ socketStatus: 'connecting' });
+
+        const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:8000', {
+          auth: { token },
+        });
+
+        newSocket.on('connect', () => {
+          console.log('Socket connected:', newSocket.id);
+          set({ socket: newSocket, socketStatus: 'connected' });
+        });
+
+        newSocket.on('disconnect', (reason) => {
+          console.log('Socket disconnected:', reason);
+          // Reset state on disconnect
+          set({
+            socket: null,
+            socketStatus: 'disconnected',
+            queue: [],
+            history: [],
+            bookmarks: [],
+            currentTrack: null,
+          });
+        });
+
+        newSocket.on('connect_error', (error) => {
+          console.error('Socket connection error:', error.message);
+          set({ socketStatus: 'disconnected' });
+        });
+
+        // Main event listener for receiving the entire queue state from the backend
+        newSocket.on('queue_state', (state: FullQueueState) => {
+          set({
+            queue: state.queue,
+            history: state.history,
+            bookmarks: state.bookmarks,
+          });
+        });
+      },
+
+      disconnect: () => {
+        const { socket } = get();
+        if (socket) {
+          socket.disconnect();
+        }
+      },
 
       setCurrentTrack: (track) => set({ currentTrack: track }),
 
       updateSubmission: (updatedSubmission) => {
-        const allLists = ['queue', 'recentlyPlayed', 'savedForLater', 'reviewerPicks'] as const;
-        allLists.forEach((listName) => {
-          const list = get()[listName];
-          const updatedList = list.map((item) =>
+        // Optimistically update the submission wherever it appears
+        const updateList = (list: Submission[]) =>
+          list.map((item) =>
             item.id === updatedSubmission.id ? { ...item, ...updatedSubmission } : item
           );
-          set({ [listName]: updatedList });
-        });
 
-        // If the updated track is the current track, update it as well
-        if (get().currentTrack?.id === updatedSubmission.id) {
-          set({ currentTrack: { ...get().currentTrack, ...updatedSubmission } });
-        }
+        set((state) => ({
+          queue: updateList(state.queue),
+          history: updateList(state.history),
+          bookmarks: updateList(state.bookmarks),
+          currentTrack:
+            state.currentTrack?.id === updatedSubmission.id
+              ? { ...state.currentTrack, ...updatedSubmission }
+              : state.currentTrack,
+        }));
       },
-
-      handleQueueUpdate: (newQueue) => {
-        set({ queue: newQueue });
-      },
-
-      setSocketStatus: (status) => set({ socketStatus: status }),
     }),
     { name: 'QueueStore' }
   )

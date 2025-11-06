@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useQueueStore } from '../stores/queueStore';
+import { useQueueStore } from '../../stores/queueStore';
 import WaveSurfer from 'wavesurfer.js';
 
 const WebPlayer = () => {

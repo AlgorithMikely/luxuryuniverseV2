@@ -10,7 +10,6 @@ from sqlalchemy import (
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
 import datetime
-from custom_types import JsonEncodedList
 
 Base = declarative_base()
 
@@ -37,22 +36,8 @@ class Reviewer(Base):
 
     user = relationship("User", back_populates="reviewer_profile")
     submissions = relationship("Submission", back_populates="reviewer")
-    sessions = relationship("ReviewSession", back_populates="reviewer")
     economy_configs = relationship("EconomyConfig", back_populates="reviewer")
     transactions = relationship("Transaction", back_populates="reviewer")
-
-
-class ReviewSession(Base):
-    __tablename__ = "review_sessions"
-    id = Column(Integer, primary_key=True, index=True)
-    reviewer_id = Column(Integer, ForeignKey("reviewers.id"), nullable=False, index=True)
-    name = Column(String, default="Default Session")
-    status = Column(String, default="active", nullable=False)
-    created_at = Column(DateTime, default=func.now())
-    open_queue_tiers = Column(JsonEncodedList, nullable=False, default=[0, 5, 10, 15, 20, 25])
-
-    reviewer = relationship("Reviewer", back_populates="sessions")
-    submissions = relationship("Submission", back_populates="session")
 
 
 class Submission(Base):
@@ -60,7 +45,6 @@ class Submission(Base):
     id = Column(Integer, primary_key=True, index=True)
     reviewer_id = Column(Integer, ForeignKey("reviewers.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    session_id = Column(Integer, ForeignKey("review_sessions.id"), index=True, nullable=False)
     track_url = Column(String, nullable=False)
     track_title = Column(String, nullable=True)
     archived_url = Column(String, nullable=True)
@@ -68,11 +52,9 @@ class Submission(Base):
     submitted_at = Column(DateTime, default=datetime.datetime.utcnow)
     score = Column(Integer, nullable=True)
     notes = Column(String, nullable=True)
-    skipValue = Column(Integer, default=0, nullable=True)
 
     reviewer = relationship("Reviewer", back_populates="submissions")
     user = relationship("User", back_populates="submissions")
-    session = relationship("ReviewSession", back_populates="submissions")
 
     __table_args__ = (Index("ix_submission_reviewer_id_status", "reviewer_id", "status"),)
 

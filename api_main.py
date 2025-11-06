@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 import socketio
 
-from api import auth, reviewer_api, user_api, admin_api, proxy_api, session_api, bot_api
+from api import auth, reviewer_api, user_api, admin_api, proxy_api
 import socket_handlers
 from sio_instance import sio
 from bot_main import bot, bot_ready # Import the bot and the ready event
@@ -57,8 +57,6 @@ app.include_router(reviewer_api.router, prefix="/api")
 app.include_router(user_api.router, prefix="/api")
 app.include_router(admin_api.router, prefix="/api")
 app.include_router(proxy_api.router, prefix="/api")
-app.include_router(session_api.router)
-app.include_router(bot_api.router)
 
 # Create the Socket.IO app and mount it
 socket_app = socketio.ASGIApp(sio)

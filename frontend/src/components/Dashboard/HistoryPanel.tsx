@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { useQueueStore } from '../stores/queueStore';
-import { Submission } from '../stores/queueStore';
+import { useQueueStore, Submission } from '../../stores/queueStore';
 
 type Tab = 'recentlyPlayed' | 'savedForLater' | 'reviewerPicks';
 

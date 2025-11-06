@@ -1,9 +1,9 @@
-import asyncio
 from sqlalchemy.orm import Session
 import models
 import event_service
 
-def _add_coins_sync(db: Session, reviewer_id: int, user_id: int, amount: int, reason: str):
+async def add_coins(db: Session, reviewer_id: int, user_id: int, amount: int, reason: str):
+    # Create a transaction for the audit log
     transaction = models.Transaction(
         reviewer_id=reviewer_id,
         user_id=user_id,
@@ -12,6 +12,7 @@ def _add_coins_sync(db: Session, reviewer_id: int, user_id: int, amount: int, re
     )
     db.add(transaction)
 
+    # Find the user's wallet, or create a new one
     wallet = db.query(models.Wallet).filter(
         models.Wallet.user_id == user_id,
         models.Wallet.reviewer_id == reviewer_id
@@ -29,13 +30,10 @@ def _add_coins_sync(db: Session, reviewer_id: int, user_id: int, amount: int, re
 
     db.commit()
     db.refresh(wallet)
-    return wallet
 
-async def add_coins(db: Session, reviewer_id: int, user_id: int, amount: int, reason: str):
-    wallet = await asyncio.to_thread(
-        _add_coins_sync, db, reviewer_id, user_id, amount, reason
-    )
+    # Emit a balance update
     await event_service.emit_balance_update(reviewer_id, user_id, wallet.balance)
+
     return wallet
 
 def get_balance(db: Session, reviewer_id: int, user_id: int) -> int:

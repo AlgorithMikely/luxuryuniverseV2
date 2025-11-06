@@ -1,5 +1,4 @@
-import { useQueueStore } from '../stores/queueStore';
-import { Submission } from '../stores/queueStore'; // Import the Submission type
+import { useQueueStore, Submission } from '../../stores/queueStore';
 
 const QueuePanel = () => {
   const { queue, setCurrentTrack, socketStatus } = useQueueStore();

@@ -3,16 +3,11 @@ import logging
 import re
 import httpx
 import yt_dlp
-from fastapi import APIRouter, HTTPException, Request, Depends
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
-from database import get_db
-import models
-from security import get_current_user
-import schemas
 from bot_instance import bot
 
-router = APIRouter(prefix="/stream", tags=["Stream"])
+router = APIRouter(prefix="/proxy", tags=["Proxy"])
 
 async def resolve_discord_url(jump_url: str) -> str:
     """
@@ -40,30 +35,20 @@ async def resolve_discord_url(jump_url: str) -> str:
         raise HTTPException(status_code=500, detail=f"Failed to resolve Discord URL: {e}")
 
 
-@router.get("/{submission_id}")
-async def stream_submission(submission_id: int, request: Request, db: Session = Depends(get_db), current_user: schemas.UserProfile = Depends(get_current_user)):
-    """
-    Provides a streaming proxy for a submission's audio.
-    """
-    submission = db.query(models.Submission).filter(models.Submission.id == submission_id).first()
-    if not submission:
-        raise HTTPException(status_code=404, detail="Submission not found")
+@router.get("/audio")
+async def audio_proxy(request: Request):
+    url = request.query_params.get("url")
+    if not url:
+        raise HTTPException(status_code=400, detail="URL parameter is required")
 
-    # Authorization Check: Ensure the user has access to this submission.
-    # An admin can access any submission. A reviewer can access submissions for their own sessions.
-    is_admin = "admin" in current_user.roles
-    is_reviewer = current_user.reviewer_profile and submission.reviewer_id == current_user.reviewer_profile.id
-
-    if not is_admin and not is_reviewer:
-        raise HTTPException(status_code=403, detail="Not authorized to access this submission")
-
-    url = submission.track_url
+    # If it's a Discord jump URL, resolve it first
     if "discord.com/channels" in url:
         try:
             url = await resolve_discord_url(url)
         except HTTPException as e:
             raise e
 
+    # For non-Discord URLs, use yt-dlp to get a direct streamable URL
     if "discord.com" not in url:
         try:
             with yt_dlp.YoutubeDL({'format': 'bestaudio', 'quiet': True}) as ydl:
