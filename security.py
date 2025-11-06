@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import List
 from fastapi import Depends, HTTPException, status
@@ -5,6 +6,10 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from config import settings
 import schemas
+from database import get_db
+from sqlalchemy.orm import Session
+from services import user_service
+import models
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -27,11 +32,6 @@ def verify_token(token: str, credentials_exception) -> schemas.TokenData:
         raise credentials_exception
     return token_data
 
-from database import get_db
-from sqlalchemy.orm import Session
-from services import user_service
-import models
-
 def get_current_user(token: str = Depends(oauth2_scheme)) -> schemas.TokenData:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -40,23 +40,20 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> schemas.TokenData:
     )
     token_data = verify_token(token, credentials_exception)
 
-    # Dynamically add admin role if the user's discord_id is in the admin list
     if token_data.discord_id in settings.ADMIN_DISCORD_IDS:
         if "admin" not in token_data.roles:
             token_data.roles.append("admin")
 
     return token_data
 
-
-def get_current_active_user(
+async def get_current_active_user(
     current_user: schemas.TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> models.User:
-    user = user_service.get_user_by_discord_id(db, discord_id=current_user.discord_id)
+    user = await asyncio.to_thread(user_service.get_user_by_discord_id, db, discord_id=current_user.discord_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return user
-
 
 def require_admin(current_user: schemas.TokenData = Depends(get_current_user)):
     if "admin" not in current_user.roles:

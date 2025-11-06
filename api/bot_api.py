@@ -28,7 +28,6 @@ async def create_bot_submission(submission_data: schemas.BotSubmissionCreate, db
     if not reviewer:
         raise HTTPException(status_code=404, detail="Reviewer not found for the given channel ID")
 
-    # The create_submission service function will handle finding the active session
     new_submission = await queue_service.create_submission(
         db,
         reviewer_id=reviewer.id,
@@ -38,5 +37,4 @@ async def create_bot_submission(submission_data: schemas.BotSubmissionCreate, db
         archived_url=submission_data.archived_url
     )
 
-    # The service function also handles the WebSocket broadcast, so no extra code is needed here.
     return {"message": "Submission created successfully", "submission_id": new_submission.id}

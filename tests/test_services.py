@@ -4,12 +4,10 @@ from sqlalchemy.orm import sessionmaker, Session
 from models import Base, User, Reviewer, Submission, ReviewSession
 from services import user_service, queue_service
 
-# In-memory SQLite database for testing
 DATABASE_URL = "sqlite:///:memory:"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Pytest fixture to provide a database session for each test
 @pytest.fixture(scope="function")
 def db_session():
     Base.metadata.create_all(bind=engine)
@@ -21,16 +19,13 @@ def db_session():
         Base.metadata.drop_all(bind=engine)
 
 def test_get_or_create_user(db_session: Session):
-    # Test creating a new user
     user = user_service.get_or_create_user(db_session, "123", "testuser")
     assert user.discord_id == "123"
     assert user.username == "testuser"
 
-    # Test retrieving an existing user
     user2 = user_service.get_or_create_user(db_session, "123", "testuser")
     assert user2.id == user.id
 
-    # Test updating a user's username
     user3 = user_service.get_or_create_user(db_session, "123", "new_username")
     assert user3.username == "new_username"
 

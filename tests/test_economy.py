@@ -4,12 +4,10 @@ from sqlalchemy.orm import sessionmaker, Session
 from models import Base, User, Reviewer, Transaction
 from services import user_service, economy_service
 
-# In-memory SQLite database for testing
 DATABASE_URL = "sqlite:///:memory:"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Pytest fixture to provide a database session for each test
 @pytest.fixture(scope="function")
 def db_session():
     Base.metadata.create_all(bind=engine)

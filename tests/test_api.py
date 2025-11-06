@@ -11,7 +11,6 @@ from models import User, Reviewer, Base
 from database import get_db
 
 from sqlalchemy.pool import StaticPool
-# Use an in-memory SQLite database for testing
 TEST_DATABASE_URL = "sqlite:///:memory:"
 os.environ["TEST_DATABASE_URL"] = TEST_DATABASE_URL
 engine = create_engine(
@@ -21,7 +20,6 @@ engine = create_engine(
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Override the get_db dependency to use the test database
 def override_get_db():
     try:
         db = TestingSessionLocal()
@@ -78,11 +76,9 @@ def test_reviewer_isolation(db_session):
 
     token1 = create_access_token(data={"sub": user1.discord_id, "roles": ["reviewer"]})
 
-    # Accessing own queue should work
     response = client.get(f"/api/{reviewer1.id}/queue", headers={"Authorization": f"Bearer {token1}"})
     assert response.status_code == 200
 
-    # Accessing other reviewer's queue should be forbidden
     response = client.get(f"/api/{reviewer2.id}/queue", headers={"Authorization": f"Bearer {token1}"})
     assert response.status_code == 403
 
@@ -94,7 +90,6 @@ def test_dashboard_endpoints(db_session):
     token = create_access_token(data={"sub": admin_user.discord_id, "roles": ["admin"]})
     headers = {"Authorization": f"Bearer {token}"}
 
-    # Create a dummy reviewer to test against
     reviewer_user = User(discord_id="101", username="reviewer_user")
     db_session.add(reviewer_user)
     db_session.commit()
@@ -102,14 +97,11 @@ def test_dashboard_endpoints(db_session):
     db_session.add(reviewer)
     db_session.commit()
 
-    # Test GET /api/{reviewer.id}/queue
     response_queue = client.get(f"/api/{reviewer.id}/queue", headers=headers)
     assert response_queue.status_code == 200
 
-    # Test POST /api/{reviewer.id}/queue/next
     response_next = client.post(f"/api/{reviewer.id}/queue/next", headers=headers)
     assert response_next.status_code in [200, 404]
 
-    # Test GET /api/{reviewer.id}/queue/played
     response_played = client.get(f"/api/{reviewer.id}/queue/played", headers=headers)
     assert response_played.status_code == 200
