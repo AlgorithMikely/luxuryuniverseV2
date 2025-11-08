@@ -58,3 +58,22 @@ class Submission(BaseModel):
     status: str
     user: User
     model_config = ConfigDict(from_attributes=True)
+
+class ReviewSessionBase(BaseModel):
+    name: str
+
+class ReviewSessionCreate(ReviewSessionBase):
+    pass
+
+class ReviewSessionUpdate(BaseModel):
+    name: Optional[str] = None
+    status: Optional[str] = None
+    open_queue_tiers: Optional[List[int]] = None
+
+class ReviewSession(ReviewSessionBase):
+    id: int
+    reviewer_id: int
+    status: str
+    open_queue_tiers: List[int]
+    submissions: List[Submission] = []
+    model_config = ConfigDict(from_attributes=True)
