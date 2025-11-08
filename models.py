@@ -10,8 +10,28 @@ from sqlalchemy import (
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
 import datetime
+import json
+from sqlalchemy.types import TypeDecorator, TEXT
 
 Base = declarative_base()
+
+# ✅ Custom type required by Alembic migration file
+class JsonEncodedList(TypeDecorator):
+    """
+    Stores Python lists as JSON strings in the database.
+    Used for backward compatibility with older migrations.
+    """
+    impl = TEXT
+
+    def process_bind_param(self, value, dialect):
+        if value is not None:
+            return json.dumps(value)
+        return None
+
+    def process_result_value(self, value, dialect):
+        if value is not None:
+            return json.loads(value)
+        return None
 
 
 class User(Base):
@@ -80,6 +100,7 @@ class Transaction(Base):
 
     reviewer = relationship("Reviewer", back_populates="transactions")
     user = relationship("User", back_populates="transactions")
+
 
 class Wallet(Base):
     __tablename__ = "wallets"
