@@ -47,7 +47,7 @@ def create_app():
     app.include_router(user_api.router, prefix="/api")
     app.include_router(admin_api.router, prefix="/api")
     app.include_router(proxy_api.router, prefix="/api")
-    app.include_router(session_api.router, prefix="/api")
+    app.include_router(session_api.router, prefix="/api/sessions", tags=["sessions"])
 
     socket_app = socketio.ASGIApp(sio)
     app.mount("/socket.io", socket_app)
