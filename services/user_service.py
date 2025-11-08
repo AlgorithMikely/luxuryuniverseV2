@@ -1,9 +1,14 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 import models
 
 def get_user_by_discord_id(db: Session, discord_id: str) -> models.User | None:
     """Retrieves a user by their Discord ID."""
-    return db.query(models.User).filter(models.User.discord_id == discord_id).first()
+    return (
+        db.query(models.User)
+        .options(joinedload(models.User.reviewer_profile))
+        .filter(models.User.discord_id == discord_id)
+        .first()
+    )
 
 def get_or_create_user(db: Session, discord_id: str, username: str) -> models.User:
     """

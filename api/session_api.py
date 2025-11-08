@@ -5,7 +5,7 @@ from typing import List
 import models
 import schemas
 from database import get_db
-from security import get_current_user
+from security import get_current_active_user
 from services import queue_service
 
 router = APIRouter()
@@ -14,7 +14,7 @@ router = APIRouter()
 def create_session(
     session_create: schemas.ReviewSessionCreate,
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user),
+    user: models.User = Depends(get_current_active_user),
 ):
     if not user.reviewer_profile:
         raise HTTPException(status_code=403, detail="User is not a reviewer")
@@ -23,7 +23,7 @@ def create_session(
 @router.get("", response_model=List[schemas.ReviewSession])
 def get_sessions(
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user),
+    user: models.User = Depends(get_current_active_user),
 ):
     if not user.reviewer_profile:
         raise HTTPException(status_code=403, detail="User is not a reviewer")
@@ -32,7 +32,7 @@ def get_sessions(
 @router.get("/active", response_model=schemas.ReviewSession)
 def get_active_session(
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user),
+    user: models.User = Depends(get_current_active_user),
 ):
     if not user.reviewer_profile:
         raise HTTPException(status_code=403, detail="User is not a reviewer")
@@ -45,7 +45,7 @@ def get_active_session(
 def activate_session(
     session_id: int,
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user),
+    user: models.User = Depends(get_current_active_user),
 ):
     if not user.reviewer_profile:
         raise HTTPException(status_code=403, detail="User is not a reviewer")
@@ -55,7 +55,7 @@ def activate_session(
 def archive_session(
     session_id: int,
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user),
+    user: models.User = Depends(get_current_active_user),
 ):
     if not user.reviewer_profile:
         raise HTTPException(status_code=403, detail="User is not a reviewer")
@@ -66,7 +66,7 @@ def update_session(
     session_id: int,
     session_update: schemas.ReviewSessionUpdate,
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user),
+    user: models.User = Depends(get_current_active_user),
 ):
     if not user.reviewer_profile:
         raise HTTPException(status_code=403, detail="User is not a reviewer")
@@ -76,7 +76,7 @@ def update_session(
 def get_session_submissions(
     session_id: int,
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_user),
+    user: models.User = Depends(get_current_active_user),
 ):
     if not user.reviewer_profile:
         raise HTTPException(status_code=403, detail="User is not a reviewer")
