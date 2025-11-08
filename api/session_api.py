@@ -5,8 +5,8 @@ from typing import List
 import models
 import schemas
 from database import get_db
-from security import get_current_active_user
-from services import queue_service
+from security import get_current_user
+from services import queue_service, user_service
 
 router = APIRouter()
 
@@ -14,27 +14,30 @@ router = APIRouter()
 def create_session(
     session_create: schemas.ReviewSessionCreate,
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_active_user),
+    token: schemas.TokenData = Depends(get_current_user),
 ):
-    if not user.reviewer_profile:
+    user = user_service.get_user_by_discord_id(db, discord_id=token.discord_id)
+    if not user or not user.reviewer_profile:
         raise HTTPException(status_code=403, detail="User is not a reviewer")
     return queue_service.create_session(db, user.reviewer_profile.id, session_create.name)
 
 @router.get("", response_model=List[schemas.ReviewSession])
 def get_sessions(
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_active_user),
+    token: schemas.TokenData = Depends(get_current_user),
 ):
-    if not user.reviewer_profile:
+    user = user_service.get_user_by_discord_id(db, discord_id=token.discord_id)
+    if not user or not user.reviewer_profile:
         raise HTTPException(status_code=403, detail="User is not a reviewer")
     return queue_service.get_sessions_by_reviewer(db, user.reviewer_profile.id)
 
 @router.get("/active", response_model=schemas.ReviewSession)
 def get_active_session(
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_active_user),
+    token: schemas.TokenData = Depends(get_current_user),
 ):
-    if not user.reviewer_profile:
+    user = user_service.get_user_by_discord_id(db, discord_id=token.discord_id)
+    if not user or not user.reviewer_profile:
         raise HTTPException(status_code=403, detail="User is not a reviewer")
     session = queue_service.get_active_session_by_reviewer(db, user.reviewer_profile.id)
     if not session:
@@ -45,9 +48,10 @@ def get_active_session(
 def activate_session(
     session_id: int,
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_active_user),
+    token: schemas.TokenData = Depends(get_current_user),
 ):
-    if not user.reviewer_profile:
+    user = user_service.get_user_by_discord_id(db, discord_id=token.discord_id)
+    if not user or not user.reviewer_profile:
         raise HTTPException(status_code=403, detail="User is not a reviewer")
     return queue_service.activate_session(db, user.reviewer_profile.id, session_id)
 
@@ -55,9 +59,10 @@ def activate_session(
 def archive_session(
     session_id: int,
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_active_user),
+    token: schemas.TokenData = Depends(get_current_user),
 ):
-    if not user.reviewer_profile:
+    user = user_service.get_user_by_discord_id(db, discord_id=token.discord_id)
+    if not user or not user.reviewer_profile:
         raise HTTPException(status_code=403, detail="User is not a reviewer")
     return queue_service.archive_session(db, user.reviewer_profile.id, session_id)
 
@@ -66,9 +71,10 @@ def update_session(
     session_id: int,
     session_update: schemas.ReviewSessionUpdate,
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_active_user),
+    token: schemas.TokenData = Depends(get_current_user),
 ):
-    if not user.reviewer_profile:
+    user = user_service.get_user_by_discord_id(db, discord_id=token.discord_id)
+    if not user or not user.reviewer_profile:
         raise HTTPException(status_code=403, detail="User is not a reviewer")
     return queue_service.update_session(db, user.reviewer_profile.id, session_id, session_update)
 
@@ -76,9 +82,10 @@ def update_session(
 def get_session_submissions(
     session_id: int,
     db: Session = Depends(get_db),
-    user: models.User = Depends(get_current_active_user),
+    token: schemas.TokenData = Depends(get_current_user),
 ):
-    if not user.reviewer_profile:
+    user = user_service.get_user_by_discord_id(db, discord_id=token.discord_id)
+    if not user or not user.reviewer_profile:
         raise HTTPException(status_code=403, detail="User is not a reviewer")
 
     session = queue_service.get_session_by_id(db, session_id)
