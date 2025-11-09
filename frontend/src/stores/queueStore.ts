@@ -72,6 +72,7 @@ export const useQueueStore = create<UnifiedQueueState>()(
 
         const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:8000', {
           auth: { token },
+          transports: ['websocket'],
         });
 
         newSocket.on('connect', () => {
