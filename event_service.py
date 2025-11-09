@@ -1,8 +1,13 @@
 from sio_instance import sio
 
+import logging
+
 async def emit_queue_update(reviewer_id: int, queue_data: list):
     """Emits a queue update to the specified reviewer's room."""
-    await sio.emit("queue_updated", queue_data, room=f"reviewer_room_{reviewer_id}")
+    room = f"reviewer_room_{reviewer_id}"
+    logging.info(f"Emitting 'queue_updated' to room {room} with data: {queue_data}")
+    await sio.emit("queue_updated", queue_data, room=room)
+    logging.info("'queue_updated' event emitted.")
 
 async def emit_balance_update(reviewer_id: int, user_id: int, new_balance: int):
     """Emits a balance update to the specified user's room."""

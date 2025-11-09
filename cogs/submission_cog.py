@@ -88,6 +88,7 @@ class PassiveSubmissionCog(commands.Cog):
                     # For URL submissions, the original content is the track_url.
                     final_track_url = jump_url if message.attachments else submission_content
 
+                    logging.info(f"Creating submission for reviewer {reviewer.id} in session {active_session.id}")
                     await queue_service.create_submission(
                         db,
                         reviewer_id=reviewer.id,
@@ -97,6 +98,7 @@ class PassiveSubmissionCog(commands.Cog):
                         archived_url=jump_url,
                         session_id=active_session.id
                     )
+                    logging.info("Submission created successfully.")
 
                     await message.delete()
 

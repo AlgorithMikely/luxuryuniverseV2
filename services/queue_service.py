@@ -20,10 +20,12 @@ async def create_submission(db: Session, reviewer_id: int, user_id: int, track_u
     db.refresh(new_submission)
 
     # Emit a queue update
+    logging.info(f"Emitting queue update for reviewer {reviewer_id}")
     new_queue = get_pending_queue(db, reviewer_id)
     # Convert SQLAlchemy models to Pydantic models for serialization
     queue_schemas = [schemas.Submission.model_validate(s) for s in new_queue]
     await event_service.emit_queue_update(reviewer_id, [s.model_dump() for s in queue_schemas])
+    logging.info("Queue update emitted.")
 
     return new_submission
 
