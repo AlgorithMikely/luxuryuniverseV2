@@ -4,7 +4,7 @@ import schemas
 from typing import Optional
 import event_service
 
-async def create_submission(db: Session, reviewer_id: int, user_id: int, track_url: str, track_title: str, archived_url: str) -> models.Submission:
+async def create_submission(db: Session, reviewer_id: int, user_id: int, track_url: str, track_title: str, archived_url: str, session_id: Optional[int] = None) -> models.Submission:
     # ... logic to find or create user ...
     new_submission = models.Submission(
         reviewer_id=reviewer_id,
@@ -12,7 +12,8 @@ async def create_submission(db: Session, reviewer_id: int, user_id: int, track_u
         track_url=track_url,
         track_title=track_title,
         archived_url=archived_url,
-        status='pending'
+        status='pending',
+        session_id=session_id
     )
     db.add(new_submission)
     db.commit()

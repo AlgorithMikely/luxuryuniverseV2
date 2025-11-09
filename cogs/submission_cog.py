@@ -74,6 +74,11 @@ class PassiveSubmissionCog(commands.Cog):
             # --- Process Valid Submission ---
             if is_valid:
                 try:
+                    active_session = queue_service.get_active_session_by_reviewer(db, reviewer.id)
+                    if not active_session:
+                        await message.reply("Sorry, the queue is currently closed because there is no active review session.")
+                        return
+
                     user = user_service.get_or_create_user(db, str(message.author.id), message.author.name)
 
                     # Archive and get the jump_url
@@ -89,7 +94,8 @@ class PassiveSubmissionCog(commands.Cog):
                         user_id=user.id,
                         track_url=final_track_url,
                         track_title=track_title,
-                        archived_url=jump_url
+                        archived_url=jump_url,
+                        session_id=active_session.id
                     )
 
                     await message.delete()
