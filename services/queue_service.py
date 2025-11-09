@@ -86,3 +86,60 @@ def review_submission(db: Session, submission_id: int, review: schemas.ReviewCre
     db.commit()
     db.refresh(submission)
     return submission
+
+def create_session(db: Session, reviewer_id: int, name: str) -> models.ReviewSession:
+    # Set all other sessions for this reviewer to inactive
+    db.query(models.ReviewSession).filter(models.ReviewSession.reviewer_id == reviewer_id).update({models.ReviewSession.is_active: False})
+
+    new_session = models.ReviewSession(
+        reviewer_id=reviewer_id,
+        name=name,
+        is_active=True
+    )
+    db.add(new_session)
+    db.commit()
+    db.refresh(new_session)
+    return new_session
+
+def get_sessions_by_reviewer(db: Session, reviewer_id: int) -> list[models.ReviewSession]:
+    return db.query(models.ReviewSession).filter(models.ReviewSession.reviewer_id == reviewer_id).all()
+
+def get_active_session_by_reviewer(db: Session, reviewer_id: int) -> Optional[models.ReviewSession]:
+    return db.query(models.ReviewSession).filter(
+        models.ReviewSession.reviewer_id == reviewer_id,
+        models.ReviewSession.is_active == True
+    ).first()
+
+def activate_session(db: Session, reviewer_id: int, session_id: int) -> models.ReviewSession:
+    db.query(models.ReviewSession).filter(models.ReviewSession.reviewer_id == reviewer_id).update({models.ReviewSession.is_active: False})
+    session = db.query(models.ReviewSession).filter(models.ReviewSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session.is_active = True
+    db.commit()
+    db.refresh(session)
+    return session
+
+def archive_session(db: Session, reviewer_id: int, session_id: int) -> models.ReviewSession:
+    session = db.query(models.ReviewSession).filter(models.ReviewSession.id == session_id, models.ReviewSession.reviewer_id == reviewer_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session.is_active = False
+    db.commit()
+    db.refresh(session)
+    return session
+
+def update_session(db: Session, reviewer_id: int, session_id: int, session_update: schemas.ReviewSessionUpdate) -> models.ReviewSession:
+    session = db.query(models.ReviewSession).filter(models.ReviewSession.id == session_id, models.ReviewSession.reviewer_id == reviewer_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session.name = session_update.name
+    db.commit()
+    db.refresh(session)
+    return session
+
+def get_session_by_id(db: Session, session_id: int) -> Optional[models.ReviewSession]:
+    return db.query(models.ReviewSession).filter(models.ReviewSession.id == session_id).first()
+
+def get_submissions_by_session(db: Session, session_id: int) -> list[models.Submission]:
+    return db.query(models.Submission).filter(models.Submission.session_id == session_id).all()

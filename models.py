@@ -6,6 +6,7 @@ from sqlalchemy import (
     ForeignKey,
     DateTime,
     Index,
+    Boolean,
 )
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
@@ -65,6 +66,7 @@ class Submission(Base):
     id = Column(Integer, primary_key=True, index=True)
     reviewer_id = Column(Integer, ForeignKey("reviewers.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    session_id = Column(Integer, ForeignKey("review_sessions.id"), nullable=True)
     track_url = Column(String, nullable=False)
     track_title = Column(String, nullable=True)
     archived_url = Column(String, nullable=True)
@@ -75,6 +77,7 @@ class Submission(Base):
 
     reviewer = relationship("Reviewer", back_populates="submissions")
     user = relationship("User", back_populates="submissions")
+    session = relationship("ReviewSession", back_populates="submissions")
 
     __table_args__ = (Index("ix_submission_reviewer_id_status", "reviewer_id", "status"),)
 
@@ -118,3 +121,15 @@ class DiscordUserCache(Base):
     id = Column(Integer, primary_key=True, index=True)
     discord_id = Column(String, unique=True, index=True, nullable=False)
     username = Column(String, nullable=False)
+
+
+class ReviewSession(Base):
+    __tablename__ = "review_sessions"
+    id = Column(Integer, primary_key=True, index=True)
+    reviewer_id = Column(Integer, ForeignKey("reviewers.id"), nullable=False)
+    name = Column(String, nullable=False)
+    is_active = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    reviewer = relationship("Reviewer")
+    submissions = relationship("Submission", back_populates="session")
