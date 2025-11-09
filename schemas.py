@@ -73,7 +73,6 @@ class ReviewSessionUpdate(BaseModel):
 class ReviewSession(ReviewSessionBase):
     id: int
     reviewer_id: int
-    status: str
-    open_queue_tiers: List[int]
+    is_active: bool
     submissions: List[Submission] = []
     model_config = ConfigDict(from_attributes=True)
