@@ -17,9 +17,21 @@ const ReviewHub = () => {
   useEffect(() => {
     if (currentTrack) {
       setNotes(currentTrack.notes || '');
-      setScore(currentTrack.score || '');
+      setScore(currentTrack.score !== undefined ? currentTrack.score : '');
     }
   }, [currentTrack]);
+
+  const handleToggleBookmark = () => {
+    if (!currentTrack) return;
+    updateSubmission({ ...currentTrack, notes, score: score === '' ? undefined : Number(score) });
+    toggleBookmark(currentTrack.id);
+  };
+
+  const handleToggleSpotlight = () => {
+    if (!currentTrack) return;
+    updateSubmission({ ...currentTrack, notes, score: score === '' ? undefined : Number(score) });
+    toggleSpotlight(currentTrack.id);
+  };
 
   const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,20 +112,20 @@ const ReviewHub = () => {
             onChange={(e) => setScore(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
             min="0"
             max="10"
-            className="mt-1 block w-full bg-gamma-700 border-gray-600 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 sm:text-sm text-white"
+            className="mt-1 block w-20 bg-gray-700 border-gray-600 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 sm:text-sm text-white"
           />
         </div>
         <div className="flex space-x-2">
             <button
                 type="button"
-                onClick={() => toggleBookmark(currentTrack.id)}
+                onClick={handleToggleBookmark}
                 className={`w-full font-bold py-2 px-4 rounded transition-colors duration-200 ${currentTrack.bookmarked ? 'bg-yellow-500 hover:bg-yellow-600 text-white' : 'bg-gray-600 hover:bg-gray-700 text-white'}`}
             >
                 {currentTrack.bookmarked ? 'Bookmarked' : 'Bookmark'}
             </button>
             <button
                 type="button"
-                onClick={() => toggleSpotlight(currentTrack.id)}
+                onClick={handleToggleSpotlight}
                 className={`w-full font-bold py-2 px-4 rounded transition-colors duration-200 ${currentTrack.spotlighted ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-gray-600 hover:bg-gray-700 text-white'}`}
             >
                 {currentTrack.spotlighted ? 'Spotlighted' : 'Spotlight'}
