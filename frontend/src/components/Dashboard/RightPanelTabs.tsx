@@ -35,7 +35,13 @@ const RightPanelTabs: React.FC = () => {
   );
 };
 
-const TabButton = ({ title, activeTab, onClick }) => (
+interface TabButtonProps {
+  title: string;
+  activeTab: string;
+  onClick: (title: string) => void;
+}
+
+const TabButton: React.FC<TabButtonProps> = ({ title, activeTab, onClick }) => (
   <button
     className={`px-4 py-2 text-sm font-medium ${
       activeTab === title
