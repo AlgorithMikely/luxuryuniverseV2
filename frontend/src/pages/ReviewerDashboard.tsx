@@ -10,6 +10,7 @@ import HistoryPanel from '../components/Dashboard/HistoryPanel';
 import WebPlayer from '../components/Dashboard/WebPlayer';
 import SessionManager from '../components/Dashboard/SessionManager';
 import SessionControls from '../components/Dashboard/SessionControls';
+import RightPanelTabs from '../components/Dashboard/RightPanelTabs';
 
 const ReviewerDashboard: React.FC = () => {
   const { token, user } = useAuthStore();
@@ -38,30 +39,26 @@ const ReviewerDashboard: React.FC = () => {
   return (
     <div className="bg-gray-900 text-white min-h-screen p-4">
       <div className="grid grid-cols-12 gap-4 h-[calc(100vh-2rem)]">
-        {/* --- Left Column: Session Management --- */}
-        <div className="col-span-3 flex flex-col gap-4">
-            <SessionControls />
-            <SessionManager />
-        </div>
-
-        {/* --- Center Column: Queue and Review --- */}
-        <div className="col-span-6 flex flex-col gap-4 h-full">
+        {/* --- Left Column: Submission Queue --- */}
+        <div className="col-span-3 flex flex-col gap-4 h-full">
             <div className="flex-1 min-h-0">
                 <QueuePanel />
+            </div>
+        </div>
+
+        {/* --- Center Column: Player and Review --- */}
+        <div className="col-span-6 flex flex-col gap-4 h-full">
+            <div>
+                <WebPlayer />
             </div>
             <div className="flex-1 min-h-0">
                 <ReviewHub />
             </div>
         </div>
 
-        {/* --- Right Column: History and Player --- */}
+        {/* --- Right Column: Tabs --- */}
         <div className="col-span-3 flex flex-col gap-4 h-full">
-           <div className="flex-1 min-h-0">
-                <HistoryPanel />
-           </div>
-           <div>
-                <WebPlayer />
-           </div>
+          <RightPanelTabs />
         </div>
       </div>
     </div>
