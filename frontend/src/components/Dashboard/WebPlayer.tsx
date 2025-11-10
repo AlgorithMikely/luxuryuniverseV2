@@ -11,6 +11,7 @@ const WebPlayer = () => {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [currentTrackUrl, setCurrentTrackUrl] = useState<string | null>(null);
 
   // Helper to format time
   const formatTime = (seconds: number) => {
@@ -34,7 +35,13 @@ const WebPlayer = () => {
   };
 
   useEffect(() => {
-    if (currentTrack && (isYoutubeUrl(currentTrack.track_url) || isSpotifyUrl(currentTrack.track_url))) {
+    if (currentTrack?.track_url !== currentTrackUrl) {
+        setCurrentTrackUrl(currentTrack?.track_url || null);
+    }
+  }, [currentTrack]);
+
+  useEffect(() => {
+    if (currentTrackUrl && (isYoutubeUrl(currentTrackUrl) || isSpotifyUrl(currentTrackUrl))) {
       if (wavesurfer.current) {
         wavesurfer.current.destroy();
         wavesurfer.current = null;
@@ -74,18 +81,18 @@ const WebPlayer = () => {
       ws.destroy();
       wavesurfer.current = null;
     };
-  }, [currentTrack]);
+  }, [currentTrackUrl]);
 
   useEffect(() => {
-    if (wavesurfer.current && currentTrack && !isYoutubeUrl(currentTrack.track_url) && !isSpotifyUrl(currentTrack.track_url)) {
-      const audioUrl = `/api/proxy/audio?url=${encodeURIComponent(currentTrack.track_url)}`;
+    if (wavesurfer.current && currentTrackUrl && !isYoutubeUrl(currentTrackUrl) && !isSpotifyUrl(currentTrackUrl)) {
+      const audioUrl = `/api/proxy/audio?url=${encodeURIComponent(currentTrackUrl)}`;
       wavesurfer.current.load(audioUrl);
-    } else if (!currentTrack) {
+    } else if (!currentTrackUrl) {
         wavesurfer.current?.stop();
         setCurrentTime(0);
         setDuration(0);
     }
-  }, [currentTrack]);
+  }, [currentTrackUrl]);
 
   useEffect(() => {
     if(wavesurfer.current) {
@@ -98,14 +105,14 @@ const WebPlayer = () => {
   };
 
   const renderPlayer = () => {
-    if (!currentTrack) return null;
+    if (!currentTrackUrl) return null;
 
-    if (isYoutubeUrl(currentTrack.track_url)) {
+    if (isYoutubeUrl(currentTrackUrl)) {
       return (
         <iframe
           width="100%"
           height="315"
-          src={getYoutubeEmbedUrl(currentTrack.track_url)}
+          src={getYoutubeEmbedUrl(currentTrackUrl)}
           title="YouTube video player"
           frameBorder="0"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -114,10 +121,10 @@ const WebPlayer = () => {
       );
     }
 
-    if (isSpotifyUrl(currentTrack.track_url)) {
+    if (isSpotifyUrl(currentTrackUrl)) {
       return (
         <iframe
-          src={getSpotifyEmbedUrl(currentTrack.track_url)}
+          src={getSpotifyEmbedUrl(currentTrackUrl)}
           width="100%"
           height="380"
           frameBorder="0"
@@ -138,7 +145,7 @@ const WebPlayer = () => {
           <button
             onClick={handlePlayPause}
             className="bg-purple-600 hover:bg-purple-700 text-white font-bold p-2 rounded-full w-10 h-10 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={!currentTrack}
+            disabled={!currentTrackUrl}
           >
             {isPlaying ? (
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6" /></svg>
