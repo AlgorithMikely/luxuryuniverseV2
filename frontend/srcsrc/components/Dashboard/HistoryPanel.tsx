@@ -33,7 +33,7 @@ const HistoryPanel = () => {
 
   return (
     <div className="bg-gray-800 rounded-lg shadow-lg h-full flex flex-col">
-      <div className="overflow-y-auto flex-grow p-4">
+      <div className="overflow-y-auto flex-grow">
         {renderList(history)}
       </div>
     </div>
