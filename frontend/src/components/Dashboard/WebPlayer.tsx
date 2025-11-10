@@ -25,7 +25,12 @@ const WebPlayer = () => {
   const isSpotifyUrl = (url: string) => url.includes('spotify.com');
 
   const getYoutubeEmbedUrl = (url: string) => {
-    const videoId = url.split('v=')[1] || url.split('/').pop();
+    let videoId;
+    if (url.includes('v=')) {
+      videoId = new URLSearchParams(new URL(url).search).get('v');
+    } else {
+      videoId = url.split('/').pop();
+    }
     return `https://www.youtube.com/embed/${videoId}`;
   };
 
