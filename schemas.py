@@ -41,6 +41,7 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     discord_id: str | None = None
+    username: str | None = None
     roles: List[str] = []
 
 

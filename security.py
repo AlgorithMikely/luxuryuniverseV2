@@ -19,10 +19,11 @@ def verify_token(token: str, credentials_exception) -> schemas.TokenData:
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         discord_id: str = payload.get("sub")
+        username: str = payload.get("username")
         roles: List[str] = payload.get("roles", [])
-        if discord_id is None:
+        if discord_id is None or username is None:
             raise credentials_exception
-        token_data = schemas.TokenData(discord_id=discord_id, roles=roles)
+        token_data = schemas.TokenData(discord_id=discord_id, username=username, roles=roles)
     except JWTError:
         raise credentials_exception
     return token_data

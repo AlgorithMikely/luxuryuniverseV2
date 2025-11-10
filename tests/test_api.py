@@ -76,7 +76,7 @@ def test_reviewer_isolation(db_session):
     db_session.add_all([reviewer1, reviewer2])
     db_session.commit()
 
-    token1 = create_access_token(data={"sub": user1.discord_id, "roles": ["reviewer"]})
+    token1 = create_access_token(data={"sub": user1.discord_id, "username": user1.username, "roles": ["reviewer"]})
 
     # Accessing own queue should work
     response = client.get(f"/api/{reviewer1.id}/queue", headers={"Authorization": f"Bearer {token1}"})
@@ -91,7 +91,7 @@ def test_dashboard_endpoints(db_session):
     db_session.add(admin_user)
     db_session.commit()
 
-    token = create_access_token(data={"sub": admin_user.discord_id, "roles": ["admin"]})
+    token = create_access_token(data={"sub": admin_user.discord_id, "username": admin_user.username, "roles": ["admin"]})
     headers = {"Authorization": f"Bearer {token}"}
 
     # Create a dummy reviewer to test against

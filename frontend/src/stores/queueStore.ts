@@ -106,6 +106,11 @@ export const useQueueStore = create<UnifiedQueueState>()(
             bookmarks: state.bookmarks,
           });
         });
+
+        // Event listener for incremental queue updates
+        newSocket.on('queue_updated', (newQueue: Submission[]) => {
+          set({ queue: newQueue });
+        });
       },
 
       disconnect: () => {
