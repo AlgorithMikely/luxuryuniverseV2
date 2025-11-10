@@ -36,7 +36,10 @@ const ReviewHub = () => {
 
       // Update the submission in the global store
       updateSubmission(response.data);
-      handleNextTrack();
+
+      if (currentTrack.status !== 'played') {
+        handleNextTrack();
+      }
 
     } catch (error) {
       console.error('Failed to submit review:', error);
@@ -120,7 +123,7 @@ const ReviewHub = () => {
           type="submit"
           className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition-colors duration-200"
         >
-          {isPlayed ? 'Update Review & Play Next' : 'Submit Review & Play Next'}
+          {isPlayed ? 'Update Review' : 'Submit Review & Play Next'}
         </button>
       </form>
     </div>
