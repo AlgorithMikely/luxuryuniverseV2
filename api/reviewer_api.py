@@ -53,4 +53,4 @@ async def get_played_queue(reviewer_id: int, db: Session = Depends(get_db)):
 
 @router.post("/{reviewer_id}/queue/review/{submission_id}", response_model=schemas.Submission, dependencies=[Depends(check_is_reviewer)])
 async def review_submission(submission_id: int, review: schemas.ReviewCreate, db: Session = Depends(get_db)):
-    return queue_service.review_submission(db, submission_id, review)
+    return await queue_service.review_submission(db, submission_id, review)

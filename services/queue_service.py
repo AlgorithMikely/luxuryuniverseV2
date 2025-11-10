@@ -58,6 +58,11 @@ async def advance_queue(db: Session, reviewer_id: int) -> Optional[models.Submis
         queue_schemas = [schemas.Submission.model_validate(s) for s in new_queue]
         await event_service.emit_queue_update(reviewer_id, [s.model_dump() for s in queue_schemas])
 
+        # Also emit a history update
+        new_history = get_played_queue(db, reviewer_id)
+        history_schemas = [schemas.Submission.model_validate(s) for s in new_history]
+        await event_service.emit_history_update(reviewer_id, [s.model_dump() for s in history_schemas])
+
 
     return submission
 
@@ -76,7 +81,7 @@ def get_played_queue(db: Session, reviewer_id: int) -> list[models.Submission]:
         models.Submission.status == 'played'
     ).order_by(models.Submission.submitted_at.desc()).all()
 
-def review_submission(db: Session, submission_id: int, review: schemas.ReviewCreate) -> models.Submission:
+async def review_submission(db: Session, submission_id: int, review: schemas.ReviewCreate) -> models.Submission:
     submission = db.query(models.Submission).filter(models.Submission.id == submission_id).first()
     if not submission:
         raise HTTPException(status_code=404, detail="Submission not found")
@@ -86,6 +91,12 @@ def review_submission(db: Session, submission_id: int, review: schemas.ReviewCre
     submission.status = 'reviewed'
     db.commit()
     db.refresh(submission)
+
+    # Emit a history update
+    new_history = get_played_queue(db, submission.reviewer_id)
+    history_schemas = [schemas.Submission.model_validate(s) for s in new_history]
+    await event_service.emit_history_update(submission.reviewer_id, [s.model_dump() for s in history_schemas])
+
     return submission
 
 def create_session(db: Session, reviewer_id: int, name: str) -> models.ReviewSession:
