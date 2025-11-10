@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -12,30 +13,31 @@ BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("FastAPI is starting up, creating bot task...")
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+    logging.info("FastAPI is starting up, creating bot task...")
     if not BOT_TOKEN:
-        print("CRITICAL: DISCORD_BOT_TOKEN environment variable is not set. Bot cannot start.")
+        logging.critical("DISCORD_BOT_TOKEN environment variable is not set. Bot cannot start.")
         raise ValueError("DISCORD_BOT_TOKEN is not set")
 
     bot_task = asyncio.create_task(bot.start(BOT_TOKEN))
-    print("Waiting for Discord bot to log in and be ready...")
+    logging.info("Waiting for Discord bot to log in and be ready...")
     await bot_ready.wait()
-    print("Discord bot is ready. FastAPI application will now start.")
+    logging.info("Discord bot is ready. FastAPI application will now start.")
 
     yield
 
-    print("FastAPI is shutting down...")
+    logging.info("FastAPI is shutting down...")
     if bot.is_ready():
-        print("Closing Discord bot connection...")
+        logging.info("Closing Discord bot connection...")
         await bot.close()
-        print("Discord bot connection closed.")
+        logging.info("Discord bot connection closed.")
 
     if 'bot_task' in locals() and not bot_task.done():
         bot_task.cancel()
         try:
             await bot_task
         except asyncio.CancelledError:
-            print("Bot task successfully cancelled.")
+            logging.info("Bot task successfully cancelled.")
 
 def create_app():
     app = FastAPI(title="Universe Bot Main App", lifespan=lifespan)
