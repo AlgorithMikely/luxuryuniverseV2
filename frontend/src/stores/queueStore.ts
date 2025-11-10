@@ -22,6 +22,8 @@ export interface Submission {
   notes?: string;
   score?: number;
   skip_count: number;
+  bookmarked?: boolean;
+  spotlighted?: boolean;
 }
 
 // This is the shape of the data received from the 'queue_state' WebSocket event.
@@ -29,6 +31,7 @@ export interface FullQueueState {
   queue: Submission[];
   history: Submission[];
   bookmarks: Submission[];
+  spotlight: Submission[];
 }
 
 // Define the state structure for our new unified store.
@@ -40,6 +43,7 @@ interface UnifiedQueueState {
   queue: Submission[];
   history: Submission[];
   bookmarks: Submission[];
+  spotlight: Submission[];
   currentTrack: Submission | null;
 
   // --- ACTIONS ---
@@ -47,6 +51,8 @@ interface UnifiedQueueState {
   disconnect: () => void;
   setCurrentTrack: (track: Submission | null) => void;
   updateSubmission: (updatedSubmission: Submission) => void; // For optimistic UI updates
+  toggleBookmark: (submissionId: number) => void;
+  toggleSpotlight: (submissionId: number) => void;
 }
 
 export const useQueueStore = create<UnifiedQueueState>()(
@@ -58,6 +64,7 @@ export const useQueueStore = create<UnifiedQueueState>()(
       queue: [],
       history: [],
       bookmarks: [],
+      spotlight: [],
       currentTrack: null,
 
       // --- ACTION IMPLEMENTATIONS ---
@@ -89,6 +96,7 @@ export const useQueueStore = create<UnifiedQueueState>()(
             queue: [],
             history: [],
             bookmarks: [],
+            spotlight: [],
             currentTrack: null,
           });
         });
@@ -104,6 +112,7 @@ export const useQueueStore = create<UnifiedQueueState>()(
             queue: state.queue,
             history: state.history,
             bookmarks: state.bookmarks,
+            spotlight: state.spotlight,
           });
         });
 
@@ -146,12 +155,34 @@ export const useQueueStore = create<UnifiedQueueState>()(
           queue: updateList(state.queue),
           history: updateList(state.history),
           bookmarks: updateList(state.bookmarks),
+          spotlight: updateList(state.spotlight),
           currentTrack:
             state.currentTrack?.id === updatedSubmission.id
               ? { ...state.currentTrack, ...updatedSubmission }
               : state.currentTrack,
         }));
       },
+
+        toggleBookmark: (submissionId) => {
+            const { updateSubmission, queue, history } = get();
+            const submission = [...queue, ...history].find(s => s.id === submissionId);
+            if (submission) {
+                const updatedSubmission = { ...submission, bookmarked: !submission.bookmarked };
+                updateSubmission(updatedSubmission);
+                // Here you would also make an API call to persist the change
+            }
+        },
+
+        toggleSpotlight: (submissionId) => {
+            const { updateSubmission, queue, history } = get();
+            const submission = [...queue, ...history].find(s => s.id === submissionId);
+            if (submission) {
+                const updatedSubmission = { ...submission, spotlighted: !submission.spotlighted };
+                updateSubmission(updatedSubmission);
+                // Here you would also make an API call to persist the change
+            }
+        },
+
     }),
     { name: 'QueueStore' }
   )

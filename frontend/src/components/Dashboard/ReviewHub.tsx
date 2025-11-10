@@ -5,7 +5,7 @@ import { useParams } from 'react-router-dom';
 import api from '../../services/api';
 
 const ReviewHub = () => {
-  const { currentTrack, updateSubmission, setCurrentTrack, queue } = useQueueStore();
+  const { currentTrack, updateSubmission, setCurrentTrack, queue, toggleBookmark, toggleSpotlight } = useQueueStore();
   const { user } = useAuthStore();
   const { reviewerId } = useParams<{ reviewerId: string }>();
 
@@ -99,6 +99,22 @@ const ReviewHub = () => {
             max="10"
             className="mt-1 block w-full bg-gamma-700 border-gray-600 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500 sm:text-sm text-white"
           />
+        </div>
+        <div className="flex space-x-2">
+            <button
+                type="button"
+                onClick={() => toggleBookmark(currentTrack.id)}
+                className={`w-full font-bold py-2 px-4 rounded transition-colors duration-200 ${currentTrack.bookmarked ? 'bg-yellow-500 hover:bg-yellow-600 text-white' : 'bg-gray-600 hover:bg-gray-700 text-white'}`}
+            >
+                {currentTrack.bookmarked ? 'Bookmarked' : 'Bookmark'}
+            </button>
+            <button
+                type="button"
+                onClick={() => toggleSpotlight(currentTrack.id)}
+                className={`w-full font-bold py-2 px-4 rounded transition-colors duration-200 ${currentTrack.spotlighted ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-gray-600 hover:bg-gray-700 text-white'}`}
+            >
+                {currentTrack.spotlighted ? 'Spotlighted' : 'Spotlight'}
+            </button>
         </div>
         <button
           type="submit"

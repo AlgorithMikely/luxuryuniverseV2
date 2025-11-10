@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import HistoryPanel from './HistoryPanel';
 import SessionManagerTab from './SessionManagerTab';
+import BookmarkPanel from './BookmarkPanel';
+import SpotlightPanel from './SpotlightPanel';
 
 const RightPanelTabs: React.FC = () => {
   const [activeTab, setActiveTab] = useState('History');
@@ -10,9 +12,9 @@ const RightPanelTabs: React.FC = () => {
       case 'History':
         return <HistoryPanel />;
       case 'Bookmarks':
-        return <div className="p-4">Bookmarks Coming Soon!</div>;
+        return <BookmarkPanel />;
       case 'Spotlight':
-        return <div className="p-4">Spotlight Coming Soon!</div>;
+        return <SpotlightPanel />;
       case 'Session Manager':
         return <SessionManagerTab />;
       default:

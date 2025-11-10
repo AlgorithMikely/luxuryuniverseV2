@@ -10,6 +10,7 @@ const WebPlayer = () => {
   const [volume, setVolume] = useState(0.5);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Helper to format time
   const formatTime = (seconds: number) => {
@@ -32,6 +33,7 @@ const WebPlayer = () => {
       height: 60,
       cursorWidth: 1,
       cursorColor: 'white',
+      interact: true, // Allow interaction
     });
 
     const ws = wavesurfer.current;
@@ -39,11 +41,24 @@ const WebPlayer = () => {
     ws.on('play', () => setIsPlaying(true));
     ws.on('pause', () => setIsPlaying(false));
     ws.on('finish', () => setIsPlaying(false));
-    ws.on('audioprocess', (time) => setCurrentTime(time));
+
+    ws.on('audioprocess', (time) => {
+      if (!isDragging) {
+        setCurrentTime(time);
+      }
+    });
+
+    ws.on('seeking', (time) => {
+        setCurrentTime(time);
+    });
+
+    ws.on('drag', () => setIsDragging(true));
+    ws.on('interaction', () => setIsDragging(false));
+
+
     ws.on('ready', (newDuration) => {
       setDuration(newDuration);
       setCurrentTime(0);
-      ws.play();
     });
 
     return () => {
