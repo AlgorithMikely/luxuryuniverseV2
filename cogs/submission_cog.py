@@ -42,6 +42,8 @@ class PassiveSubmissionCog(commands.Cog):
         if message.author.bot or not message.guild:
             return
 
+        logging.info(f"Processing message from {message.author.name} in channel {message.channel.name}")
+
         # Use a context manager for the database session
         with self.bot.SessionLocal() as db:
             reviewer = queue_service.get_reviewer_by_channel_id(db, message.channel.id)
@@ -49,6 +51,8 @@ class PassiveSubmissionCog(commands.Cog):
             # We only care about messages in reviewer channels where the queue is open
             if not reviewer or reviewer.queue_status != "open":
                 return
+
+            logging.info(f"Found reviewer: {reviewer.user.username} for channel {message.channel.name}")
 
             submission_content = message.content
             is_valid = False
@@ -76,10 +80,15 @@ class PassiveSubmissionCog(commands.Cog):
                 try:
                     active_session = queue_service.get_active_session_by_reviewer(db, reviewer.id)
                     if not active_session:
+                        logging.warning(f"No active session found for reviewer {reviewer.user.username}. Rejecting submission.")
                         await message.reply("Sorry, the queue is currently closed because there is no active review session.")
                         return
 
+                    logging.info(f"Found active session: {active_session.id} for reviewer: {reviewer.user.username}")
+
                     user = user_service.get_or_create_user(db, str(message.author.id), message.author.name)
+
+                    logging.info(f"Processing submission for user {user.username}. Content: {submission_content}")
 
                     # Archive and get the jump_url
                     jump_url = await self.archive_submission(db, user, message, submission_content)
@@ -98,7 +107,7 @@ class PassiveSubmissionCog(commands.Cog):
                         archived_url=jump_url,
                         session_id=active_session.id
                     )
-                    logging.info("Submission created successfully.")
+                    logging.info(f"Submission saved successfully for {user.username}. Archived URL: {jump_url}")
 
                     await message.delete()
 
