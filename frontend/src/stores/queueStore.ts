@@ -145,7 +145,6 @@ export const useQueueStore = create<UnifiedQueueState>()(
       setCurrentTrack: (track) => set({ currentTrack: track }),
 
       updateSubmission: (updatedSubmission) => {
-        // Optimistically update the submission wherever it appears
         const updateList = (list: Submission[]) =>
           list.map((item) =>
             item.id === updatedSubmission.id ? { ...item, ...updatedSubmission } : item
@@ -154,8 +153,8 @@ export const useQueueStore = create<UnifiedQueueState>()(
         set((state) => ({
           queue: updateList(state.queue),
           history: updateList(state.history),
-          bookmarks: updateList(state.bookmarks),
-          spotlight: updateList(state.spotlight),
+          bookmarks: state.bookmarks.find(s => s.id === updatedSubmission.id) ? updateList(state.bookmarks) : state.bookmarks,
+          spotlight: state.spotlight.find(s => s.id === updatedSubmission.id) ? updateList(state.spotlight) : state.spotlight,
           currentTrack:
             state.currentTrack?.id === updatedSubmission.id
               ? { ...state.currentTrack, ...updatedSubmission }
@@ -163,25 +162,37 @@ export const useQueueStore = create<UnifiedQueueState>()(
         }));
       },
 
-        toggleBookmark: (submissionId) => {
-            const { updateSubmission, queue, history } = get();
-            const submission = [...queue, ...history].find(s => s.id === submissionId);
-            if (submission) {
-                const updatedSubmission = { ...submission, bookmarked: !submission.bookmarked };
-                updateSubmission(updatedSubmission);
-                // Here you would also make an API call to persist the change
-            }
-        },
+      toggleBookmark: (submissionId) => {
+        const { updateSubmission, queue, history, bookmarks } = get();
+        const submission = [...queue, ...history, ...bookmarks].find(s => s.id === submissionId);
 
-        toggleSpotlight: (submissionId) => {
-            const { updateSubmission, queue, history } = get();
-            const submission = [...queue, ...history].find(s => s.id === submissionId);
-            if (submission) {
-                const updatedSubmission = { ...submission, spotlighted: !submission.spotlighted };
-                updateSubmission(updatedSubmission);
-                // Here you would also make an API call to persist the change
-            }
-        },
+        if (submission) {
+          const updatedSubmission = { ...submission, bookmarked: !submission.bookmarked };
+          updateSubmission(updatedSubmission);
+
+          set(state => ({
+            bookmarks: updatedSubmission.bookmarked
+              ? [...state.bookmarks, updatedSubmission]
+              : state.bookmarks.filter(s => s.id !== submissionId)
+          }));
+        }
+      },
+
+      toggleSpotlight: (submissionId) => {
+        const { updateSubmission, queue, history, spotlight } = get();
+        const submission = [...queue, ...history, ...spotlight].find(s => s.id === submissionId);
+
+        if (submission) {
+          const updatedSubmission = { ...submission, spotlighted: !submission.spotlighted };
+          updateSubmission(updatedSubmission);
+
+          set(state => ({
+            spotlight: updatedSubmission.spotlighted
+              ? [...state.spotlight, updatedSubmission]
+              : state.spotlight.filter(s => s.id !== submissionId)
+          }));
+        }
+      },
 
     }),
     { name: 'QueueStore' }
