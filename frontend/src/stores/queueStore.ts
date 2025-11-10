@@ -116,6 +116,14 @@ export const useQueueStore = create<UnifiedQueueState>()(
         newSocket.on('history_updated', (newHistory: Submission[]) => {
           set({ history: newHistory });
         });
+
+        // Event listener for receiving the initial state upon connection
+        newSocket.on('initial_state', (state: FullQueueState) => {
+            set({
+                queue: state.queue,
+                history: state.history,
+            });
+        });
       },
 
       disconnect: () => {
