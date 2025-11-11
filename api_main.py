@@ -4,6 +4,7 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 import socketio
+import threading
 
 import socket_handlers
 from sio_instance import sio
@@ -11,15 +12,20 @@ from bot_main import bot, bot_ready
 
 BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
+def run_bot():
+    if not BOT_TOKEN:
+        logging.critical("DISCORD_BOT_TOKEN environment variable is not set. Bot cannot start.")
+        return
+    bot.run(BOT_TOKEN)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-    logging.info("FastAPI is starting up, creating bot task...")
-    if not BOT_TOKEN:
-        logging.critical("DISCORD_BOT_TOKEN environment variable is not set. Bot cannot start.")
-        raise ValueError("DISCORD_BOT_TOKEN is not set")
+    logging.info("FastAPI is starting up, creating bot thread...")
 
-    bot_task = asyncio.create_task(bot.start(BOT_TOKEN))
+    bot_thread = threading.Thread(target=run_bot)
+    bot_thread.start()
+
     logging.info("Waiting for Discord bot to log in and be ready...")
     await bot_ready.wait()
     logging.info("Discord bot is ready. FastAPI application will now start.")
@@ -29,15 +35,9 @@ async def lifespan(app: FastAPI):
     logging.info("FastAPI is shutting down...")
     if bot.is_ready():
         logging.info("Closing Discord bot connection...")
-        await bot.close()
+        # Running close() in a thread-safe way
+        asyncio.run_coroutine_threadsafe(bot.close(), bot.loop).result()
         logging.info("Discord bot connection closed.")
-
-    if 'bot_task' in locals() and not bot_task.done():
-        bot_task.cancel()
-        try:
-            await bot_task
-        except asyncio.CancelledError:
-            logging.info("Bot task successfully cancelled.")
 
 def create_app():
     app = FastAPI(title="Universe Bot Main App", lifespan=lifespan)
