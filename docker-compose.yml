@@ -9,6 +9,8 @@ services:
       - postgres_data:/var/lib/postgresql/data/
     ports:
       - "6543:5432"
+    networks:
+      - app-network
 
   backend:
     build: .
@@ -29,6 +31,8 @@ services:
     depends_on:
       - db
     command: ["uvicorn", "api_main:app", "--host", "0.0.0.0", "--port", "8000"]
+    networks:
+      - app-network
 
   frontend:
     build:
@@ -37,6 +41,12 @@ services:
       - "5173:80"
     depends_on:
       - backend
+    networks:
+      - app-network
 
 volumes:
   postgres_data:
+
+networks:
+  app-network:
+    driver: bridge

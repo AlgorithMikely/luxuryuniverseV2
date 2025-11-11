@@ -46,6 +46,11 @@ class User(Base):
     submissions = relationship("Submission", back_populates="user")
     transactions = relationship("Transaction", back_populates="user")
 
+    # Spotify OAuth fields
+    spotify_access_token = Column(String, nullable=True)
+    spotify_refresh_token = Column(String, nullable=True)
+    spotify_token_expires_at = Column(DateTime, nullable=True)
+
 
 class Reviewer(Base):
     __tablename__ = "reviewers"

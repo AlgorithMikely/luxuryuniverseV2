@@ -43,8 +43,9 @@ def create_app():
     app = FastAPI(title="Universe Bot Main App", lifespan=lifespan)
 
     # Import and include routers here to avoid circular imports
-    from api import auth, reviewer_api, user_api, admin_api, proxy_api, session_api
+    from api import auth, reviewer_api, user_api, admin_api, proxy_api, session_api, spotify_api
     app.include_router(auth.router, prefix="/api")
+    app.include_router(spotify_api.router, prefix="/api")
     app.include_router(reviewer_api.router, prefix="/api")
     app.include_router(user_api.router, prefix="/api")
     app.include_router(admin_api.router, prefix="/api")
