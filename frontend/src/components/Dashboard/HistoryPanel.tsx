@@ -1,7 +1,11 @@
+import { useState } from 'react';
 import { useQueueStore, Submission } from '../../stores/queueStore';
 
+type Tab = 'history' | 'bookmarks';
+
 const HistoryPanel = () => {
-  const { history, setCurrentTrack } = useQueueStore();
+  const { history, bookmarks, setCurrentTrack } = useQueueStore();
+  const [activeTab, setActiveTab] = useState<Tab>('history');
 
   const handleTrackSelect = (track: Submission) => {
     setCurrentTrack(track);
@@ -31,10 +35,30 @@ const HistoryPanel = () => {
     );
   };
 
+  const tabs: { id: Tab; label: string; list: Submission[] }[] = [
+    { id: 'history', label: 'History', list: history },
+    { id: 'bookmarks', label: 'Bookmarks', list: bookmarks },
+  ];
+
   return (
-    <div className="bg-gray-800 rounded-lg shadow-lg h-full flex flex-col">
-      <div className="overflow-y-auto flex-grow p-4">
-        {renderList(history)}
+    <div className="bg-gray-800 rounded-lg shadow-lg p-4 h-full flex flex-col">
+      <div className="flex border-b border-gray-700 mb-4">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`py-2 px-4 text-sm font-medium ${
+              activeTab === tab.id
+                ? 'text-purple-400 border-b-2 border-purple-400'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      <div className="overflow-y-auto flex-grow">
+        {renderList(tabs.find((t) => t.id === activeTab)!.list)}
       </div>
     </div>
   );

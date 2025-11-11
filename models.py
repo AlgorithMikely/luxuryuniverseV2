@@ -41,15 +41,13 @@ class User(Base):
     discord_id = Column(String, unique=True, index=True, nullable=False)
     username = Column(String, nullable=False)
     tiktok_username = Column(String, unique=True, nullable=True)
+    spotify_access_token = Column(String, nullable=True)
+    spotify_refresh_token = Column(String, nullable=True)
+    spotify_token_expires_at = Column(DateTime, nullable=True)
 
     reviewer_profile = relationship("Reviewer", back_populates="user", uselist=False)
     submissions = relationship("Submission", back_populates="user")
     transactions = relationship("Transaction", back_populates="user")
-
-    # Spotify OAuth fields
-    spotify_access_token = Column(String, nullable=True)
-    spotify_refresh_token = Column(String, nullable=True)
-    spotify_token_expires_at = Column(DateTime, nullable=True)
 
 
 class Reviewer(Base):

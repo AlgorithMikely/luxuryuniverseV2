@@ -55,9 +55,11 @@ class PassiveSubmissionCog(commands.Cog):
 
         logging.info(f"Processing message from {message.author.name} in channel {message.channel.name}")
 
+        # Use a context manager for the database session
         with self.bot.SessionLocal() as db:
             reviewer = queue_service.get_reviewer_by_channel_id(db, message.channel.id)
 
+            # We only care about messages in reviewer channels where the queue is open
             if not reviewer or reviewer.queue_status != "open":
                 return
 
@@ -65,8 +67,9 @@ class PassiveSubmissionCog(commands.Cog):
 
             submission_content = message.content
             is_valid = False
-            track_title = None
 
+            # --- Validation ---
+            track_title = None
             if "spotify.com" in submission_content and self.sp:
                 try:
                     track = self.sp.track(submission_content)
@@ -76,7 +79,7 @@ class PassiveSubmissionCog(commands.Cog):
                 except Exception as e:
                     logging.error(f"Error processing Spotify link: {e}")
                     is_valid = False
-
+            # 1. Check for URL
             elif "http" in submission_content:
                 try:
                     with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True, 'force_generic_extractor': True}) as ydl:
@@ -84,13 +87,15 @@ class PassiveSubmissionCog(commands.Cog):
                         track_title = info.get('title', 'Unknown Title')
                     is_valid = True
                 except yt_dlp.utils.DownloadError:
-                    is_valid = False
+                    is_valid = False # Invalid URL
 
+            # 2. Check for attachments if no valid URL was found
             elif message.attachments:
                 is_valid = True
                 track_title = message.attachments[0].filename
                 submission_content = message.attachments[0].url
 
+            # --- Process Valid Submission ---
             if is_valid:
                 try:
                     active_session = queue_service.get_active_session_by_reviewer(db, reviewer.id)
@@ -105,7 +110,11 @@ class PassiveSubmissionCog(commands.Cog):
 
                     logging.info(f"Processing submission for user {user.username}. Content: {submission_content}")
 
+                    # Archive and get the jump_url
                     jump_url = await self.archive_submission(db, user, message, submission_content)
+
+                    # For file submissions, the jump_url is the track_url.
+                    # For URL submissions, the original content is the track_url.
                     final_track_url = jump_url if message.attachments else submission_content
 
                     logging.info(f"Creating submission for reviewer {reviewer.id} in session {active_session.id}")
@@ -124,8 +133,9 @@ class PassiveSubmissionCog(commands.Cog):
 
                 except Exception as e:
                     logging.error(f"Error processing valid submission: {e}")
-                    await message.add_reaction("❌")
+                    await message.add_reaction("❌") # Internal error
 
+            # --- Handle Invalid Submission ---
             else:
                 try:
                     await message.add_reaction("❌")
@@ -134,7 +144,7 @@ class PassiveSubmissionCog(commands.Cog):
                         "Please submit a valid URL or a file attachment."
                     )
                 except discord.Forbidden:
-                    pass
+                    pass # Can't send DMs
 
 async def setup(bot):
     await bot.add_cog(PassiveSubmissionCog(bot))

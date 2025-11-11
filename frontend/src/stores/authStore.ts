@@ -15,14 +15,12 @@ export interface UserProfile {
   reviewer_profile: ReviewerProfile | null;
   roles: string[];
   moderated_reviewers?: ReviewerProfile[];
-  spotify_connected?: boolean;
 }
 
 interface AuthState {
   token: string | null;
   user: UserProfile | null;
   isLoading: boolean;
-  spotify_connected: boolean;
   setToken: (token: string) => Promise<void>;
   logout: () => void;
   checkAuth: () => Promise<void>;
@@ -34,20 +32,18 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       user: null,
       isLoading: true, // Start with loading true on initialization
-      spotify_connected: false,
       setToken: async (token) => {
         set({ token, isLoading: true });
         try {
           const response = await api.get('/user/me');
-          const user = response.data;
-          set({ user: user, spotify_connected: !!user.spotify_refresh_token, isLoading: false });
+          set({ user: response.data, isLoading: false });
         } catch (error) {
           console.error("Failed to fetch user profile:", error);
-          set({ token: null, user: null, spotify_connected: false, isLoading: false });
+          set({ token: null, user: null, isLoading: false });
         }
       },
       logout: () => {
-        set({ token: null, user: null, isLoading: false, spotify_connected: false });
+        set({ token: null, user: null, isLoading: false });
         useSessionStore.getState().clearActiveSession();
       },
       checkAuth: async () => {
@@ -56,13 +52,12 @@ export const useAuthStore = create<AuthState>()(
           set({ isLoading: true });
           try {
             const response = await api.get('/user/me');
-            const user = response.data;
-            set({ user: user, spotify_connected: !!user.spotify_refresh_token, isLoading: false });
+            set({ user: response.data, isLoading: false });
             // After fetching user, fetch their active session
             await useSessionStore.getState().fetchActiveSession();
           } catch (error) {
             console.error("Failed to verify token on load:", error);
-            set({ token: null, user: null, isLoading: false, spotify_connected: false });
+            set({ token: null, user: null, isLoading: false });
           }
         } else {
           set({ isLoading: false });

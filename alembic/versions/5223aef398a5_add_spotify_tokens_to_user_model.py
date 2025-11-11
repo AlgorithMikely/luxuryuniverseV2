@@ -1,8 +1,8 @@
-"""Add spotify refresh token to user model
+"""Add spotify tokens to user model
 
-Revision ID: c33408364594
+Revision ID: 5223aef398a5
 Revises: f657320e6a35
-Create Date: 2025-11-10 23:35:30.806155
+Create Date: 2025-11-11 06:02:21.046418
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'c33408364594'
+revision: str = '5223aef398a5'
 down_revision: Union[str, Sequence[str], None] = 'f657320e6a35'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
