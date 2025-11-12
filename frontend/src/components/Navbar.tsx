@@ -3,6 +3,11 @@ import { useAuthStore } from "../stores/authStore";
 
 const Navbar = () => {
   const { user, logout } = useAuthStore();
+
+  const handleSpotifyLogin = () => {
+    // Redirect to backend endpoint that starts the Spotify OAuth flow
+    window.location.href = '/api/spotify/login';
+  };
   // Safely check for admin role, ensuring user and user.roles exist.
   const isAdmin = user?.roles?.includes("admin");
 
@@ -21,6 +26,9 @@ const Navbar = () => {
           <Link to="/hub" className="text-gray-300 hover:text-white">
             Hub
           </Link>
+              <button onClick={handleSpotifyLogin} className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
+                Login with Spotify
+              </button>
           <button onClick={logout} className="btn bg-purple-600 p-2 rounded">
             Logout
           </button>

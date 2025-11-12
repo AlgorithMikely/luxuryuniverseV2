@@ -8,7 +8,6 @@ import DashboardRedirect from "./pages/DashboardPage";
 import ReviewerDashboard from "./pages/ReviewerDashboard";
 import UserHubPage from "./pages/UserHubPage";
 import AdminPage from "./pages/AdminPage";
-import ArchivedSessionPage from './pages/ArchivedSessionPage';
 import ErrorPage from "./pages/ErrorPage";
 import Navbar from './components/Navbar';
 import { Toaster } from "react-hot-toast";
@@ -52,7 +51,6 @@ function App() {
               <Route path="/dashboard" element={<DashboardRedirect />} />
               <Route path="/dashboard/:reviewerId" element={<ReviewerDashboard />} />
               <Route path="/hub" element={<UserHubPage />} />
-              <Route path="/session/:sessionId" element={<ArchivedSessionPage />} />
               <Route path="/admin" element={<ProtectedRoute adminOnly={true}><AdminPage /></ProtectedRoute>} />
             </Route>
 

@@ -1,158 +1,136 @@
 import { create } from 'zustand';
-import { devtools } from 'zustand/middleware';
 import io, { Socket } from 'socket.io-client';
+import { Submission, ReviewSession } from '../types';
+import api from '../services/api';
 
-// Define the shape of a User, matching the backend schema.
-interface User {
-  id: number;
-  username: string;
-  tiktok_username?: string | null;
-}
-
-// Expand the Submission interface to include all relevant data from the backend.
-export interface Submission {
-  id: number;
-  session_id: number;
-  user: User;
-  track_url: string;
-  track_title?: string | null;
-  archived_url?: string | null;
-  status: 'pending' | 'played' | 'bookmarked';
-  submitted_at: string;
-  notes?: string;
-  score?: number;
-  skip_count: number;
-}
-
-// This is the shape of the data received from the 'queue_state' WebSocket event.
-export interface FullQueueState {
-  queue: Submission[];
-  history: Submission[];
-  bookmarks: Submission[];
-}
-
-// Define the state structure for our new unified store.
-interface UnifiedQueueState {
+interface QueueState {
   socket: Socket | null;
-  socketStatus: 'connected' | 'disconnected' | 'connecting';
+  connect: (reviewerId: string) => void;
+  disconnect: () => void;
 
-  // Core data arrays
   queue: Submission[];
   history: Submission[];
   bookmarks: Submission[];
-  currentTrack: Submission | null;
+  spotlight: Submission[];
+  activeSubmission: Submission | null;
+  activeSession: ReviewSession | null;
 
-  // --- ACTIONS ---
-  connect: (token: string) => void;
-  disconnect: () => void;
-  setCurrentTrack: (track: Submission | null) => void;
-  updateSubmission: (updatedSubmission: Submission) => void; // For optimistic UI updates
+  setActiveSubmission: (submissionId: number, reviewerId: string, isFromHistory?: boolean) => void;
+  updateSubmission: (submission: Submission) => void;
+  advanceQueue: (reviewerId: string) => void;
+  setActiveSession: (session: ReviewSession) => void;
 }
 
-export const useQueueStore = create<UnifiedQueueState>()(
-  devtools(
-    (set, get) => ({
-      // Initial state
-      socket: null,
-      socketStatus: 'disconnected',
-      queue: [],
-      history: [],
-      bookmarks: [],
-      currentTrack: null,
+export const useQueueStore = create<QueueState>((set, get) => ({
+  socket: null,
+  queue: [],
+  history: [],
+  bookmarks: [],
+  spotlight: [],
+  activeSubmission: null,
+  activeSession: null,
 
-      // --- ACTION IMPLEMENTATIONS ---
+  connect: (reviewerId: string) => {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      console.error('Authentication token not found');
+      return;
+    }
 
-      connect: (token) => {
-        const { socket } = get();
-        if (socket?.connected) {
-          return; // Prevent multiple connections
-        }
+    // Disconnect existing socket if any before creating a new one
+    get().disconnect();
 
-        set({ socketStatus: 'connecting' });
+    const socket: Socket = io({
+      auth: { token, reviewer_id: reviewerId },
+    });
 
-        const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:8000', {
-          auth: { token },
-          transports: ['websocket'],
+    socket.on('connect', () => {
+      console.log('Socket connected successfully');
+    });
+
+    socket.on('disconnect', () => {
+      console.log('Socket disconnected');
+      set({ socket: null, queue: [], history: [], activeSubmission: null, bookmarks: [], spotlight: [] });
+    });
+
+    socket.on('initial_state', (data: { queue: Submission[], history: Submission[], active_session: ReviewSession | null }) => {
+        const bookmarks = [...data.queue, ...data.history].filter(s => s.bookmarked);
+        const spotlight = [...data.queue, ...data.history].filter(s => s.spotlighted);
+        set({
+            queue: data.queue,
+            history: data.history,
+            bookmarks,
+            spotlight,
+            activeSession: data.active_session,
         });
+    });
 
-        newSocket.on('connect', () => {
-          console.log('Socket connected:', newSocket.id);
-          set({ socket: newSocket, socketStatus: 'connected' });
-        });
+    socket.on('queue_updated', (newQueue: Submission[]) => {
+      set(state => {
+        const allSubs = [...newQueue, ...state.history];
+        return {
+          queue: newQueue,
+          bookmarks: allSubs.filter(s => s.bookmarked),
+          spotlight: allSubs.filter(s => s.spotlighted),
+        };
+      });
+    });
 
-        newSocket.on('disconnect', (reason) => {
-          console.log('Socket disconnected:', reason);
-          // Reset state on disconnect
-          set({
-            socket: null,
-            socketStatus: 'disconnected',
-            queue: [],
-            history: [],
-            bookmarks: [],
-            currentTrack: null,
-          });
-        });
+    socket.on('history_updated', (newHistory: Submission[]) => {
+      set(state => {
+        const allSubs = [...state.queue, ...newHistory];
+        return {
+          history: newHistory,
+          bookmarks: allSubs.filter(s => s.bookmarked),
+          spotlight: allSubs.filter(s => s.spotlighted),
+        };
+      });
+    });
 
-        newSocket.on('connect_error', (error) => {
-          console.error('Socket connection error:', error.message);
-          set({ socketStatus: 'disconnected' });
-        });
+    set({ socket });
+  },
 
-        // Main event listener for receiving the entire queue state from the backend
-        newSocket.on('queue_state', (state: FullQueueState) => {
-          set({
-            queue: state.queue,
-            history: state.history,
-            bookmarks: state.bookmarks,
-          });
-        });
+  disconnect: () => {
+    get().socket?.disconnect();
+    set({ socket: null });
+  },
 
-        // Event listener for incremental queue updates
-        newSocket.on('queue_updated', (newQueue: Submission[]) => {
-          set({ queue: newQueue });
-        });
+  setActiveSubmission: (submissionId: number, reviewerId: string, isFromHistory = false) => {
+    const source = isFromHistory ? get().history : get().queue;
+    const submission = source.find(s => s.id === submissionId);
+    if (submission) {
+      set({ activeSubmission: submission });
+    }
+  },
 
-        // Event listener for history updates
-        newSocket.on('history_updated', (newHistory: Submission[]) => {
-          set({ history: newHistory });
-        });
+  updateSubmission: (submission: Submission) => {
+    const updateList = (list: Submission[]) => list.map(s => s.id === submission.id ? submission : s);
+    set(state => {
+      const newQueue = updateList(state.queue);
+      const newHistory = updateList(state.history);
+      const allSubs = [...newQueue, ...newHistory];
+      return {
+        queue: newQueue,
+        history: newHistory,
+        activeSubmission: state.activeSubmission?.id === submission.id ? submission : state.activeSubmission,
+        bookmarks: allSubs.filter(s => s.bookmarked),
+        spotlight: allSubs.filter(s => s.spotlighted),
+      }
+    });
+  },
 
-        // Event listener for receiving the initial state upon connection
-        newSocket.on('initial_state', (state: FullQueueState) => {
-            set({
-                queue: state.queue,
-                history: state.history,
-            });
-        });
-      },
+  advanceQueue: async (reviewerId: string) => {
+    try {
+        const response = await api.post(`/reviewers/${reviewerId}/queue/next`);
+        const nextSubmission = response.data;
+        set({ activeSubmission: nextSubmission || null });
+    } catch (error) {
+        console.error("Failed to advance queue:", error);
+        // Handle error, maybe show a toast notification
+    }
+  },
 
-      disconnect: () => {
-        const { socket } = get();
-        if (socket) {
-          socket.disconnect();
-        }
-      },
-
-      setCurrentTrack: (track) => set({ currentTrack: track }),
-
-      updateSubmission: (updatedSubmission) => {
-        // Optimistically update the submission wherever it appears
-        const updateList = (list: Submission[]) =>
-          list.map((item) =>
-            item.id === updatedSubmission.id ? { ...item, ...updatedSubmission } : item
-          );
-
-        set((state) => ({
-          queue: updateList(state.queue),
-          history: updateList(state.history),
-          bookmarks: updateList(state.bookmarks),
-          currentTrack:
-            state.currentTrack?.id === updatedSubmission.id
-              ? { ...state.currentTrack, ...updatedSubmission }
-              : state.currentTrack,
-        }));
-      },
-    }),
-    { name: 'QueueStore' }
-  )
-);
+  setActiveSession: (session: ReviewSession) => {
+    set({ activeSession: session });
+  },
+}));
