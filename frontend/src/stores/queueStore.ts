@@ -86,7 +86,11 @@ export const useQueueStore = create<QueueState>()(
       },
 
       disconnect: () => {
-        get().socket?.disconnect();
+        const { socket } = get();
+        if (socket) {
+          socket.disconnect();
+          set({ socket: null, socketStatus: 'disconnected' });
+        }
       },
 
       setCurrentTrack: (track) => set({ currentTrack: track }),

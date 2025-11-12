@@ -23,11 +23,9 @@ const ReviewerDashboard: React.FC = () => {
 
     // Disconnect when the component unmounts
     return () => {
-      if (socketStatus === 'connected') {
-        disconnect();
-      }
+      disconnect();
     };
-  }, [token, connect, disconnect, socketStatus]);
+  }, [token, socketStatus]);
 
 
   if (!user) {
