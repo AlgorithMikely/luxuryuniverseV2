@@ -1,11 +1,8 @@
-import { useState } from 'react';
-import { useQueueStore, Submission } from '../../stores/queueStore';
-
-type Tab = 'history' | 'bookmarks';
+import { useQueueStore } from '../../stores/queueStore';
+import { Submission } from '../../types';
 
 const HistoryPanel = () => {
-  const { history, bookmarks, setCurrentTrack } = useQueueStore();
-  const [activeTab, setActiveTab] = useState<Tab>('history');
+  const { history, setCurrentTrack } = useQueueStore();
 
   const handleTrackSelect = (track: Submission) => {
     setCurrentTrack(track);
@@ -13,7 +10,7 @@ const HistoryPanel = () => {
 
   const renderList = (list: Submission[]) => {
     if (list.length === 0) {
-      return <p className="text-gray-400 p-4">This list is empty.</p>;
+      return <p className="text-gray-400 p-4 text-center">No tracks in history yet.</p>;
     }
     return (
       <ul className="space-y-2 p-1">
@@ -35,30 +32,11 @@ const HistoryPanel = () => {
     );
   };
 
-  const tabs: { id: Tab; label: string; list: Submission[] }[] = [
-    { id: 'history', label: 'History', list: history },
-    { id: 'bookmarks', label: 'Bookmarks', list: bookmarks },
-  ];
-
   return (
-    <div className="bg-gray-800 rounded-lg shadow-lg p-4 h-full flex flex-col">
-      <div className="flex border-b border-gray-700 mb-4">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`py-2 px-4 text-sm font-medium ${
-              activeTab === tab.id
-                ? 'text-purple-400 border-b-2 border-purple-400'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+    <div className="bg-gray-800 rounded-lg shadow-inner h-full flex flex-col">
+       <h2 className="text-xl font-bold text-white p-4 sticky top-0 bg-gray-800">History</h2>
       <div className="overflow-y-auto flex-grow">
-        {renderList(tabs.find((t) => t.id === activeTab)!.list)}
+        {renderList(history)}
       </div>
     </div>
   );

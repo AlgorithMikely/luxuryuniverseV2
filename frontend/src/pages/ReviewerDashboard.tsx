@@ -4,12 +4,11 @@ import { useQueueStore } from '../stores/queueStore';
 import { useSessionStore } from '../stores/sessionStore';
 
 // Import Panel Components
-import QueuePanel from '../components/Dashboard/QueuePanel';
+import SubmissionQueue from '../components/Dashboard/QueuePanel';
 import ReviewHub from '../components/Dashboard/ReviewHub';
-import HistoryPanel from '../components/Dashboard/HistoryPanel';
 import WebPlayer from '../components/Dashboard/WebPlayer';
-import SessionManager from '../components/Dashboard/SessionManager';
-import SessionControls from '../components/Dashboard/SessionControls';
+import RightPanelTabs from '../components/Dashboard/RightPanelTabs';
+
 
 const ReviewerDashboard: React.FC = () => {
   const { token, user } = useAuthStore();
@@ -17,18 +16,18 @@ const ReviewerDashboard: React.FC = () => {
   const { connect, disconnect, socketStatus } = useQueueStore();
 
   useEffect(() => {
-    // Connect the socket when a token is available and there's an active session
-    if (token && activeSession && socketStatus !== 'connected') {
+    // Connect the socket when a token is available
+    if (token && socketStatus !== 'connected') {
       connect(token);
     }
 
-    // Disconnect when the component unmounts or the session ends
+    // Disconnect when the component unmounts
     return () => {
       if (socketStatus === 'connected') {
         disconnect();
       }
     };
-  }, [token, activeSession, connect, disconnect, socketStatus]);
+  }, [token, connect, disconnect, socketStatus]);
 
 
   if (!user) {
@@ -37,31 +36,23 @@ const ReviewerDashboard: React.FC = () => {
 
   return (
     <div className="bg-gray-900 text-white min-h-screen p-4">
-      <div className="grid grid-cols-12 gap-4 h-[calc(100vh-2rem)]">
-        {/* --- Left Column: Session Management --- */}
+       <div className="grid grid-cols-12 gap-4 h-[calc(100vh-2rem)]">
+        {/* --- Left Column: Submission Queue --- */}
         <div className="col-span-3 flex flex-col gap-4">
-            <SessionControls />
-            <SessionManager />
+          <SubmissionQueue />
         </div>
 
-        {/* --- Center Column: Queue and Review --- */}
+        {/* --- Middle Column: Player and Review Hub --- */}
         <div className="col-span-6 flex flex-col gap-4 h-full">
-            <div className="flex-1 min-h-0">
-                <QueuePanel />
-            </div>
-            <div className="flex-1 min-h-0">
-                <ReviewHub />
-            </div>
+          <WebPlayer />
+          <div className="flex-1 min-h-0">
+             <ReviewHub />
+          </div>
         </div>
 
-        {/* --- Right Column: History and Player --- */}
+        {/* --- Right Column: Tabs (History, Bookmarks, etc.) --- */}
         <div className="col-span-3 flex flex-col gap-4 h-full">
-           <div className="flex-1 min-h-0">
-                <HistoryPanel />
-           </div>
-           <div>
-                <WebPlayer />
-           </div>
+            <RightPanelTabs />
         </div>
       </div>
     </div>
