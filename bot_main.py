@@ -67,3 +67,6 @@ async def main():
     """The main entrypoint for the bot."""
     async with bot:
         await bot.start(settings.DISCORD_TOKEN)
+
+if __name__ == "__main__":
+    asyncio.run(main())
