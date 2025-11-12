@@ -51,4 +51,9 @@ class Settings(BaseSettings):
     DISCORD_REDIRECT_URI: str
     FRONTEND_URL: str = "http://localhost:5173"
 
+    # Spotify API Settings
+    SPOTIFY_CLIENT_ID: Optional[str] = None
+    SPOTIFY_CLIENT_SECRET: Optional[str] = None
+    SPOTIFY_REDIRECT_URI: str = "http://localhost:8000/api/spotify/callback"
+
 settings = Settings()
