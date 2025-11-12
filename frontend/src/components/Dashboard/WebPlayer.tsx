@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { useQueueStore } from '../../stores/queueStore';
 import { useSpotifyStore } from '../../stores/spotifyStore';
 import WaveSurfer from 'wavesurfer.js';
-import { FaPlay, FaPause, FaForward, FaBackward, FaVolumeUp } from 'react-icons/fa';
 
 // --- Helper Functions for URL detection ---
 const isSpotifyUrl = (url: string) => url.includes('open.spotify.com');
@@ -32,7 +31,7 @@ const getYoutubeEmbedUrl = (url: string): string | null => {
 const WebPlayer = () => {
   // --- State and Store Hooks ---
   const { currentTrack } = useQueueStore();
-  const { spotifyPlayer, isPlaying: isSpotifyPlaying, progress, duration, currentSpotifyTrack } = useSpotifyStore();
+  const { spotifyPlayer, isPlaying: isSpotifyPlaying, currentSpotifyTrack } = useSpotifyStore();
 
   // --- Refs for WaveSurfer ---
   const waveformRef = useRef<HTMLDivElement>(null);
@@ -99,19 +98,18 @@ const WebPlayer = () => {
   const renderSpotifyPlayer = () => (
     <div className="flex flex-col items-center justify-center p-4">
         <h3 className="text-xl font-bold">{currentSpotifyTrack?.name || 'No song selected'}</h3>
-        <p className="text-md text-gray-400">{currentSpotifyTrack?.artists.map(a => a.name).join(', ') || '...'}</p>
+        <p className="text-md text-gray-400">{currentSpotifyTrack?.artists.map((a: { name: string }) => a.name).join(', ') || '...'}</p>
         <div className="flex items-center gap-4 my-4">
-            <FaBackward className="cursor-pointer hover:text-purple-400" onClick={handlePrevTrack} />
-            <div onClick={handleSpotifyPlayPause} className="cursor-pointer text-3xl hover:text-purple-400">
-                {isSpotifyPlaying ? <FaPause /> : <FaPlay />}
-            </div>
-            <FaForward className="cursor-pointer hover:text-purple-400" onClick={handleNextTrack} />
+            <button className="cursor-pointer hover:text-purple-400" onClick={handlePrevTrack}>Prev</button>
+            <button onClick={handleSpotifyPlayPause} className="cursor-pointer text-3xl hover:text-purple-400">
+                {isSpotifyPlaying ? 'Pause' : 'Play'}
+            </button>
+            <button className="cursor-pointer hover:text-purple-400" onClick={handleNextTrack}>Next</button>
         </div>
          <div className="flex items-center gap-2 w-full">
-            <FaVolumeUp />
+            <span>Volume</span>
             <input type="range" min="0" max="1" step="0.01" defaultValue="1" onChange={handleSpotifyVolume} className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer" />
         </div>
-        {/* Progress bar could be added here using `progress` and `duration` from the store */}
     </div>
   );
 
@@ -140,16 +138,16 @@ const WebPlayer = () => {
       </div>
       <div ref={waveformRef} className="mb-4" />
        <div className="flex items-center justify-between">
-            <div onClick={handleWaveSurferPlayPause} className="cursor-pointer text-2xl hover:text-purple-400">
-                {isWaveSurferPlaying ? <FaPause /> : <FaPlay />}
-            </div>
+            <button onClick={handleWaveSurferPlayPause} className="cursor-pointer text-2xl hover:text-purple-400">
+                {isWaveSurferPlaying ? 'Pause' : 'Play'}
+            </button>
              <div className="flex items-center gap-2">
                 <span>{waveSurferTime.toFixed(2)}s</span>
                 <span>/</span>
                 <span>{waveSurferDuration.toFixed(2)}s</span>
             </div>
              <div className="flex items-center gap-2 w-1/3">
-                <FaVolumeUp />
+                <span>Volume</span>
                 <input type="range" min="0" max="1" step="0.05" value={waveSurferVolume} onChange={(e) => setWaveSurferVolume(parseFloat(e.target.value))} className="w-full" />
             </div>
         </div>

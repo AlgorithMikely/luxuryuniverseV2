@@ -3,6 +3,8 @@ import { devtools } from 'zustand/middleware';
 import io, { Socket } from 'socket.io-client';
 import { Submission } from '../types';
 
+export type { Submission };
+
 // This is the shape of the data received from the WebSocket events.
 export interface FullQueueState {
   queue: Submission[];

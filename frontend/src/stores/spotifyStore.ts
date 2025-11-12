@@ -1,5 +1,5 @@
 import create from 'zustand';
-import { SpotifyPlayer, SpotifyTrack } from '../../types'; // Assuming types are defined
+import { SpotifyPlayer, SpotifyTrack } from '../types'; // Assuming types are defined
 
 interface SpotifyState {
   spotifyPlayer: SpotifyPlayer | null;
