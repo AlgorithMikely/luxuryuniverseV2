@@ -8,21 +8,25 @@ import ReviewHub from '../components/Dashboard/ReviewHub';
 import WebPlayer from '../components/Dashboard/WebPlayer';
 import RightPanelTabs from '../components/Dashboard/RightPanelTabs';
 
-
 const ReviewerDashboard: React.FC = () => {
   const { token, user } = useAuthStore();
-  const { connect, disconnect, socketStatus } = useQueueStore();
+  // We get the functions once and can trust them to be stable
+  const connect = useQueueStore((state) => state.connect);
+  const disconnect = useQueueStore((state) => state.disconnect);
+  const socketStatus = useQueueStore((state) => state.socketStatus);
 
   useEffect(() => {
-    if (token && socketStatus === 'disconnected') {
+    // This effect should only run when the token changes, or on mount/unmount.
+    if (token) {
+      // The connect function in the store is responsible for preventing duplicates
       connect(token);
     }
 
-    // Cleanup on component unmount
+    // The cleanup function will be called when the component unmounts.
     return () => {
       disconnect();
     };
-  }, [token, connect, disconnect, socketStatus]);
+  }, [token, connect, disconnect]); // Depending on the functions is now safe as they are selected individually
 
 
   if (!user) {
