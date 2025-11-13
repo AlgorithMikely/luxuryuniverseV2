@@ -1,18 +1,17 @@
 import { create } from 'zustand';
-import { SpotifyPlayer, SpotifyTrack } from '../types';
 
 interface SpotifyState {
-  spotifyPlayer: SpotifyPlayer | null;
+  spotifyPlayer: Spotify.Player | null;
   deviceId: string | null;
   isPlayerReady: boolean;
   isPlaying: boolean;
-  currentSpotifyTrack: SpotifyTrack | null;
+  currentSpotifyTrack: Spotify.Track | null;
   progress: number;
   duration: number;
-  setSpotifyPlayer: (player: SpotifyPlayer) => void;
+  setSpotifyPlayer: (player: Spotify.Player | null) => void;
   setDeviceId: (id: string) => void;
   setIsPlayerReady: (ready: boolean) => void;
-  updatePlaybackState: (state: any) => void; // TODO: Replace 'any' with a proper Spotify state type
+  updatePlaybackState: (state: Spotify.PlaybackState | null) => void;
 }
 
 export const useSpotifyStore = create<SpotifyState>()((set) => ({
