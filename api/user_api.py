@@ -40,3 +40,21 @@ async def get_my_submissions(
     db: Session = Depends(get_db),
 ):
     return queue_service.get_submissions_by_user(db, user_id=current_user.id)
+
+
+# --- Temporary endpoint for generating a test JWT ---
+@router.get("/test-token", include_in_schema=False)
+async def get_test_token():
+    """
+    Generates a JWT for a mock user for frontend testing.
+    This should be removed before production.
+    """
+    from datetime import timedelta
+    mock_user_data = {
+        "sub": "1234567890",
+        "username": "Test Reviewer",
+        "roles": ["reviewer", "admin"],
+        "moderated_reviewers": []
+    }
+    access_token = security.create_access_token(data=mock_user_data)
+    return {"access_token": access_token}
