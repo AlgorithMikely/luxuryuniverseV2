@@ -1,8 +1,9 @@
+import React from 'react';
 import { Navigate } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
 
 interface ProtectedRouteProps {
-  children: JSX.Element;
+  children: React.ReactNode;
   adminOnly?: boolean;
 }
 

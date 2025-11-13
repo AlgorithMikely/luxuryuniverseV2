@@ -1,5 +1,5 @@
-import create from 'zustand';
-import { SpotifyPlayer, SpotifyTrack } from '../types'; // Assuming types are defined
+import { create } from 'zustand';
+import { SpotifyPlayer, SpotifyTrack } from '../types';
 
 interface SpotifyState {
   spotifyPlayer: SpotifyPlayer | null;
@@ -12,10 +12,10 @@ interface SpotifyState {
   setSpotifyPlayer: (player: SpotifyPlayer) => void;
   setDeviceId: (id: string) => void;
   setIsPlayerReady: (ready: boolean) => void;
-  updatePlaybackState: (state: any) => void; // Replace 'any' with a proper Spotify state type
+  updatePlaybackState: (state: any) => void; // TODO: Replace 'any' with a proper Spotify state type
 }
 
-export const useSpotifyStore = create<SpotifyState>((set) => ({
+export const useSpotifyStore = create<SpotifyState>()((set) => ({
   spotifyPlayer: null,
   deviceId: null,
   isPlayerReady: false,
