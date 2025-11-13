@@ -58,6 +58,8 @@ class Submission(BaseModel):
     archived_url: Optional[str] = None
     status: str
     user: User
+    bookmarked: bool = False
+    spotlighted: bool = False
     model_config = ConfigDict(from_attributes=True)
 
 class ReviewSessionBase(BaseModel):
@@ -77,3 +79,9 @@ class ReviewSession(ReviewSessionBase):
     is_active: bool
     submissions: List[Submission] = []
     model_config = ConfigDict(from_attributes=True)
+
+class FullQueueState(BaseModel):
+    queue: List[Submission]
+    history: List[Submission]
+    bookmarks: List[Submission]
+    spotlight: List[Submission]

@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useQueueStore } from '../stores/queueStore';
 
@@ -9,6 +10,7 @@ import WebPlayer from '../components/Dashboard/WebPlayer';
 import RightPanelTabs from '../components/Dashboard/RightPanelTabs';
 
 const ReviewerDashboard: React.FC = () => {
+  const { reviewerId } = useParams<{ reviewerId: string }>();
   const { token, user } = useAuthStore();
   // We get the functions once and can trust them to be stable
   const connect = useQueueStore((state) => state.connect);
@@ -17,9 +19,9 @@ const ReviewerDashboard: React.FC = () => {
 
   useEffect(() => {
     // This effect should only run when the token changes, or on mount/unmount.
-    if (token) {
+    if (token && reviewerId) {
       // The connect function in the store is responsible for preventing duplicates
-      connect(token);
+      connect(token, reviewerId);
     }
 
     // The cleanup function will be called when the component unmounts.

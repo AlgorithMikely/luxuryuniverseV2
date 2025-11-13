@@ -54,3 +54,11 @@ async def get_played_queue(reviewer_id: int, db: Session = Depends(get_db)):
 @router.post("/{reviewer_id}/queue/review/{submission_id}", response_model=schemas.Submission, dependencies=[Depends(check_is_reviewer)])
 async def review_submission(submission_id: int, review: schemas.ReviewCreate, db: Session = Depends(get_db)):
     return await queue_service.review_submission(db, submission_id, review)
+
+@router.get("/{reviewer_id}/queue/initial-state", response_model=schemas.FullQueueState, dependencies=[Depends(check_is_reviewer)])
+def get_initial_state(reviewer_id: int, db: Session = Depends(get_db)):
+    """
+    Provides the full initial state for a reviewer's dashboard,
+    useful for HTTP polling or initial page loads.
+    """
+    return queue_service.get_initial_state(db, reviewer_id=reviewer_id)

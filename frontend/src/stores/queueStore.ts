@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import io, { Socket } from 'socket.io-client';
 import { Submission } from '../types';
+import api from '../services/api'; // Make sure api service is imported
 
 export type { Submission };
 
@@ -14,13 +15,14 @@ export interface FullQueueState {
 
 interface QueueState {
   socket: Socket | null;
-  socketStatus: 'connected' | 'disconnected' | 'connecting';
+  socketStatus: 'connected' | 'disconnected' | 'connecting' | 'disabled';
   queue: Submission[];
   history: Submission[];
   bookmarks: Submission[];
   spotlight: Submission[];
   currentTrack: Submission | null;
-  connect: (token: string) => void;
+  connect: (token: string, reviewerId: string) => void;
+  fetchInitialStateHttp: (reviewerId: string) => Promise<void>;
   disconnect: () => void;
   setCurrentTrack: (track: Submission | null) => void;
   updateSubmission: (updatedSubmission: Submission) => void;
@@ -39,8 +41,30 @@ export const useQueueStore = create<QueueState>()(
       spotlight: [],
       currentTrack: null,
 
-      connect: (token) => {
-        // Prevent multiple connections
+      fetchInitialStateHttp: async (reviewerId) => {
+        try {
+          const response = await api.get<FullQueueState>(`/reviewer/${reviewerId}/queue/initial-state`);
+          set({
+            queue: response.data.queue || [],
+            history: response.data.history || [],
+            bookmarks: response.data.bookmarks || [],
+            spotlight: response.data.spotlight || [],
+            // Set the first track in the queue as the current track
+            currentTrack: response.data.queue?.[0] || null,
+          });
+        } catch (error) {
+          console.error("Failed to fetch initial state via HTTP:", error);
+        }
+      },
+
+      connect: (token, reviewerId) => {
+        if (import.meta.env.VITE_DISABLE_SOCKETIO === 'true') {
+          console.log("Socket.IO disabled. Fetching initial state via HTTP.");
+          set({ socketStatus: 'disabled' });
+          get().fetchInitialStateHttp(reviewerId);
+          return;
+        }
+
         if (get().socket || get().socketStatus === 'connecting') return;
 
         set({ socketStatus: 'connecting' });
@@ -69,6 +93,7 @@ export const useQueueStore = create<QueueState>()(
             history: state.history || [],
             bookmarks: state.bookmarks || [],
             spotlight: state.spotlight || [],
+            currentTrack: state.queue?.[0] || null,
           });
         });
 

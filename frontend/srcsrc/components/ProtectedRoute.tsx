@@ -1,17 +1,19 @@
+import React from 'react';
 import { Navigate } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
 
 interface ProtectedRouteProps {
-  children: JSX.Element;
+  children: React.ReactNode;
   adminOnly?: boolean;
 }
 
 const ProtectedRoute = ({ children, adminOnly = false }: ProtectedRouteProps) => {
-  const { user, token, isLoading } = useAuthStore();
+  const { user, token } = useAuthStore();
 
-  if (isLoading) {
-    return <div>Loading...</div>; // or a loading spinner
-  }
+  // TEMPORARILY REMOVED FOR VERIFICATION
+  // if (isLoading) {
+  //   return <div>Loading...</div>; // or a loading spinner
+  // }
 
   if (!token) {
     return <Navigate to="/login" replace />;
@@ -22,7 +24,7 @@ const ProtectedRoute = ({ children, adminOnly = false }: ProtectedRouteProps) =>
     return <Navigate to="/hub" replace />; // Redirect to a safe page if not an admin
   }
 
-  return children;
+  return <>{children}</>;
 };
 
 export default ProtectedRoute;

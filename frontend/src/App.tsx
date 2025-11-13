@@ -50,7 +50,7 @@ function App() {
             {/* Routes with Navbar */}
             <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
               <Route path="/dashboard" element={<DashboardRedirect />} />
-              <Route path="/dashboard/:reviewerId" element={<ReviewerDashboard />} />
+              <Route path="/reviewer/:reviewerId" element={<ReviewerDashboard />} />
               <Route path="/hub" element={<UserHubPage />} />
               <Route path="/session/:sessionId" element={<ArchivedSessionPage />} />
               <Route path="/admin" element={<ProtectedRoute adminOnly={true}><AdminPage /></ProtectedRoute>} />

@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useQueueStore } from '../../stores/queueStore';
 import { useSpotifyStore } from '../../stores/spotifyStore';
+import { useAuthStore } from '../../stores/authStore';
 import WaveSurfer from 'wavesurfer.js';
 import { Play, Pause, Volume2, VolumeX } from 'lucide-react';
+import api from '../../services/api';
 
 // --- Helper functions ---
-const isSpotifyUrl = (url: string) => url?.includes('open.spotify.com');
-const isYoutubeUrl = (url: string) => url?.includes('youtube.com') || url?.includes('youtu.be');
+const isSpotifyUrl = (url: string | undefined): url is string => !!url && url.includes('open.spotify.com');
+const isYoutubeUrl = (url: string | undefined): url is string => !!url && (url.includes('youtube.com') || url.includes('youtu.be'));
 
 const getYoutubeEmbedUrl = (url: string): string | null => {
     if (!url) return null;
@@ -19,12 +21,14 @@ const getYoutubeEmbedUrl = (url: string): string | null => {
             videoId = urlObj.searchParams.get('v');
         }
     } catch (e) {
+        console.error("Invalid YouTube URL", e);
         return null;
     }
     return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
 };
 
 const formatTime = (seconds: number) => {
+    if (isNaN(seconds)) return '0:00';
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = Math.floor(seconds % 60);
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
@@ -34,7 +38,16 @@ const formatTime = (seconds: number) => {
 // --- Main Component ---
 const WebPlayer = () => {
     const { currentTrack } = useQueueStore();
-    const { spotifyPlayer, isPlaying: isSpotifyPlaying, currentSpotifyTrack } = useSpotifyStore();
+    const { user } = useAuthStore();
+    const {
+        spotifyPlayer,
+        isPlaying: isSpotifyPlaying,
+        currentSpotifyTrack,
+        setSpotifyPlayer,
+        setDeviceId,
+        setIsPlayerReady,
+        updatePlaybackState
+    } = useSpotifyStore();
 
     const waveformRef = useRef<HTMLDivElement>(null);
     const wavesurfer = useRef<WaveSurfer | null>(null);
@@ -66,9 +79,87 @@ const WebPlayer = () => {
         }
     }, [isMuted, volume]);
 
+    // --- Dynamic Spotify SDK Loader & Player Setup ---
+    useEffect(() => {
+        const trackUrl = currentTrack?.track_url;
+
+        if (!isSpotifyUrl(trackUrl) || !user) {
+             if (spotifyPlayer) {
+                spotifyPlayer.disconnect();
+                setSpotifyPlayer(null);
+            }
+            return;
+        }
+
+        // If script is already loaded, don't add it again.
+        if (window.Spotify || document.getElementById('spotify-sdk')) {
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.id = 'spotify-sdk';
+        script.src = 'https://sdk.scdn.co/spotify-player.js';
+        script.async = true;
+
+        document.body.appendChild(script);
+
+        window.onSpotifyWebPlaybackSDKReady = () => {
+            const setupPlayer = async () => {
+                try {
+                    const response = await api.get('/spotify/token');
+                    const token = response.data.access_token;
+                    if (!token) {
+                        console.error("Failed to get Spotify token from backend.");
+                        return;
+                    }
+
+                    const player = new Spotify.Player({
+                        name: 'Universe Bot Web Player',
+                        getOAuthToken: (cb) => { cb(token); },
+                        volume: 0.5,
+                    });
+
+                    player.addListener('ready', ({ device_id }) => {
+                        console.log('Spotify Player Ready with Device ID', device_id);
+                        setDeviceId(device_id);
+                        setIsPlayerReady(true);
+                    });
+                    player.addListener('not_ready', ({ device_id }) => {
+                        console.log('Device ID has gone offline', device_id);
+                        setIsPlayerReady(false);
+                    });
+                    player.addListener('player_state_changed', (state) => {
+                        updatePlaybackState(state);
+                    });
+                    player.addListener('initialization_error', ({ message }) => { console.error('Init Error:', message); });
+                    player.addListener('authentication_error', ({ message }) => { console.error('Auth Error:', message); });
+                    player.addListener('account_error', ({ message }) => { console.error('Account Error:', message); });
+
+                    await player.connect();
+                    setSpotifyPlayer(player);
+
+                } catch (error) {
+                    console.error("Could not initialize Spotify player:", error);
+                }
+            };
+            setupPlayer();
+        };
+
+        return () => {
+            spotifyPlayer?.disconnect();
+            const sdkScript = document.getElementById('spotify-sdk');
+            if (sdkScript) {
+                sdkScript.remove();
+            }
+            delete window.onSpotifyWebPlaybackSDKReady;
+        };
+    }, [currentTrack?.track_url, user, setSpotifyPlayer, setDeviceId, setIsPlayerReady, updatePlaybackState]);
+
     // --- Initialize WaveSurfer ---
     useEffect(() => {
         if (!waveformRef.current) return;
+        // Don't initialize if a Spotify track is active
+        if (isSpotifyUrl(currentTrack?.track_url)) return;
 
         const ws = WaveSurfer.create({
             container: waveformRef.current,
@@ -84,16 +175,27 @@ const WebPlayer = () => {
         });
         wavesurfer.current = ws;
 
-        ws.on('play', () => setIsPlaying(true));
-        ws.on('pause', () => setIsPlaying(false));
-        ws.on('audioprocess', (time) => setCurrentTime(time));
-        ws.on('ready', (dur) => setDuration(dur));
-        ws.on('seeking', (time) => setCurrentTime(time));
+        const handlers = {
+            'play': () => setIsPlaying(true),
+            'pause': () => setIsPlaying(false),
+            'audioprocess': (time: number) => setCurrentTime(time),
+            'ready': (dur: number) => setDuration(dur),
+            'seeking': (time: number) => setCurrentTime(time),
+        };
 
-        return () => ws.destroy();
-    }, []);
+        Object.entries(handlers).forEach(([event, handler]) => {
+            ws.on(event as any, handler);
+        });
 
-    // --- Load Audio ---
+        return () => {
+            Object.entries(handlers).forEach(([event, handler]) => {
+                ws.un(event as any, handler);
+            });
+            ws.destroy();
+        };
+    }, [currentTrack?.track_url]); // Re-create wavesurfer instance when track changes to a non-spotify one
+
+    // --- Load Audio into WaveSurfer ---
     useEffect(() => {
         const url = currentTrack?.track_url;
         if (wavesurfer.current && url && !isSpotifyUrl(url) && !isYoutubeUrl(url)) {
@@ -101,12 +203,11 @@ const WebPlayer = () => {
         }
     }, [currentTrack?.track_url]);
 
-
     // --- Player Render Logic ---
     const renderSpotifyPlayer = () => (
         <div className="flex flex-col items-center justify-center p-4">
-             <h3 className="text-xl font-bold">{currentSpotifyTrack?.name || 'No song selected'}</h3>
-             <p className="text-md text-gray-400">{currentSpotifyTrack?.artists.map((a: { name: string }) => a.name).join(', ') || '...'}</p>
+             <h3 className="text-xl font-bold">{currentSpotifyTrack?.name || 'Loading Spotify...'}</h3>
+             <p className="text-md text-gray-400">{currentSpotifyTrack?.artists?.map((a) => a.name).join(', ') || '...'}</p>
              <div className="flex items-center gap-4 my-4">
                  <button onClick={() => spotifyPlayer?.previousTrack()} className="text-2xl hover:text-purple-400">Prev</button>
                  <button onClick={() => spotifyPlayer?.togglePlay()} className="text-3xl hover:text-purple-400">{isSpotifyPlaying ? 'Pause' : 'Play'}</button>
@@ -153,13 +254,13 @@ const WebPlayer = () => {
     );
 
     const renderPlayer = () => {
-        if (!currentTrack) return <div className="text-center p-8">No track selected.</div>;
+        if (!currentTrack) return <div className="flex items-center justify-center h-full min-h-[120px]"><p className="text-gray-400">No track selected.</p></div>;
         if (isSpotifyUrl(currentTrack.track_url)) return renderSpotifyPlayer();
         if (isYoutubeUrl(currentTrack.track_url)) return renderYoutubePlayer();
         return renderWaveSurferPlayer();
     };
 
-    return <div className="bg-gray-800 rounded-lg shadow-lg">{renderPlayer()}</div>;
+    return <div className="bg-gray-800 rounded-lg shadow-lg w-full">{renderPlayer()}</div>;
 };
 
 export default WebPlayer;

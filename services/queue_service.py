@@ -81,6 +81,31 @@ def get_played_queue(db: Session, reviewer_id: int) -> list[models.Submission]:
         models.Submission.status == 'played'
     ).order_by(models.Submission.submitted_at.desc()).all()
 
+def get_bookmarked_submissions(db: Session, reviewer_id: int) -> list[models.Submission]:
+    return db.query(models.Submission).options(joinedload(models.Submission.user)).filter(
+        models.Submission.reviewer_id == reviewer_id,
+        models.Submission.bookmarked == True
+    ).order_by(models.Submission.submitted_at.desc()).all()
+
+def get_spotlighted_submissions(db: Session, reviewer_id: int) -> list[models.Submission]:
+    return db.query(models.Submission).options(joinedload(models.Submission.user)).filter(
+        models.Submission.reviewer_id == reviewer_id,
+        models.Submission.spotlighted == True
+    ).order_by(models.Submission.submitted_at.desc()).all()
+
+def get_initial_state(db: Session, reviewer_id: int) -> schemas.FullQueueState:
+    queue = get_pending_queue(db, reviewer_id)
+    history = get_played_queue(db, reviewer_id)
+    bookmarks = get_bookmarked_submissions(db, reviewer_id)
+    spotlight = get_spotlighted_submissions(db, reviewer_id)
+
+    return schemas.FullQueueState(
+        queue=[schemas.Submission.model_validate(s) for s in queue],
+        history=[schemas.Submission.model_validate(s) for s in history],
+        bookmarks=[schemas.Submission.model_validate(s) for s in bookmarks],
+        spotlight=[schemas.Submission.model_validate(s) for s in spotlight],
+    )
+
 async def review_submission(db: Session, submission_id: int, review: schemas.ReviewCreate) -> models.Submission:
     submission = db.query(models.Submission).filter(models.Submission.id == submission_id).first()
     if not submission:
