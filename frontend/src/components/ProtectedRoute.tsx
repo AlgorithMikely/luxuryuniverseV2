@@ -23,7 +23,7 @@ const ProtectedRoute = ({ children, adminOnly = false }: ProtectedRouteProps) =>
     return <Navigate to="/hub" replace />; // Redirect to a safe page if not an admin
   }
 
-  return children;
+  return <>{children}</>;
 };
 
 export default ProtectedRoute;
