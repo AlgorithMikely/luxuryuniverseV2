@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { useQueueStore } from '../stores/queueStore';
-import { useSessionStore } from '../stores/sessionStore';
 
 // Import Panel Components
 import SubmissionQueue from '../components/Dashboard/QueuePanel';
@@ -12,20 +11,18 @@ import RightPanelTabs from '../components/Dashboard/RightPanelTabs';
 
 const ReviewerDashboard: React.FC = () => {
   const { token, user } = useAuthStore();
-  const { activeSession } = useSessionStore();
   const { connect, disconnect, socketStatus } = useQueueStore();
 
   useEffect(() => {
-    // Connect the socket when a token is available
-    if (token && socketStatus !== 'connected') {
+    if (token && socketStatus === 'disconnected') {
       connect(token);
     }
 
-    // Disconnect when the component unmounts
+    // Cleanup on component unmount
     return () => {
       disconnect();
     };
-  }, [token, socketStatus]);
+  }, [token, connect, disconnect, socketStatus]);
 
 
   if (!user) {

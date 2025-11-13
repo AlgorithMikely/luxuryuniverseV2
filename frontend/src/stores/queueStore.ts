@@ -5,7 +5,6 @@ import { Submission } from '../types';
 
 export type { Submission };
 
-// This is the shape of the data received from the WebSocket events.
 export interface FullQueueState {
   queue: Submission[];
   history: Submission[];
@@ -13,19 +12,14 @@ export interface FullQueueState {
   spotlight: Submission[];
 }
 
-// Define the state structure for our store.
 interface QueueState {
   socket: Socket | null;
   socketStatus: 'connected' | 'disconnected' | 'connecting';
-
-  // Core data arrays
   queue: Submission[];
   history: Submission[];
   bookmarks: Submission[];
   spotlight: Submission[];
   currentTrack: Submission | null;
-
-  // --- ACTIONS ---
   connect: (token: string) => void;
   disconnect: () => void;
   setCurrentTrack: (track: Submission | null) => void;
@@ -37,7 +31,6 @@ interface QueueState {
 export const useQueueStore = create<QueueState>()(
   devtools(
     (set, get) => ({
-      // Initial state
       socket: null,
       socketStatus: 'disconnected',
       queue: [],
@@ -46,11 +39,9 @@ export const useQueueStore = create<QueueState>()(
       spotlight: [],
       currentTrack: null,
 
-      // --- ACTION IMPLEMENTATIONS ---
-
       connect: (token) => {
-        const { socket } = get();
-        if (socket?.connected) return;
+        // Prevent multiple connections
+        if (get().socket || get().socketStatus === 'connecting') return;
 
         set({ socketStatus: 'connecting' });
         const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:8000', {
@@ -63,15 +54,15 @@ export const useQueueStore = create<QueueState>()(
         });
 
         newSocket.on('disconnect', () => {
-          set({ socket: null, socketStatus: 'disconnected' });
+          set({ socket: null, socketStatus: 'disconnected', queue: [], history: [], bookmarks: [], spotlight: [], currentTrack: null });
         });
 
         newSocket.on('connect_error', (error) => {
           console.error('Socket connection error:', error);
           set({ socketStatus: 'disconnected' });
+          get().disconnect();
         });
 
-        // Combined state update event
         newSocket.on('initial_state', (state: FullQueueState) => {
           set({
             queue: state.queue || [],
@@ -80,70 +71,61 @@ export const useQueueStore = create<QueueState>()(
             spotlight: state.spotlight || [],
           });
         });
-         newSocket.on('queue_updated', (newQueue: Submission[]) => set({ queue: newQueue }));
-         newSocket.on('history_updated', (newHistory: Submission[]) => set({ history: newHistory }));
 
+        newSocket.on('queue_updated', (newQueue: Submission[]) => set({ queue: newQueue }));
+        newSocket.on('history_updated', (newHistory: Submission[]) => set({ history: newHistory }));
       },
 
       disconnect: () => {
         const { socket } = get();
         if (socket) {
           socket.disconnect();
-          set({ socket: null, socketStatus: 'disconnected' });
         }
+        set({ socket: null, socketStatus: 'disconnected' });
       },
 
       setCurrentTrack: (track) => set({ currentTrack: track }),
 
       updateSubmission: (updatedSubmission) => {
         const updateList = (list: Submission[]) =>
-          list.map((item) =>
-            item.id === updatedSubmission.id ? { ...item, ...updatedSubmission } : item
-          );
+          list.map((item) => (item.id === updatedSubmission.id ? { ...item, ...updatedSubmission } : item));
         set((state) => ({
           queue: updateList(state.queue),
           history: updateList(state.history),
           bookmarks: updateList(state.bookmarks),
           spotlight: updateList(state.spotlight),
           currentTrack:
-            state.currentTrack?.id === updatedSubmission.id
-              ? { ...state.currentTrack, ...updatedSubmission }
-              : state.currentTrack,
+            state.currentTrack?.id === updatedSubmission.id ? { ...state.currentTrack, ...updatedSubmission } : state.currentTrack,
         }));
       },
 
       toggleBookmark: (trackId) => {
-          const { queue, history, bookmarks } = get();
-          const allTracks = [...queue, ...history];
-          const track = allTracks.find(t => t.id === trackId);
+        const { queue, history, bookmarks } = get();
+        const allTracks = [...queue, ...history, ...bookmarks];
+        const track = allTracks.find((t) => t.id === trackId);
+        if (!track) return;
 
-          if(!track) return;
-
-          const isBookmarked = bookmarks.some(b => b.id === trackId);
-
-          if(isBookmarked) {
-              set({ bookmarks: bookmarks.filter(b => b.id !== trackId) });
-          } else {
-              set({ bookmarks: [...bookmarks, { ...track, bookmarked: true }] });
-          }
+        const isBookmarked = bookmarks.some((b) => b.id === trackId);
+        if (isBookmarked) {
+          set({ bookmarks: bookmarks.filter((b) => b.id !== trackId) });
+        } else {
+          set({ bookmarks: [...bookmarks, { ...track, bookmarked: true }] });
+        }
       },
 
       toggleSpotlight: (trackId) => {
-          const { queue, history, spotlight } = get();
-          const allTracks = [...queue, ...history];
-          const track = allTracks.find(t => t.id === trackId);
+        const { queue, history, spotlight } = get();
+        const allTracks = [...queue, ...history, ...spotlight];
+        const track = allTracks.find((t) => t.id === trackId);
+        if (!track) return;
 
-          if(!track) return;
-
-          const isSpotlighted = spotlight.some(s => s.id === trackId);
-
-          if(isSpotlighted) {
-              set({ spotlight: spotlight.filter(s => s.id !== trackId) });
-          } else {
-              set({ spotlight: [...spotlight, { ...track, spotlighted: true }] });
-          }
+        const isSpotlighted = spotlight.some((s) => s.id === trackId);
+        if (isSpotlighted) {
+          set({ spotlight: spotlight.filter((s) => s.id !== trackId) });
+        } else {
+          set({ spotlight: [...spotlight, { ...track, spotlighted: true }] });
+        }
       },
-
     }),
     { name: 'QueueStore' }
   )
