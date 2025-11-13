@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useQueueStore } from '../../stores/queueStore';
 import { useSpotifyStore } from '../../stores/spotifyStore';
 import WaveSurfer from 'wavesurfer.js';
-import { FaPlay, FaPause, FaVolumeUp, FaVolumeMute } from 'react-icons/fa';
 
 // --- Helper functions ---
 const isSpotifyUrl = (url: string) => url?.includes('open.spotify.com');
@@ -133,11 +132,11 @@ const WebPlayer = () => {
 
             <div className="flex items-center gap-4">
                 <button onClick={onPlayPause} className="text-white text-2xl hover:text-purple-400">
-                    {isPlaying ? <FaPause /> : <FaPlay />}
+                    {isPlaying ? 'Pause' : 'Play'}
                 </button>
                 <span className="text-gray-400 text-sm w-20">{formatTime(currentTime)} / {formatTime(duration)}</span>
                 <button onClick={toggleMute} className="text-white text-lg hover:text-purple-400">
-                    {isMuted ? <FaVolumeMute /> : <FaVolumeUp />}
+                    {isMuted ? 'Unmute' : 'Mute'}
                 </button>
                 <input
                     type="range"
