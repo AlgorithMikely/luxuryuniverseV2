@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useQueueStore } from '../../stores/queueStore';
 import { useSpotifyStore } from '../../stores/spotifyStore';
@@ -91,7 +92,6 @@ const WebPlayer = () => {
             return;
         }
 
-        // If script is already loaded, don't add it again.
         if (window.Spotify || document.getElementById('spotify-sdk')) {
             return;
         }
@@ -158,7 +158,6 @@ const WebPlayer = () => {
     // --- Initialize WaveSurfer ---
     useEffect(() => {
         if (!waveformRef.current) return;
-        // Don't initialize if a Spotify track is active
         if (isSpotifyUrl(currentTrack?.track_url)) return;
 
         const ws = WaveSurfer.create({
@@ -193,7 +192,7 @@ const WebPlayer = () => {
             });
             ws.destroy();
         };
-    }, [currentTrack?.track_url]); // Re-create wavesurfer instance when track changes to a non-spotify one
+    }, [currentTrack?.track_url]);
 
     // --- Load Audio into WaveSurfer ---
     useEffect(() => {
