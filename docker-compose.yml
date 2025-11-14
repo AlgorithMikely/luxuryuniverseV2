@@ -25,7 +25,7 @@ services:
       - DISCORD_BOT_TOKEN=${DISCORD_TOKEN}
       - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
       - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
-      - DISCORD_REDIRECT_URI=http://localhost:8000/api/auth/callback
+      - DISCORD_REDIRECT_URI=http://localhost:5173/api/auth/callback
     depends_on:
       - db
     command: ["python", "-m", "bot_main"]
