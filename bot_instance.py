@@ -1,4 +1,10 @@
+# bot_instance.py
+import asyncio
+from typing import Optional
+import discord
+
 # This file exists to break a circular import between the API and the bot.
 # The bot instance is set here by bot_main.py on startup.
 # The API can then import it from here without depending on the full bot_main.py module.
-bot = None
+bot: Optional[discord.Client] = None
+bot_ready = asyncio.Event()
