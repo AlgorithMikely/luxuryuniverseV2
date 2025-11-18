@@ -4,8 +4,8 @@ from sqlalchemy.orm import Session
 import httpx
 
 from database import get_db
-from schemas import User
-from security import get_current_user
+from models import User
+from security import get_current_active_user
 from services import user_service
 from config import settings
 import logging
@@ -16,13 +16,10 @@ router = APIRouter(prefix="/spotify", tags=["Spotify"])
 SPOTIFY_SCOPES = "streaming user-read-email user-read-private"
 
 @router.get("/login")
-async def spotify_login(current_user: User = Depends(get_current_user)):
+async def spotify_login(current_user: User = Depends(get_current_active_user)):
     """
     Redirects the user to Spotify's authorization page.
     """
-    if not current_user:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
     auth_url = (
         f"https://accounts.spotify.com/authorize"
         f"?response_type=code"
@@ -75,24 +72,22 @@ async def spotify_callback(code: str, state: str, db: Session = Depends(get_db))
     return RedirectResponse(f"{settings.FRONTEND_URL}/hub")
 
 @router.get("/token")
-async def get_spotify_token(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def get_spotify_token(current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
     """
     Provides the frontend with a short-lived Spotify access token.
     If the current access token is expired, it uses the refresh token to get a new one.
     """
-    user = user_service.get_user_by_discord_id(db, discord_id=current_user.discord_id)
-
-    if not user or not user.spotify_refresh_token:
+    if not current_user.spotify_refresh_token:
         raise HTTPException(status_code=404, detail="User not connected to Spotify")
 
     # Check if the token is expired or close to expiring
-    if user_service.is_spotify_token_expired(user):
+    if user_service.is_spotify_token_expired(current_user):
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 "https://accounts.spotify.com/api/token",
                 data={
                     "grant_type": "refresh_token",
-                    "refresh_token": user.spotify_refresh_token,
+                    "refresh_token": current_user.spotify_refresh_token,
                     "client_id": settings.SPOTIFY_CLIENT_ID,
                     "client_secret": settings.SPOTIFY_CLIENT_SECRET,
                 },
@@ -107,12 +102,12 @@ async def get_spotify_token(current_user: User = Depends(get_current_user), db: 
         token_data = response.json()
 
         # Update the database with the new token info
-        user = user_service.update_user_spotify_tokens(
+        current_user = user_service.update_user_spotify_tokens(
             db=db,
-            discord_id=user.discord_id,
+            discord_id=current_user.discord_id,
             access_token=token_data['access_token'],
-            refresh_token=user.spotify_refresh_token, # Refresh token might be rotated, but often is not
+            refresh_token=current_user.spotify_refresh_token, # Refresh token might be rotated, but often is not
             expires_in=token_data['expires_in']
         )
 
-    return {"access_token": user.spotify_access_token}
+    return {"access_token": current_user.spotify_access_token}

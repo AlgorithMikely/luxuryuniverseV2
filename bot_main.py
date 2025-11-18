@@ -10,9 +10,6 @@ from database import SessionLocal
 import bot_instance as bot_instance_module
 from api_main import create_app
 
-# An event to signal when the bot is ready
-bot_ready = asyncio.Event()
-
 # Custom Bot class to hold the database session factory
 class UniverseBot(commands.Bot):
     def __init__(self, *args, **kwargs):
@@ -48,7 +45,7 @@ class UniverseBot(commands.Bot):
             print(f"Failed to sync commands: {e}")
 
         # Signal that the bot is ready
-        bot_ready.set()
+        bot_instance_module.bot_ready.set()
 
     async def close(self):
         if self.api_server:

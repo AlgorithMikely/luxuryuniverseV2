@@ -18,17 +18,17 @@ const ReviewerDashboard: React.FC = () => {
   const socketStatus = useQueueStore((state) => state.socketStatus);
 
   useEffect(() => {
-    // This effect should only run when the token changes, or on mount/unmount.
-    if (token && reviewerId) {
-      // The connect function in the store is responsible for preventing duplicates
+    // This effect should only run when we have a valid token AND a user object.
+    // The user object's presence confirms the token has been validated by the backend.
+    if (token && user && reviewerId) {
       connect(token, reviewerId);
     }
 
-    // The cleanup function will be called when the component unmounts.
+    // The cleanup function will be called when the component unmounts or dependencies change.
     return () => {
       disconnect();
     };
-  }, [token, connect, disconnect]); // Depending on the functions is now safe as they are selected individually
+  }, [token, user, reviewerId, connect, disconnect]);
 
 
   if (!user) {

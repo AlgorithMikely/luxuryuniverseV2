@@ -1,5 +1,4 @@
-// @ts-nocheck
-import { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useQueueStore } from '../../stores/queueStore';
 import { useSpotifyStore } from '../../stores/spotifyStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -8,12 +7,14 @@ import { Play, Pause, Volume2, VolumeX } from 'lucide-react';
 import api from '../../services/api';
 
 // --- Helper functions ---
-const isSpotifyUrl = (url: string | undefined): url is string => !!url && url.includes('open.spotify.com');
-const isYoutubeUrl = (url: string | undefined): url is string => !!url && (url.includes('youtube.com') || url.includes('youtu.be'));
+const isSpotifyUrl = (url?: string): url is string => !!url && url.includes('open.spotify.com');
+const isYoutubeUrl = (url?: string): url is string => !!url && (url.includes('youtube.com') || url.includes('youtu.be'));
+const isSoundCloudUrl = (url?: string): url is string => !!url && url.includes('soundcloud.com');
+
 
 const getYoutubeEmbedUrl = (url: string): string | null => {
     if (!url) return null;
-    let videoId = null;
+    let videoId: string | null = null;
     try {
         const urlObj = new URL(url);
         if (urlObj.hostname === 'youtu.be') {
@@ -29,15 +30,14 @@ const getYoutubeEmbedUrl = (url: string): string | null => {
 };
 
 const formatTime = (seconds: number) => {
-    if (isNaN(seconds)) return '0:00';
+    if (isNaN(seconds) || seconds < 0) return '0:00';
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = Math.floor(seconds % 60);
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 };
 
-
 // --- Main Component ---
-const WebPlayer = () => {
+const WebPlayer: React.FC = () => {
     const { currentTrack } = useQueueStore();
     const { user } = useAuthStore();
     const {
@@ -52,6 +52,7 @@ const WebPlayer = () => {
 
     const waveformRef = useRef<HTMLDivElement>(null);
     const wavesurfer = useRef<WaveSurfer | null>(null);
+    const isDragging = useRef(false);
 
     const [isPlaying, setIsPlaying] = useState(false);
     const [volume, setVolume] = useState(0.5);
@@ -66,33 +67,28 @@ const WebPlayer = () => {
     const onVolumeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const newVolume = parseFloat(e.target.value);
         setVolume(newVolume);
-        if (wavesurfer.current) {
-            wavesurfer.current.setVolume(newVolume);
-        }
+        wavesurfer.current?.setVolume(newVolume);
         setIsMuted(newVolume === 0);
     }, []);
 
     const toggleMute = useCallback(() => {
         const newMuted = !isMuted;
         setIsMuted(newMuted);
-        if (wavesurfer.current) {
-            wavesurfer.current.setVolume(newMuted ? 0 : volume);
-        }
+        wavesurfer.current?.setVolume(newMuted ? 0 : volume);
     }, [isMuted, volume]);
 
     // --- Dynamic Spotify SDK Loader & Player Setup ---
     useEffect(() => {
         const trackUrl = currentTrack?.track_url;
-
         if (!isSpotifyUrl(trackUrl) || !user) {
-             if (spotifyPlayer) {
+            if (spotifyPlayer) {
                 spotifyPlayer.disconnect();
                 setSpotifyPlayer(null);
             }
             return;
         }
 
-        if (window.Spotify || document.getElementById('spotify-sdk')) {
+        if ((window as any).Spotify || document.getElementById('spotify-sdk')) {
             return;
         }
 
@@ -100,44 +96,33 @@ const WebPlayer = () => {
         script.id = 'spotify-sdk';
         script.src = 'https://sdk.scdn.co/spotify-player.js';
         script.async = true;
-
         document.body.appendChild(script);
 
-        window.onSpotifyWebPlaybackSDKReady = () => {
+        (window as any).onSpotifyWebPlaybackSDKReady = () => {
             const setupPlayer = async () => {
                 try {
                     const response = await api.get('/spotify/token');
                     const token = response.data.access_token;
-                    if (!token) {
-                        console.error("Failed to get Spotify token from backend.");
-                        return;
-                    }
+                    if (!token) throw new Error("Failed to get Spotify token.");
 
-                    const player = new Spotify.Player({
+                    const player = new (window as any).Spotify.Player({
                         name: 'Universe Bot Web Player',
-                        getOAuthToken: (cb) => { cb(token); },
+                        getOAuthToken: (cb: (token: string) => void) => { cb(token); },
                         volume: 0.5,
                     });
 
-                    player.addListener('ready', ({ device_id }) => {
-                        console.log('Spotify Player Ready with Device ID', device_id);
+                    player.addListener('ready', ({ device_id }: { device_id: string }) => {
                         setDeviceId(device_id);
                         setIsPlayerReady(true);
                     });
-                    player.addListener('not_ready', ({ device_id }) => {
-                        console.log('Device ID has gone offline', device_id);
-                        setIsPlayerReady(false);
-                    });
-                    player.addListener('player_state_changed', (state) => {
-                        updatePlaybackState(state);
-                    });
-                    player.addListener('initialization_error', ({ message }) => { console.error('Init Error:', message); });
-                    player.addListener('authentication_error', ({ message }) => { console.error('Auth Error:', message); });
-                    player.addListener('account_error', ({ message }) => { console.error('Account Error:', message); });
+                    player.addListener('not_ready', () => setIsPlayerReady(false));
+                    player.addListener('player_state_changed', (state: any) => updatePlaybackState(state));
+                    player.addListener('initialization_error', ({ message }: { message: string }) => console.error('Init Error:', message));
+                    player.addListener('authentication_error', ({ message }: { message: string }) => console.error('Auth Error:', message));
+                    player.addListener('account_error', ({ message }: { message: string }) => console.error('Account Error:', message));
 
                     await player.connect();
                     setSpotifyPlayer(player);
-
                 } catch (error) {
                     console.error("Could not initialize Spotify player:", error);
                 }
@@ -147,20 +132,20 @@ const WebPlayer = () => {
 
         return () => {
             spotifyPlayer?.disconnect();
-            const sdkScript = document.getElementById('spotify-sdk');
-            if (sdkScript) {
-                sdkScript.remove();
-            }
-            delete window.onSpotifyWebPlaybackSDKReady;
+            document.getElementById('spotify-sdk')?.remove();
+            delete (window as any).onSpotifyWebPlaybackSDKReady;
         };
-    }, [currentTrack?.track_url, user, setSpotifyPlayer, setDeviceId, setIsPlayerReady, updatePlaybackState]);
+    }, [currentTrack?.track_url, user, spotifyPlayer, setSpotifyPlayer, setDeviceId, setIsPlayerReady, updatePlaybackState]);
 
-    // --- Initialize WaveSurfer ---
+
+    // --- WaveSurfer Initialization and Audio Loading ---
     useEffect(() => {
-        if (!waveformRef.current) return;
-        if (isSpotifyUrl(currentTrack?.track_url)) return;
+        const url = currentTrack?.track_url;
+        if (!waveformRef.current || isSpotifyUrl(url) || isYoutubeUrl(url)) {
+            return;
+        }
 
-        const ws = WaveSurfer.create({
+        wavesurfer.current = WaveSurfer.create({
             container: waveformRef.current,
             waveColor: 'rgb(200, 200, 200)',
             progressColor: '#A78BFA',
@@ -170,37 +155,91 @@ const WebPlayer = () => {
             barRadius: 2,
             cursorWidth: 2,
             cursorColor: 'white',
-            dragToSeek: true,
+            dragToSeek: false, // We'll handle this manually for a better experience
         });
-        wavesurfer.current = ws;
 
-        const handlers = {
-            'play': () => setIsPlaying(true),
-            'pause': () => setIsPlaying(false),
-            'audioprocess': (time: number) => setCurrentTime(time),
-            'ready': (dur: number) => setDuration(dur),
-            'seeking': (time: number) => setCurrentTime(time),
+        if (url) {
+            wavesurfer.current.load(`/api/proxy/audio?url=${encodeURIComponent(url)}`);
+        }
+
+        const ws = wavesurfer.current;
+
+        const onReady = (newDuration: number) => setDuration(newDuration);
+        const onPlay = () => setIsPlaying(true);
+        const onPause = () => setIsPlaying(false);
+        const onTimeUpdate = (time: number) => {
+            if (!isDragging.current) setCurrentTime(time);
+        };
+        const onFinish = () => {
+            setIsPlaying(false);
+            setCurrentTime(0);
+            ws.seekTo(0);
         };
 
-        Object.entries(handlers).forEach(([event, handler]) => {
-            ws.on(event as any, handler);
-        });
+        ws.on('ready', onReady);
+        ws.on('play', onPlay);
+        ws.on('pause', onPause);
+        ws.on('timeupdate', onTimeUpdate);
+        ws.on('finish', onFinish);
 
         return () => {
-            Object.entries(handlers).forEach(([event, handler]) => {
-                ws.un(event as any, handler);
-            });
+            ws.un('ready', onReady);
+            ws.un('play', onPlay);
+            ws.un('pause', onPause);
+            ws.un('timeupdate', onTimeUpdate);
+            ws.un('finish', onFinish);
             ws.destroy();
+            wavesurfer.current = null;
         };
-    }, [currentTrack?.track_url]);
+    }, [currentTrack]);
 
-    // --- Load Audio into WaveSurfer ---
+
+    // --- Manual Drag-to-Seek Handler ---
     useEffect(() => {
-        const url = currentTrack?.track_url;
-        if (wavesurfer.current && url && !isSpotifyUrl(url) && !isYoutubeUrl(url)) {
-             wavesurfer.current.load(`/api/proxy/audio?url=${encodeURIComponent(url)}`);
-        }
-    }, [currentTrack?.track_url]);
+        const container = waveformRef.current;
+        const ws = wavesurfer.current;
+        if (!container || !ws) return;
+
+        const handleSeek = (e: MouseEvent | TouchEvent) => {
+            const rect = container.getBoundingClientRect();
+            const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+            const progress = (clientX - rect.left) / rect.width;
+            setCurrentTime(duration * progress);
+            ws.seekTo(progress);
+        };
+
+        const onMouseDown = (e: MouseEvent | TouchEvent) => {
+            isDragging.current = true;
+            handleSeek(e);
+        };
+
+        const onMouseMove = (e: MouseEvent | TouchEvent) => {
+            if (isDragging.current) {
+                handleSeek(e);
+            }
+        };
+
+        const onMouseUp = () => {
+            isDragging.current = false;
+        };
+
+        container.addEventListener('mousedown', onMouseDown);
+        container.addEventListener('touchstart', onMouseDown);
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('touchmove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+        window.addEventListener('touchend', onMouseUp);
+
+        return () => {
+            container.removeEventListener('mousedown', onMouseDown);
+            container.removeEventListener('touchstart', onMouseDown);
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('touchmove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+            window.removeEventListener('touchend', onMouseUp);
+        };
+
+    }, [duration]); // Re-bind if duration changes
 
     // --- Player Render Logic ---
     const renderSpotifyPlayer = () => (
@@ -220,6 +259,23 @@ const WebPlayer = () => {
         return embedUrl ? (
             <div className="aspect-w-16 aspect-h-9"><iframe src={embedUrl} title="YouTube video player" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen className="w-full h-full"></iframe></div>
         ) : <p className="text-center p-8">Invalid YouTube URL</p>;
+    };
+
+    const renderSoundCloudPlayer = () => {
+        // SoundCloud embed URL format is slightly different
+        const embedUrl = `https://w.soundcloud.com/player/?url=${encodeURIComponent(currentTrack!.track_url)}&color=%23ff5500&auto_play=false&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true&visual=true`;
+        return (
+            <div className="aspect-w-16 aspect-h-9">
+                <iframe
+                    width="100%"
+                    height="300"
+                    scrolling="no"
+                    frameBorder="no"
+                    allow="autoplay"
+                    src={embedUrl}>
+                </iframe>
+            </div>
+        );
     };
 
     const renderWaveSurferPlayer = () => (
@@ -256,6 +312,7 @@ const WebPlayer = () => {
         if (!currentTrack) return <div className="flex items-center justify-center h-full min-h-[120px]"><p className="text-gray-400">No track selected.</p></div>;
         if (isSpotifyUrl(currentTrack.track_url)) return renderSpotifyPlayer();
         if (isYoutubeUrl(currentTrack.track_url)) return renderYoutubePlayer();
+        if (isSoundCloudUrl(currentTrack.track_url)) return renderSoundCloudPlayer();
         return renderWaveSurferPlayer();
     };
 
