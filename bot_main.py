@@ -2,15 +2,24 @@ import asyncio
 import discord
 from discord.ext import commands
 from sqlalchemy.orm import sessionmaker
+import uvicorn
+from fastapi import FastAPI
 
 from config import settings
 from database import SessionLocal
+import bot_instance as bot_instance_module
+from api_main import create_app
+
+# An event to signal when the bot is ready
+bot_ready = asyncio.Event()
 
 # Custom Bot class to hold the database session factory
 class UniverseBot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.SessionLocal: sessionmaker = SessionLocal
+        self.api_app: FastAPI = create_app()
+        self.api_server: uvicorn.Server | None = None
 
     async def setup_hook(self):
         # This is called when the bot is preparing to start
@@ -23,6 +32,12 @@ class UniverseBot(commands.Bot):
         await self.load_extension("cogs.channel_creator_cog")
         print("Cogs loaded.")
 
+        # Start the FastAPI server as a background task
+        config = uvicorn.Config(self.api_app, host="0.0.0.0", port=8000, log_level="info")
+        self.api_server = uvicorn.Server(config)
+        self.loop.create_task(self.api_server.serve())
+        print("FastAPI server started.")
+
     async def on_ready(self):
         print(f'Logged in as {self.user} (ID: {self.user.id})')
         print('Syncing slash commands...')
@@ -32,18 +47,26 @@ class UniverseBot(commands.Bot):
         except Exception as e:
             print(f"Failed to sync commands: {e}")
 
-import bot_instance as bot_instance_module
+        # Signal that the bot is ready
+        bot_ready.set()
+
+    async def close(self):
+        if self.api_server:
+            await self.api_server.shutdown()
+        await super().close()
+
+intents = discord.Intents.default()
+intents.message_content = True  # Required for on_message event
+intents.reactions = True      # Required for on_reaction_add event
+intents.members = True        # Required for fetching all members
+
+bot = UniverseBot(command_prefix="!", intents=intents)
+bot_instance_module.bot = bot # Set the bot instance
 
 async def main():
     """The main entrypoint for the bot."""
-    intents = discord.Intents.default()
-    intents.message_content = True  # Required for on_message event
-    intents.reactions = True      # Required for on_reaction_add event
-    intents.members = True        # Required for fetching all members
-
-    bot = UniverseBot(command_prefix="!", intents=intents)
-    bot_instance_module.bot = bot # Set the bot instance
-
     async with bot:
         await bot.start(settings.DISCORD_TOKEN)
 
+if __name__ == "__main__":
+    asyncio.run(main())

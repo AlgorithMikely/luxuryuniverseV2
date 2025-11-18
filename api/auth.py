@@ -61,7 +61,9 @@ async def callback(code: str, db: Session = Depends(get_db)):
             roles.append("admin")
 
     # Create a JWT for the user
-    jwt_token = security.create_access_token(data={"sub": user.discord_id, "roles": roles})
+    jwt_token = security.create_access_token(
+        data={"sub": user.discord_id, "username": user.username, "roles": roles}
+    )
 
     # Redirect to the frontend with the token
     return RedirectResponse(f"{settings.FRONTEND_URL}/auth/callback?token={jwt_token}")

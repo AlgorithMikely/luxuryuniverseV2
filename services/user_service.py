@@ -1,9 +1,16 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 import models
+from datetime import datetime, timedelta
+
 
 def get_user_by_discord_id(db: Session, discord_id: str) -> models.User | None:
     """Retrieves a user by their Discord ID."""
-    return db.query(models.User).filter(models.User.discord_id == discord_id).first()
+    return (
+        db.query(models.User)
+        .options(joinedload(models.User.reviewer_profile))
+        .filter(models.User.discord_id == discord_id)
+        .first()
+    )
 
 def get_or_create_user(db: Session, discord_id: str, username: str) -> models.User:
     """
@@ -74,3 +81,32 @@ def remove_reviewer_profile(db: Session, reviewer_id: int) -> bool:
 def get_all_discord_users(db: Session) -> list[models.DiscordUserCache]:
     """Retrieves all users from the Discord user cache."""
     return db.query(models.DiscordUserCache).all()
+
+
+def update_user_spotify_tokens(
+    db: Session,
+    discord_id: str,
+    access_token: str,
+    refresh_token: str,
+    expires_in: int,
+) -> models.User:
+    """Updates a user's Spotify tokens and expiration time."""
+    user = get_user_by_discord_id(db, discord_id)
+    if not user:
+        # This case should ideally not happen if called after user creation/retrieval
+        raise ValueError("User not found")
+
+    user.spotify_access_token = access_token
+    user.spotify_refresh_token = refresh_token
+    user.spotify_token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def is_spotify_token_expired(user: models.User) -> bool:
+    """Checks if the user's Spotify access token is expired or close to expiring."""
+    if not user.spotify_token_expires_at:
+        return True
+    # Check if the token expires in the next 60 seconds
+    return user.spotify_token_expires_at <= datetime.utcnow() + timedelta(seconds=60)

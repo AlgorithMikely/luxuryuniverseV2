@@ -1,99 +1,59 @@
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { useQueueStore } from '../stores/queueStore';
 import { useAuthStore } from '../stores/authStore';
-import { useSocketStore } from '../stores/socketStore'; // Import the new store
-import api from '../services/api';
+import { useQueueStore } from '../stores/queueStore';
 
-// Import the panel components
-import QueuePanel from '../components/QueuePanel';
-import ReviewHub from '../components/ReviewHub';
-import HistoryPanel from '../components/HistoryPanel';
-import WebPlayer from '../components/WebPlayer';
-import Navbar from '../components/Navbar';
+// Import Panel Components
+import SubmissionQueue from '../components/Dashboard/QueuePanel';
+import ReviewHub from '../components/Dashboard/ReviewHub';
+import WebPlayer from '../components/Dashboard/WebPlayer';
+import RightPanelTabs from '../components/Dashboard/RightPanelTabs';
 
-const ReviewerDashboard = () => {
+const ReviewerDashboard: React.FC = () => {
   const { reviewerId } = useParams<{ reviewerId: string }>();
-  const {
-    setQueue,
-    setRecentlyPlayed,
-    setSocketStatus,
-    handleQueueUpdate,
-  } = useQueueStore();
-  const { user } = useAuthStore();
-  const { socket } = useSocketStore(); // Use the Zustand store
+  const { token, user } = useAuthStore();
+  // We get the functions once and can trust them to be stable
+  const connect = useQueueStore((state) => state.connect);
+  const disconnect = useQueueStore((state) => state.disconnect);
+  const socketStatus = useQueueStore((state) => state.socketStatus);
 
   useEffect(() => {
-    const fetchInitialData = async () => {
-      if (!reviewerId) return;
-      try {
-        const [queueRes, playedRes] = await Promise.all([
-          api.get(`/api/${reviewerId}/queue`),
-          api.get(`/api/${reviewerId}/queue/played`),
-        ]);
-        setQueue(queueRes.data);
-        setRecentlyPlayed(playedRes.data);
-      } catch (error) {
-        console.error('Failed to fetch initial dashboard data:', error);
-      }
-    };
-
-    fetchInitialData();
-  }, [reviewerId, setQueue, setRecentlyPlayed]);
-
-  // The socket connection and event listeners are now managed globally in App.tsx
-  // We just need to react to socket events here.
-  useEffect(() => {
-    if (!socket) {
-      setSocketStatus('disconnected');
-      return;
+    // This effect should only run when the token changes, or on mount/unmount.
+    if (token && reviewerId) {
+      // The connect function in the store is responsible for preventing duplicates
+      connect(token, reviewerId);
     }
 
-    // Set initial status based on the global socket state
-    setSocketStatus(socket.connected ? 'connected' : 'connecting');
-
-    // The 'connect' and 'disconnect' events are handled here to update the UI
-    const handleConnect = () => setSocketStatus('connected');
-    const handleDisconnect = () => setSocketStatus('disconnected');
-
-    socket.on('connect', handleConnect);
-    socket.on('disconnect', handleDisconnect);
-    socket.on('queue_updated', handleQueueUpdate); // handleQueueUpdate now expects the data directly
-
-    // Cleanup listeners on component unmount
+    // The cleanup function will be called when the component unmounts.
     return () => {
-      socket.off('connect', handleConnect);
-      socket.off('disconnect', handleDisconnect);
-      socket.off('queue_updated', handleQueueUpdate);
+      disconnect();
     };
-  }, [socket, setSocketStatus, handleQueueUpdate]);
+  }, [token, connect, disconnect]); // Depending on the functions is now safe as they are selected individually
+
 
   if (!user) {
-    return <div>Loading...</div>;
+    return <div className="text-white text-center p-8">Loading user profile...</div>;
   }
 
   return (
-    <div className="bg-gray-900 text-white min-h-screen flex flex-col">
-      <Navbar />
-      <div className="flex-grow p-4 grid grid-cols-1 lg:grid-cols-12 gap-4 h-full">
-        {/* Left Panel: Queue */}
-        <div className="lg:col-span-3 h-full">
-          <QueuePanel />
+    <div className="bg-gray-900 text-white min-h-screen p-4">
+       <div className="grid grid-cols-12 gap-4 h-[calc(100vh-2rem)]">
+        {/* --- Left Column: Submission Queue --- */}
+        <div className="col-span-3 flex flex-col gap-4">
+          <SubmissionQueue />
         </div>
 
-        {/* Center Panel: Review Hub */}
-        <div className="lg:col-span-6 h-full flex flex-col">
-          <div className="flex-grow">
-            <ReviewHub />
-          </div>
-          <div className="mt-4">
-            <WebPlayer />
+        {/* --- Middle Column: Player and Review Hub --- */}
+        <div className="col-span-6 flex flex-col gap-4 h-full">
+          <WebPlayer />
+          <div className="flex-1 min-h-0">
+             <ReviewHub />
           </div>
         </div>
 
-        {/* Right Panel: History */}
-        <div className="lg:col-span-3 h-full">
-          <HistoryPanel />
+        {/* --- Right Column: Tabs (History, Bookmarks, etc.) --- */}
+        <div className="col-span-3 flex flex-col gap-4 h-full">
+            <RightPanelTabs />
         </div>
       </div>
     </div>

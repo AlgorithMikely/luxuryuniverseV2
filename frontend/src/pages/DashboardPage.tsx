@@ -14,9 +14,9 @@ const DashboardRedirect = () => {
 
     if (user) {
       if (user.roles?.includes('admin') && user.moderated_reviewers && user.moderated_reviewers.length > 0) {
-        navigate(`/dashboard/${user.moderated_reviewers[0].id}`);
+        navigate(`/reviewer/${user.moderated_reviewers[0].id}`);
       } else if (user.reviewer_profile) {
-        navigate(`/dashboard/${user.reviewer_profile.id}`);
+        navigate(`/reviewer/${user.reviewer_profile.id}`);
       } else {
         navigate('/hub');
       }

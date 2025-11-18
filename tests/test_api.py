@@ -76,7 +76,7 @@ def test_reviewer_isolation(db_session):
     db_session.add_all([reviewer1, reviewer2])
     db_session.commit()
 
-    token1 = create_access_token(data={"sub": user1.discord_id, "roles": ["reviewer"]})
+    token1 = create_access_token(data={"sub": user1.discord_id, "username": user1.username, "roles": ["reviewer"]})
 
     # Accessing own queue should work
     response = client.get(f"/api/{reviewer1.id}/queue", headers={"Authorization": f"Bearer {token1}"})
@@ -85,3 +85,31 @@ def test_reviewer_isolation(db_session):
     # Accessing other reviewer's queue should be forbidden
     response = client.get(f"/api/{reviewer2.id}/queue", headers={"Authorization": f"Bearer {token1}"})
     assert response.status_code == 403
+
+def test_dashboard_endpoints(db_session):
+    admin_user = User(discord_id="999", username="admin_user")
+    db_session.add(admin_user)
+    db_session.commit()
+
+    token = create_access_token(data={"sub": admin_user.discord_id, "username": admin_user.username, "roles": ["admin"]})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Create a dummy reviewer to test against
+    reviewer_user = User(discord_id="101", username="reviewer_user")
+    db_session.add(reviewer_user)
+    db_session.commit()
+    reviewer = Reviewer(user_id=reviewer_user.id, discord_channel_id="101", tiktok_handle="test_reviewer")
+    db_session.add(reviewer)
+    db_session.commit()
+
+    # Test GET /api/{reviewer.id}/queue
+    response_queue = client.get(f"/api/{reviewer.id}/queue", headers=headers)
+    assert response_queue.status_code == 200
+
+    # Test POST /api/{reviewer.id}/queue/next
+    response_next = client.post(f"/api/{reviewer.id}/queue/next", headers=headers)
+    assert response_next.status_code in [200, 404]
+
+    # Test GET /api/{reviewer.id}/queue/played
+    response_played = client.get(f"/api/{reviewer.id}/queue/played", headers=headers)
+    assert response_played.status_code == 200

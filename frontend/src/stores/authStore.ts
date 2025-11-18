@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import api from '../services/api';
+import { useSessionStore } from './sessionStore';
 
 export interface ReviewerProfile {
     id: number;
@@ -43,6 +44,7 @@ export const useAuthStore = create<AuthState>()(
       },
       logout: () => {
         set({ token: null, user: null, isLoading: false });
+        useSessionStore.getState().clearActiveSession();
       },
       checkAuth: async () => {
         const { token } = get();
@@ -51,6 +53,8 @@ export const useAuthStore = create<AuthState>()(
           try {
             const response = await api.get('/user/me');
             set({ user: response.data, isLoading: false });
+            // After fetching user, fetch their active session
+            await useSessionStore.getState().fetchActiveSession();
           } catch (error) {
             console.error("Failed to verify token on load:", error);
             set({ token: null, user: null, isLoading: false });

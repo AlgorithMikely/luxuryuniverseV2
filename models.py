@@ -6,12 +6,33 @@ from sqlalchemy import (
     ForeignKey,
     DateTime,
     Index,
+    Boolean,
 )
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
 import datetime
+import json
+from sqlalchemy.types import TypeDecorator, TEXT
 
 Base = declarative_base()
+
+# ✅ Custom type required by Alembic migration file
+class JsonEncodedList(TypeDecorator):
+    """
+    Stores Python lists as JSON strings in the database.
+    Used for backward compatibility with older migrations.
+    """
+    impl = TEXT
+
+    def process_bind_param(self, value, dialect):
+        if value is not None:
+            return json.dumps(value)
+        return None
+
+    def process_result_value(self, value, dialect):
+        if value is not None:
+            return json.loads(value)
+        return None
 
 
 class User(Base):
@@ -20,6 +41,9 @@ class User(Base):
     discord_id = Column(String, unique=True, index=True, nullable=False)
     username = Column(String, nullable=False)
     tiktok_username = Column(String, unique=True, nullable=True)
+    spotify_access_token = Column(String, nullable=True)
+    spotify_refresh_token = Column(String, nullable=True)
+    spotify_token_expires_at = Column(DateTime, nullable=True)
 
     reviewer_profile = relationship("Reviewer", back_populates="user", uselist=False)
     submissions = relationship("Submission", back_populates="user")
@@ -45,12 +69,18 @@ class Submission(Base):
     id = Column(Integer, primary_key=True, index=True)
     reviewer_id = Column(Integer, ForeignKey("reviewers.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    session_id = Column(Integer, ForeignKey("review_sessions.id"), nullable=True)
     track_url = Column(String, nullable=False)
+    track_title = Column(String, nullable=True)
+    archived_url = Column(String, nullable=True)
     status = Column(String, default="pending", nullable=False)
     submitted_at = Column(DateTime, default=datetime.datetime.utcnow)
+    score = Column(Integer, nullable=True)
+    notes = Column(String, nullable=True)
 
     reviewer = relationship("Reviewer", back_populates="submissions")
     user = relationship("User", back_populates="submissions")
+    session = relationship("ReviewSession", back_populates="submissions")
 
     __table_args__ = (Index("ix_submission_reviewer_id_status", "reviewer_id", "status"),)
 
@@ -77,6 +107,7 @@ class Transaction(Base):
     reviewer = relationship("Reviewer", back_populates="transactions")
     user = relationship("User", back_populates="transactions")
 
+
 class Wallet(Base):
     __tablename__ = "wallets"
     id = Column(Integer, primary_key=True, index=True)
@@ -93,3 +124,15 @@ class DiscordUserCache(Base):
     id = Column(Integer, primary_key=True, index=True)
     discord_id = Column(String, unique=True, index=True, nullable=False)
     username = Column(String, nullable=False)
+
+
+class ReviewSession(Base):
+    __tablename__ = "review_sessions"
+    id = Column(Integer, primary_key=True, index=True)
+    reviewer_id = Column(Integer, ForeignKey("reviewers.id"), nullable=False)
+    name = Column(String, nullable=False)
+    is_active = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    reviewer = relationship("Reviewer")
+    submissions = relationship("Submission", back_populates="session")

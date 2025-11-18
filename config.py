@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     DISCORD_TOKEN: str = "your_discord_token_here"
     SECRET_KEY: str = "a_very_secret_key"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
     ADMIN_DISCORD_IDS: List[str] = []
 
     @field_validator('ADMIN_DISCORD_IDS', mode='before')
@@ -50,5 +50,10 @@ class Settings(BaseSettings):
     DISCORD_CLIENT_SECRET: str
     DISCORD_REDIRECT_URI: str
     FRONTEND_URL: str = "http://localhost:5173"
+
+    # Spotify API Settings
+    SPOTIFY_CLIENT_ID: Optional[str] = None
+    SPOTIFY_CLIENT_SECRET: Optional[str] = None
+    SPOTIFY_REDIRECT_URI: str = "http://localhost:8000/api/spotify/callback"
 
 settings = Settings()

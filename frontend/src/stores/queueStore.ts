@@ -1,102 +1,156 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
+import io, { Socket } from 'socket.io-client';
+import { Submission } from '../types';
+import api from '../services/api'; // Make sure api service is imported
 
-// Define the shape of a User, matching the backend schema.
-interface User {
-  id: number;
-  username: string;
-  tiktok_username?: string | null;
-}
+export type { Submission };
 
-// Expand the Submission interface to include all relevant data.
-export interface Submission {
-  id: number;
-  track_url: string;
-  status: 'pending' | 'played' | 'saved_for_later' | 'reviewer_pick';
-  submitted_at: string;
-  user: User; // Embed the user object.
-  // Optional fields for review data
-  notes?: string;
-  rating?: number;
-  is_favorite?: boolean;
-}
-
-// Define the state structure for the queue store.
-interface QueueState {
-  // Core data arrays
+export interface FullQueueState {
   queue: Submission[];
-  recentlyPlayed: Submission[];
-  savedForLater: Submission[];
-  reviewerPicks: Submission[];
+  history: Submission[];
+  bookmarks: Submission[];
+  spotlight: Submission[];
+}
 
-  // The currently active track for the web player and review hub
+interface QueueState {
+  socket: Socket | null;
+  socketStatus: 'connected' | 'disconnected' | 'connecting' | 'disabled';
+  queue: Submission[];
+  history: Submission[];
+  bookmarks: Submission[];
+  spotlight: Submission[];
   currentTrack: Submission | null;
-
-  // Connection status for real-time updates
-  socketStatus: 'connected' | 'disconnected' | 'connecting';
-
-  // --- ACTIONS ---
-
-  // Setters for initializing and updating the main lists
-  setQueue: (queue: Submission[]) => void;
-  setRecentlyPlayed: (played: Submission[]) => void;
-  setSavedForLater: (saved: Submission[]) => void;
-  setReviewerPicks: (picks: Submission[]) => void;
-
-  // Action to set the currently active track
+  connect: (token: string, reviewerId: string) => void;
+  fetchInitialStateHttp: (reviewerId: string) => Promise<void>;
+  disconnect: () => void;
   setCurrentTrack: (track: Submission | null) => void;
-
-  // Action to update a single submission's details (e.g., after a review)
   updateSubmission: (updatedSubmission: Submission) => void;
-
-  // Action to handle real-time queue updates from the socket
-  handleQueueUpdate: (newQueue: Submission[]) => void;
-
-  // Action to update socket connection status
-  setSocketStatus: (status: 'connected' | 'disconnected' | 'connecting') => void;
+  toggleBookmark: (trackId: number) => void;
+  toggleSpotlight: (trackId: number) => void;
 }
 
 export const useQueueStore = create<QueueState>()(
   devtools(
     (set, get) => ({
-      // Initial state
-      queue: [],
-      recentlyPlayed: [],
-      savedForLater: [],
-      reviewerPicks: [],
-      currentTrack: null,
+      socket: null,
       socketStatus: 'disconnected',
+      queue: [],
+      history: [],
+      bookmarks: [],
+      spotlight: [],
+      currentTrack: null,
 
-      // --- ACTION IMPLEMENTATIONS ---
+      fetchInitialStateHttp: async (reviewerId) => {
+        try {
+          const response = await api.get<FullQueueState>(`/reviewer/${reviewerId}/queue/initial-state`);
+          set({
+            queue: response.data.queue || [],
+            history: response.data.history || [],
+            bookmarks: response.data.bookmarks || [],
+            spotlight: response.data.spotlight || [],
+            // Set the first track in the queue as the current track
+            currentTrack: response.data.queue?.[0] || null,
+          });
+        } catch (error) {
+          console.error("Failed to fetch initial state via HTTP:", error);
+        }
+      },
 
-      setQueue: (queue) => set({ queue }),
-      setRecentlyPlayed: (played) => set({ recentlyPlayed: played }),
-      setSavedForLater: (saved) => set({ savedForLater: saved }),
-      setReviewerPicks: (picks) => set({ reviewerPicks: picks }),
+      connect: (token, reviewerId) => {
+        if (import.meta.env.VITE_DISABLE_SOCKETIO === 'true') {
+          console.log("Socket.IO disabled. Fetching initial state via HTTP.");
+          set({ socketStatus: 'disabled' });
+          get().fetchInitialStateHttp(reviewerId);
+          return;
+        }
+
+        if (get().socket || get().socketStatus === 'connecting') return;
+
+        set({ socketStatus: 'connecting' });
+        const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:8000', {
+          auth: { token },
+          transports: ['websocket'],
+        });
+
+        newSocket.on('connect', () => {
+          set({ socket: newSocket, socketStatus: 'connected' });
+        });
+
+        newSocket.on('disconnect', () => {
+          set({ socket: null, socketStatus: 'disconnected', queue: [], history: [], bookmarks: [], spotlight: [], currentTrack: null });
+        });
+
+        newSocket.on('connect_error', (error) => {
+          console.error('Socket connection error:', error);
+          set({ socketStatus: 'disconnected' });
+          get().disconnect();
+        });
+
+        newSocket.on('initial_state', (state: FullQueueState) => {
+          set({
+            queue: state.queue || [],
+            history: state.history || [],
+            bookmarks: state.bookmarks || [],
+            spotlight: state.spotlight || [],
+            currentTrack: state.queue?.[0] || null,
+          });
+        });
+
+        newSocket.on('queue_updated', (newQueue: Submission[]) => set({ queue: newQueue }));
+        newSocket.on('history_updated', (newHistory: Submission[]) => set({ history: newHistory }));
+      },
+
+      disconnect: () => {
+        const { socket } = get();
+        if (socket) {
+          socket.disconnect();
+        }
+        set({ socket: null, socketStatus: 'disconnected' });
+      },
 
       setCurrentTrack: (track) => set({ currentTrack: track }),
 
       updateSubmission: (updatedSubmission) => {
-        const allLists = ['queue', 'recentlyPlayed', 'savedForLater', 'reviewerPicks'] as const;
-        allLists.forEach((listName) => {
-          const list = get()[listName];
-          const updatedList = list.map((item) =>
-            item.id === updatedSubmission.id ? { ...item, ...updatedSubmission } : item
-          );
-          set({ [listName]: updatedList });
-        });
+        const updateList = (list: Submission[]) =>
+          list.map((item) => (item.id === updatedSubmission.id ? { ...item, ...updatedSubmission } : item));
+        set((state) => ({
+          queue: updateList(state.queue),
+          history: updateList(state.history),
+          bookmarks: updateList(state.bookmarks),
+          spotlight: updateList(state.spotlight),
+          currentTrack:
+            state.currentTrack?.id === updatedSubmission.id ? { ...state.currentTrack, ...updatedSubmission } : state.currentTrack,
+        }));
+      },
 
-        // If the updated track is the current track, update it as well
-        if (get().currentTrack?.id === updatedSubmission.id) {
-          set({ currentTrack: { ...get().currentTrack, ...updatedSubmission } });
+      toggleBookmark: (trackId) => {
+        const { queue, history, bookmarks } = get();
+        const allTracks = [...queue, ...history, ...bookmarks];
+        const track = allTracks.find((t) => t.id === trackId);
+        if (!track) return;
+
+        const isBookmarked = bookmarks.some((b) => b.id === trackId);
+        if (isBookmarked) {
+          set({ bookmarks: bookmarks.filter((b) => b.id !== trackId) });
+        } else {
+          set({ bookmarks: [...bookmarks, { ...track, bookmarked: true }] });
         }
       },
 
-      handleQueueUpdate: (newQueue) => {
-        set({ queue: newQueue });
-      },
+      toggleSpotlight: (trackId) => {
+        const { queue, history, spotlight } = get();
+        const allTracks = [...queue, ...history, ...spotlight];
+        const track = allTracks.find((t) => t.id === trackId);
+        if (!track) return;
 
-      setSocketStatus: (status) => set({ socketStatus: status }),
+        const isSpotlighted = spotlight.some((s) => s.id === trackId);
+        if (isSpotlighted) {
+          set({ spotlight: spotlight.filter((s) => s.id !== trackId) });
+        } else {
+          set({ spotlight: [...spotlight, { ...track, spotlighted: true }] });
+        }
+      },
     }),
     { name: 'QueueStore' }
   )

@@ -1,3 +1,9 @@
+import os
+import sys
+
+# Add the project root to sys.path for proper imports in migration scripts
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config

@@ -4,8 +4,8 @@ FROM python:3.12-slim
 # Set the working directory in the container
 WORKDIR /app
 
-# Install PostgreSQL client for pg_isready
-RUN apt-get update && apt-get install -y postgresql-client
+# Install PostgreSQL client for pg_isready and ffmpeg for yt-dlp
+RUN apt-get update && apt-get install -y postgresql-client ffmpeg
 
 # Install poetry
 RUN pip install poetry

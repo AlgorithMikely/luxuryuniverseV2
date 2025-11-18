@@ -2,6 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from services import queue_service, user_service
+from config import settings  # Import the settings object
 
 class QueueCog(commands.Cog):
     def __init__(self, bot):
@@ -9,6 +10,15 @@ class QueueCog(commands.Cog):
 
     async def _get_reviewer_from_interaction(self, interaction: discord.Interaction):
         with self.bot.SessionLocal() as db:
+            # First, check if the user is an admin.
+            # Convert admin discord ids from string to int for comparison
+            admin_ids = [int(id) for id in settings.ADMIN_DISCORD_IDS]
+            if interaction.user.id in admin_ids:
+                # For admins, we need to determine the reviewer context from the channel
+                reviewer = queue_service.get_reviewer_by_channel_id(db, interaction.channel_id)
+                return reviewer
+
+            # If not an admin, check if they are a registered reviewer
             user = user_service.get_user_by_discord_id(db, str(interaction.user.id))
             if not user:
                 return None
