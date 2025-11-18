@@ -6,7 +6,7 @@ import yt_dlp
 import asyncio
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from bot_instance import bot, bot_ready
+import bot_instance
 
 router = APIRouter(prefix="/proxy", tags=["Proxy"])
 
@@ -15,12 +15,14 @@ async def resolve_discord_url(jump_url: str) -> str:
     Resolves a Discord message jump_url to a direct attachment URL.
     """
     try:
-        await asyncio.wait_for(bot_ready.wait(), timeout=10.0)
+        logging.info("Waiting for bot to be ready...")
+        await asyncio.wait_for(bot_instance.bot_ready.wait(), timeout=10.0)
+        logging.info("Bot is ready.")
     except asyncio.TimeoutError:
         logging.error("Timed out waiting for bot to become ready.")
         raise HTTPException(status_code=503, detail="Service Unavailable: Bot is not ready.")
 
-    if not bot:
+    if not bot_instance.bot:
         raise HTTPException(status_code=503, detail="Service Unavailable: Bot is not initialized.")
 
     match = re.match(r"https://discord.com/channels/(\d+)/(\d+)/(\d+)", jump_url)
@@ -30,7 +32,7 @@ async def resolve_discord_url(jump_url: str) -> str:
     _, channel_id, message_id = match.groups()
 
     try:
-        channel = bot.get_channel(int(channel_id))
+        channel = bot_instance.bot.get_channel(int(channel_id))
         if not channel:
             raise HTTPException(status_code=404, detail=f"Discord channel not found: {channel_id}")
 

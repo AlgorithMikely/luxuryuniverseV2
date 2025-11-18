@@ -1,0 +1,61 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.5, pytest-8.4.2, pluggy-1.6.0 -- D:\selfhostedapps\luxuryuniverseV2\venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: D:\selfhostedapps\luxuryuniverseV2
+configfile: pyproject.toml
+plugins: anyio-4.11.0, httpx-0.35.0
+collecting ... collected 3 items
+
+tests/test_proxy.py::test_proxy_audio_bot_not_ready FAILED               [ 33%]
+tests/test_proxy.py::test_proxy_audio_bot_not_initialized FAILED         [ 66%]
+tests/test_proxy.py::test_proxy_audio_success FAILED                     [100%]
+
+================================== FAILURES ===================================
+_______________________ test_proxy_audio_bot_not_ready ________________________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+____________________ test_proxy_audio_bot_not_initialized _____________________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+__________________________ test_proxy_audio_success ___________________________
+async def functions are not natively supported.
+You need to install a suitable plugin for your async framework, for example:
+  - anyio
+  - pytest-asyncio
+  - pytest-tornasync
+  - pytest-trio
+  - pytest-twisted
+============================== warnings summary ===============================
+venv\Lib\site-packages\_pytest\config\__init__.py:1474
+  D:\selfhostedapps\luxuryuniverseV2\venv\Lib\site-packages\_pytest\config\__init__.py:1474: PytestConfigWarning: Unknown config option: anyio_backend
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+tests\test_proxy.py:10
+  D:\selfhostedapps\luxuryuniverseV2\tests\test_proxy.py:10: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests\test_proxy.py:22
+  D:\selfhostedapps\luxuryuniverseV2\tests\test_proxy.py:22: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+tests\test_proxy.py:37
+  D:\selfhostedapps\luxuryuniverseV2\tests\test_proxy.py:37: PytestUnknownMarkWarning: Unknown pytest.mark.asyncio - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.asyncio
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_proxy.py::test_proxy_audio_bot_not_ready - Failed: async de...
+FAILED tests/test_proxy.py::test_proxy_audio_bot_not_initialized - Failed: as...
+FAILED tests/test_proxy.py::test_proxy_audio_success - Failed: async def func...
+======================== 3 failed, 4 warnings in 1.05s ========================

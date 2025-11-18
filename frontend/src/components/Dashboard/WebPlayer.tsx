@@ -59,6 +59,7 @@ const WebPlayer: React.FC = () => {
     const [isMuted, setIsMuted] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
+    const [spotifyError, setSpotifyError] = useState<string | null>(null);
 
     const onPlayPause = useCallback(() => {
         wavesurfer.current?.playPause();
@@ -125,6 +126,7 @@ const WebPlayer: React.FC = () => {
                     setSpotifyPlayer(player);
                 } catch (error) {
                     console.error("Could not initialize Spotify player:", error);
+                    setSpotifyError("Please connect your Spotify account.");
                 }
             };
             setupPlayer();
@@ -241,18 +243,46 @@ const WebPlayer: React.FC = () => {
 
     }, [duration]); // Re-bind if duration changes
 
+    const handleLogin = async () => {
+        try {
+            const response = await api.get('/spotify/login');
+            if (response.data.url) {
+                window.location.href = response.data.url;
+            }
+        } catch (error) {
+            console.error("Failed to get login URL", error);
+            setSpotifyError("Could not connect to Spotify. Please try again.");
+        }
+    };
+
     // --- Player Render Logic ---
-    const renderSpotifyPlayer = () => (
-        <div className="flex flex-col items-center justify-center p-4">
-             <h3 className="text-xl font-bold">{currentSpotifyTrack?.name || 'Loading Spotify...'}</h3>
-             <p className="text-md text-gray-400">{currentSpotifyTrack?.artists?.map((a) => a.name).join(', ') || '...'}</p>
-             <div className="flex items-center gap-4 my-4">
-                 <button onClick={() => spotifyPlayer?.previousTrack()} className="text-2xl hover:text-purple-400">Prev</button>
-                 <button onClick={() => spotifyPlayer?.togglePlay()} className="text-3xl hover:text-purple-400">{isSpotifyPlaying ? 'Pause' : 'Play'}</button>
-                 <button onClick={() => spotifyPlayer?.nextTrack()} className="text-2xl hover:text-purple-400">Next</button>
-             </div>
-        </div>
-    );
+    const renderSpotifyPlayer = () => {
+        if (spotifyError) {
+            return (
+                <div className="flex flex-col items-center justify-center p-8 space-y-4">
+                    <p className="text-red-400">{spotifyError}</p>
+                    <button
+                        onClick={handleLogin}
+                        className="px-6 py-2 bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors font-bold"
+                    >
+                        Connect to Spotify
+                    </button>
+                </div>
+            );
+        }
+
+        return (
+            <div className="flex flex-col items-center justify-center p-4">
+                <h3 className="text-xl font-bold">{currentSpotifyTrack?.name || 'Loading Spotify...'}</h3>
+                <p className="text-md text-gray-400">{currentSpotifyTrack?.artists?.map((a) => a.name).join(', ') || '...'}</p>
+                <div className="flex items-center gap-4 my-4">
+                    <button onClick={() => spotifyPlayer?.previousTrack()} className="text-2xl hover:text-purple-400">Prev</button>
+                    <button onClick={() => spotifyPlayer?.togglePlay()} className="text-3xl hover:text-purple-400">{isSpotifyPlaying ? 'Pause' : 'Play'}</button>
+                    <button onClick={() => spotifyPlayer?.nextTrack()} className="text-2xl hover:text-purple-400">Next</button>
+                </div>
+            </div >
+        );
+    };
 
     const renderYoutubePlayer = () => {
         const embedUrl = getYoutubeEmbedUrl(currentTrack!.track_url);

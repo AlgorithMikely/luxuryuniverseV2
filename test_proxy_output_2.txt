@@ -1,0 +1,107 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.5, pytest-8.4.2, pluggy-1.6.0 -- D:\selfhostedapps\luxuryuniverseV2\venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: D:\selfhostedapps\luxuryuniverseV2
+configfile: pyproject.toml
+plugins: anyio-4.11.0, httpx-0.35.0
+collecting ... collected 6 items
+
+tests/test_proxy.py::test_proxy_audio_bot_not_ready[asyncio] PASSED      [ 16%]
+tests/test_proxy.py::test_proxy_audio_bot_not_initialized[asyncio] PASSED [ 33%]
+tests/test_proxy.py::test_proxy_audio_success[asyncio] FAILED            [ 50%]
+tests/test_proxy.py::test_proxy_audio_bot_not_ready[trio] PASSED         [ 66%]
+tests/test_proxy.py::test_proxy_audio_bot_not_initialized[trio] PASSED   [ 83%]
+tests/test_proxy.py::test_proxy_audio_success[trio] FAILED               [100%]
+
+================================== FAILURES ===================================
+______________________ test_proxy_audio_success[asyncio] ______________________
+
+    @pytest.mark.anyio
+    async def test_proxy_audio_success():
+        # Mock bot and channel
+        mock_bot = MagicMock()
+        mock_channel = AsyncMock()
+        mock_message = AsyncMock()
+        mock_attachment = MagicMock()
+        mock_attachment.url = "http://example.com/audio.mp3"
+        mock_message.attachments = [mock_attachment]
+        mock_channel.fetch_message.return_value = mock_message
+        mock_bot.get_channel.return_value = mock_channel
+    
+        bot_instance.bot = mock_bot
+        bot_instance.bot_ready = asyncio.Event()
+        bot_instance.bot_ready.set()
+    
+        # Mock httpx to return audio data
+        with patch("httpx.AsyncClient.get") as mock_get:
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.content = b"audio data"
+            mock_response.headers = {"Content-Type": "audio/mpeg"}
+            mock_get.return_value = mock_response
+    
+            response = client.get("/api/proxy/audio?url=https://discord.com/channels/123/456/789")
+>           assert response.status_code == 200
+E           assert 500 == 200
+E            +  where 500 = <Response [500 Internal Server Error]>.status_code
+
+tests\test_proxy.py:62: AssertionError
+---------------------------- Captured stderr call -----------------------------
+ERROR: [generic] Unable to download webpage: HTTP Error 404: Not Found (caused by <HTTPError 404: Not Found>)
+_______________________ test_proxy_audio_success[trio] ________________________
+
+    @pytest.mark.anyio
+    async def test_proxy_audio_success():
+        # Mock bot and channel
+        mock_bot = MagicMock()
+        mock_channel = AsyncMock()
+        mock_message = AsyncMock()
+        mock_attachment = MagicMock()
+        mock_attachment.url = "http://example.com/audio.mp3"
+        mock_message.attachments = [mock_attachment]
+        mock_channel.fetch_message.return_value = mock_message
+        mock_bot.get_channel.return_value = mock_channel
+    
+        bot_instance.bot = mock_bot
+        bot_instance.bot_ready = asyncio.Event()
+        bot_instance.bot_ready.set()
+    
+        # Mock httpx to return audio data
+        with patch("httpx.AsyncClient.get") as mock_get:
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.content = b"audio data"
+            mock_response.headers = {"Content-Type": "audio/mpeg"}
+            mock_get.return_value = mock_response
+    
+            response = client.get("/api/proxy/audio?url=https://discord.com/channels/123/456/789")
+>           assert response.status_code == 200
+E           assert 500 == 200
+E            +  where 500 = <Response [500 Internal Server Error]>.status_code
+
+tests\test_proxy.py:62: AssertionError
+---------------------------- Captured stderr call -----------------------------
+ERROR: [generic] Unable to download webpage: HTTP Error 404: Not Found (caused by <HTTPError 404: Not Found>)
+============================== warnings summary ===============================
+venv\Lib\site-packages\_pytest\config\__init__.py:1474
+  D:\selfhostedapps\luxuryuniverseV2\venv\Lib\site-packages\_pytest\config\__init__.py:1474: PytestConfigWarning: Unknown config option: anyio_backend
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+tests/test_proxy.py::test_proxy_audio_success[asyncio]
+  C:\Users\Mike\AppData\Local\Programs\Python\Python313\Lib\re\__init__.py:285: RuntimeWarning: coroutine 'Event.wait' was never awaited
+    return _compile(pattern, flags).finditer(string)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_proxy.py::test_proxy_audio_success[trio]
+  D:\selfhostedapps\luxuryuniverseV2\venv\Lib\site-packages\yt_dlp\utils\traversal.py:302: RuntimeWarning: coroutine 'Event.wait' was never awaited
+    for index, path in enumerate(paths, 1):
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_proxy.py::test_proxy_audio_success[asyncio] - assert 500 ==...
+FAILED tests/test_proxy.py::test_proxy_audio_success[trio] - assert 500 == 200
+=================== 2 failed, 4 passed, 3 warnings in 2.49s ===================

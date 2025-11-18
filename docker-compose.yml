@@ -28,7 +28,7 @@ services:
       - DISCORD_REDIRECT_URI=http://localhost:5173/api/auth/callback
     depends_on:
       - db
-    command: ["python", "-m", "bot_main"]
+    command: [ "python", "-m", "bot_main" ]
 
   frontend:
     build:

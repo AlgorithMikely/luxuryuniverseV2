@@ -98,7 +98,7 @@ def update_user_spotify_tokens(
 
     user.spotify_access_token = access_token
     user.spotify_refresh_token = refresh_token
-    user.spotify_token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+    user.spotify_token_expires_at = datetime.now(datetime.UTC) + timedelta(seconds=expires_in)
     db.commit()
     db.refresh(user)
     return user
@@ -109,4 +109,4 @@ def is_spotify_token_expired(user: models.User) -> bool:
     if not user.spotify_token_expires_at:
         return True
     # Check if the token expires in the next 60 seconds
-    return user.spotify_token_expires_at <= datetime.utcnow() + timedelta(seconds=60)
+    return user.spotify_token_expires_at <= datetime.now(datetime.UTC) + timedelta(seconds=60)

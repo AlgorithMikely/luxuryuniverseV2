@@ -10,7 +10,7 @@ import models
 router = APIRouter(
     prefix="/admin",
     tags=["Admin"],
-    # dependencies=[Depends(security.require_admin)],  # Temporarily commented out
+    dependencies=[Depends(security.require_admin)],
 )
 
 # Add this test endpoint

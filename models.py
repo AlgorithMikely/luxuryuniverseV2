@@ -74,7 +74,7 @@ class Submission(Base):
     track_title = Column(String, nullable=True)
     archived_url = Column(String, nullable=True)
     status = Column(String, default="pending", nullable=False)
-    submitted_at = Column(DateTime, default=datetime.datetime.utcnow)
+    submitted_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.UTC))
     score = Column(Integer, nullable=True)
     notes = Column(String, nullable=True)
 
@@ -132,7 +132,7 @@ class ReviewSession(Base):
     reviewer_id = Column(Integer, ForeignKey("reviewers.id"), nullable=False)
     name = Column(String, nullable=False)
     is_active = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.UTC))
 
     reviewer = relationship("Reviewer")
     submissions = relationship("Submission", back_populates="session")

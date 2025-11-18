@@ -16,6 +16,18 @@ export default defineConfig({
       },
     },
   },
+  preview: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/ws': {
+        target: 'ws://localhost:8000',
+        ws: true,
+      },
+    },
+  },
   build: {
     minify: false,
   },

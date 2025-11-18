@@ -45,7 +45,9 @@ class UniverseBot(commands.Bot):
             print(f"Failed to sync commands: {e}")
 
         # Signal that the bot is ready
+        print("Setting bot_ready event.")
         bot_instance_module.bot_ready.set()
+        print("bot_ready event set.")
 
     async def close(self):
         if self.api_server:

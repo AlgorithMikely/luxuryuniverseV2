@@ -20,15 +20,17 @@ async def spotify_login(current_user: User = Depends(get_current_active_user)):
     """
     Redirects the user to Spotify's authorization page.
     """
-    auth_url = (
-        f"https://accounts.spotify.com/authorize"
-        f"?response_type=code"
-        f"&client_id={settings.SPOTIFY_CLIENT_ID}"
-        f"&scope={SPOTIFY_SCOPES}"
-        f"&redirect_uri={settings.SPOTIFY_REDIRECT_URI}"
-        f"&state={current_user.discord_id}"  # Use discord_id to link accounts
-    )
-    return RedirectResponse(auth_url)
+    from urllib.parse import urlencode
+    
+    params = {
+        "response_type": "code",
+        "client_id": settings.SPOTIFY_CLIENT_ID,
+        "scope": SPOTIFY_SCOPES,
+        "redirect_uri": settings.SPOTIFY_REDIRECT_URI,
+        "state": current_user.discord_id,
+    }
+    auth_url = f"https://accounts.spotify.com/authorize?{urlencode(params)}"
+    return {"url": auth_url}
 
 @router.get("/callback")
 async def spotify_callback(code: str, state: str, db: Session = Depends(get_db)):
@@ -61,13 +63,19 @@ async def spotify_callback(code: str, state: str, db: Session = Depends(get_db))
         expires_in = token_data["expires_in"]
 
         # Store tokens in the database
-        user_service.update_user_spotify_tokens(
-            db,
-            discord_id=discord_id,
-            access_token=access_token,
-            refresh_token=refresh_token,
-            expires_in=expires_in,
-        )
+        logging.info(f"Updating Spotify tokens for discord_id: {discord_id}")
+        try:
+            user_service.update_user_spotify_tokens(
+                db,
+                discord_id=discord_id,
+                access_token=access_token,
+                refresh_token=refresh_token,
+                expires_in=expires_in,
+            )
+            logging.info("Successfully updated Spotify tokens")
+        except Exception as e:
+            logging.error(f"Failed to update Spotify tokens: {e}")
+            raise HTTPException(status_code=500, detail="Failed to save tokens")
 
     return RedirectResponse(f"{settings.FRONTEND_URL}/hub")
 
