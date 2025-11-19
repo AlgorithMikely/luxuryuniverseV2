@@ -154,6 +154,15 @@ class PassiveSubmissionCog(commands.Cog):
                     logging.info(f"Submission saved successfully for {user.username}. Archived URL: {jump_url}")
 
                     await message.add_reaction("✅")
+                    await asyncio.sleep(1)  # Brief delay for user to see reaction
+                    try:
+                        await message.delete()
+                    except discord.Forbidden:
+                        logging.warning(f"Missing 'Manage Messages' permission in channel {message.channel.name}")
+                    except discord.NotFound:
+                        pass # Message was already deleted by someone else
+                    except Exception as e:
+                        logging.error(f"Error deleting message: {e}")
 
                 except Exception as e:
                     logging.error(f"Error processing valid submission: {e}")
