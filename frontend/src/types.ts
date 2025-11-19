@@ -9,16 +9,16 @@ export interface User {
 }
 
 export interface UserProfile extends User {
-    roles: string[];
-    moderated_reviewers?: ReviewerProfile[];
+  roles: string[];
+  moderated_reviewers?: ReviewerProfile[];
 }
 
 export interface ReviewerProfile {
-    id: number;
-    user_id: number;
-    tiktok_handle: string;
-    discord_channel_id?: string;
-    queue_status: 'open' | 'closed';
+  id: number;
+  user_id: number;
+  tiktok_handle: string;
+  discord_channel_id?: string;
+  queue_status: 'open' | 'closed';
 }
 
 // --- Submissions & Queue ---
@@ -33,6 +33,8 @@ export interface Submission {
   submitted_at: string;
   score?: number;
   notes?: string;
+  note?: string; // Alias for notes to match frontend usage
+  rating?: number; // User rating (1-10)
   user: User;
   bookmarked?: boolean;
   spotlighted?: boolean;

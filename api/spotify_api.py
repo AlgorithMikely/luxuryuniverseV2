@@ -13,10 +13,10 @@ import logging
 router = APIRouter(prefix="/spotify", tags=["Spotify"])
 
 # Scopes needed for the Web Playback SDK
-SPOTIFY_SCOPES = "streaming user-read-email user-read-private"
+SPOTIFY_SCOPES = "streaming user-read-email user-read-private user-modify-playback-state user-read-playback-state user-read-currently-playing"
 
 @router.get("/login")
-async def spotify_login(current_user: User = Depends(get_current_active_user)):
+async def spotify_login(force_login: bool = False, current_user: User = Depends(get_current_active_user)):
     """
     Redirects the user to Spotify's authorization page.
     """
@@ -29,6 +29,10 @@ async def spotify_login(current_user: User = Depends(get_current_active_user)):
         "redirect_uri": settings.SPOTIFY_REDIRECT_URI,
         "state": current_user.discord_id,
     }
+    
+    if force_login:
+        params["show_dialog"] = "true"
+        
     auth_url = f"https://accounts.spotify.com/authorize?{urlencode(params)}"
     return {"url": auth_url}
 
@@ -65,7 +69,7 @@ async def spotify_callback(code: str, state: str, db: Session = Depends(get_db))
         # Store tokens in the database
         logging.info(f"Updating Spotify tokens for discord_id: {discord_id}")
         try:
-            user_service.update_user_spotify_tokens(
+            user = user_service.update_user_spotify_tokens(
                 db,
                 discord_id=discord_id,
                 access_token=access_token,
@@ -73,9 +77,13 @@ async def spotify_callback(code: str, state: str, db: Session = Depends(get_db))
                 expires_in=expires_in,
             )
             logging.info("Successfully updated Spotify tokens")
+            
+            if user.reviewer_profile:
+                return RedirectResponse(f"{settings.FRONTEND_URL}/reviewer/{user.reviewer_profile.id}")
+            
         except Exception as e:
             logging.error(f"Failed to update Spotify tokens: {e}")
-            raise HTTPException(status_code=500, detail="Failed to save tokens")
+            raise HTTPException(status_code=500, detail=f"Failed to save tokens: {str(e)}")
 
     return RedirectResponse(f"{settings.FRONTEND_URL}/hub")
 
@@ -85,37 +93,105 @@ async def get_spotify_token(current_user: User = Depends(get_current_active_user
     Provides the frontend with a short-lived Spotify access token.
     If the current access token is expired, it uses the refresh token to get a new one.
     """
-    if not current_user.spotify_refresh_token:
-        raise HTTPException(status_code=404, detail="User not connected to Spotify")
+    try:
+        if not current_user.spotify_refresh_token:
+            raise HTTPException(status_code=404, detail="User not connected to Spotify")
 
-    # Check if the token is expired or close to expiring
-    if user_service.is_spotify_token_expired(current_user):
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://accounts.spotify.com/api/token",
-                data={
-                    "grant_type": "refresh_token",
-                    "refresh_token": current_user.spotify_refresh_token,
-                    "client_id": settings.SPOTIFY_CLIENT_ID,
-                    "client_secret": settings.SPOTIFY_CLIENT_SECRET,
-                },
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
+        # Check if the token is expired or close to expiring
+        if user_service.is_spotify_token_expired(current_user):
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    "https://accounts.spotify.com/api/token",
+                    data={
+                        "grant_type": "refresh_token",
+                        "refresh_token": current_user.spotify_refresh_token,
+                        "client_id": settings.SPOTIFY_CLIENT_ID,
+                        "client_secret": settings.SPOTIFY_CLIENT_SECRET,
+                    },
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                )
+
+            if response.status_code != 200:
+                logging.error(f"Error refreshing Spotify token: {response.text}")
+                # If refresh fails, the user might need to re-authenticate
+                raise HTTPException(status_code=400, detail="Could not refresh Spotify token")
+
+            token_data = response.json()
+
+            # Update the database with the new token info
+            current_user = user_service.update_user_spotify_tokens(
+                db=db,
+                discord_id=current_user.discord_id,
+                access_token=token_data['access_token'],
+                refresh_token=current_user.spotify_refresh_token, # Refresh token might be rotated, but often is not
+                expires_in=token_data['expires_in']
             )
 
-        if response.status_code != 200:
-            logging.error(f"Error refreshing Spotify token: {response.text}")
-            # If refresh fails, the user might need to re-authenticate
-            raise HTTPException(status_code=400, detail="Could not refresh Spotify token")
+        return {"access_token": current_user.spotify_access_token}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Unexpected error in get_spotify_token: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
-        token_data = response.json()
+from pydantic import BaseModel
+from typing import List, Optional
 
-        # Update the database with the new token info
-        current_user = user_service.update_user_spotify_tokens(
-            db=db,
-            discord_id=current_user.discord_id,
-            access_token=token_data['access_token'],
-            refresh_token=current_user.spotify_refresh_token, # Refresh token might be rotated, but often is not
-            expires_in=token_data['expires_in']
+class PlayRequest(BaseModel):
+    device_id: str
+    uris: List[str]
+    position_ms: Optional[int] = 0
+
+@router.put("/play")
+async def spotify_play(
+    play_request: PlayRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Starts playback on the specified device.
+    """
+    # Ensure we have a valid token (refresh if needed)
+    await get_spotify_token(current_user, db)
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.put(
+            f"https://api.spotify.com/v1/me/player/play?device_id={play_request.device_id}",
+            json={"uris": play_request.uris, "position_ms": play_request.position_ms},
+            headers={
+                "Authorization": f"Bearer {current_user.spotify_access_token}",
+                "Content-Type": "application/json"
+            },
+        )
+        
+        if response.status_code not in (200, 204):
+            logging.error(f"Error starting playback: {response.text}")
+            raise HTTPException(status_code=response.status_code, detail=f"Failed to start playback: {response.text}")
+            
+    return {"status": "success"}
+
+@router.get("/track/{track_id}")
+async def get_spotify_track(
+    track_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Fetches track metadata from Spotify.
+    """
+    # Ensure we have a valid token
+    await get_spotify_token(current_user, db)
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"https://api.spotify.com/v1/tracks/{track_id}",
+            headers={
+                "Authorization": f"Bearer {current_user.spotify_access_token}",
+            },
         )
 
-    return {"access_token": current_user.spotify_access_token}
+        if response.status_code != 200:
+            logging.error(f"Error fetching track info: {response.text}")
+            raise HTTPException(status_code=response.status_code, detail="Failed to fetch track info")
+
+        return response.json()

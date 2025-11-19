@@ -25,14 +25,17 @@ class UserProfile(User):
     reviewer_profile: ReviewerProfile | None = None
     roles: List[str] = []
     moderated_reviewers: List[ReviewerProfile] = []
+    pass
 
-# In schemas.py, you should have something like:
+    pass
+
+# Restored missing classes
 class ReviewerCreate(BaseModel):
     discord_id: str
     tiktok_handle: Optional[str] = None
 
 class ReviewCreate(BaseModel):
-    score: Optional[int] = None
+    score: Optional[float] = None
     notes: Optional[str] = None
 
 class Token(BaseModel):
@@ -43,7 +46,6 @@ class TokenData(BaseModel):
     discord_id: str | None = None
     username: str | None = None
     roles: List[str] = []
-
 
 class DiscordUser(BaseModel):
     id: int
@@ -57,6 +59,8 @@ class Submission(BaseModel):
     track_title: Optional[str] = None
     archived_url: Optional[str] = None
     status: str
+    score: Optional[float] = None
+    notes: Optional[str] = None
     user: User
     bookmarked: bool = False
     spotlighted: bool = False

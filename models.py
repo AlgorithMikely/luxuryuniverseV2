@@ -7,6 +7,7 @@ from sqlalchemy import (
     DateTime,
     Index,
     Boolean,
+    Float,
 )
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
@@ -75,7 +76,7 @@ class Submission(Base):
     archived_url = Column(String, nullable=True)
     status = Column(String, default="pending", nullable=False)
     submitted_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.UTC))
-    score = Column(Integer, nullable=True)
+    score = Column(Float, nullable=True)
     notes = Column(String, nullable=True)
 
     reviewer = relationship("Reviewer", back_populates="submissions")

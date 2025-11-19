@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session, joinedload
 import models
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 def get_user_by_discord_id(db: Session, discord_id: str) -> models.User | None:
@@ -98,7 +98,7 @@ def update_user_spotify_tokens(
 
     user.spotify_access_token = access_token
     user.spotify_refresh_token = refresh_token
-    user.spotify_token_expires_at = datetime.now(datetime.UTC) + timedelta(seconds=expires_in)
+    user.spotify_token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
     db.commit()
     db.refresh(user)
     return user
@@ -108,5 +108,9 @@ def is_spotify_token_expired(user: models.User) -> bool:
     """Checks if the user's Spotify access token is expired or close to expiring."""
     if not user.spotify_token_expires_at:
         return True
+    expiry = user.spotify_token_expires_at
+    if expiry.tzinfo is None:
+        expiry = expiry.replace(tzinfo=timezone.utc)
+    
     # Check if the token expires in the next 60 seconds
-    return user.spotify_token_expires_at <= datetime.now(datetime.UTC) + timedelta(seconds=60)
+    return expiry <= datetime.now(timezone.utc) + timedelta(seconds=60)

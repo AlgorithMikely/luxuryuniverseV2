@@ -22,9 +22,12 @@ const UserHubPage = () => {
       const fetchSubmissions = async () => {
         setIsLoading(true);
         try {
-          const response = await api.get<UserSubmissionsResponse>("/user/me/submissions");
-          if (response.data && Array.isArray(response.data.submissions)) {
-            setSubmissions(response.data.submissions);
+          const response = await api.get<Submission[]>("/user/me/submissions");
+          if (Array.isArray(response.data)) {
+            setSubmissions(response.data);
+          } else if (response.data && Array.isArray((response.data as any).submissions)) {
+            // Fallback for previous structure if needed
+            setSubmissions((response.data as any).submissions);
           } else {
             console.error("Submissions data is not in the expected format:", response.data);
             setSubmissions([]);
