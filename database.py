@@ -1,25 +1,40 @@
 import os
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from config import settings
+from models import Base  # Import Base to access your tables
 
 DATABASE_URL = os.getenv("TEST_DATABASE_URL", str(settings.SQLALCHEMY_DATABASE_URI))
 
+# Ensure we use the async driver for SQLite if not specified
+if "sqlite" in DATABASE_URL and "aiosqlite" not in DATABASE_URL:
+    DATABASE_URL = DATABASE_URL.replace("sqlite://", "sqlite+aiosqlite://")
+
 # Special configuration for in-memory SQLite testing
-if "sqlite:///:memory:" in DATABASE_URL:
+if "sqlite" in DATABASE_URL and ":memory:" in DATABASE_URL:
     from sqlalchemy.pool import StaticPool
-    engine = create_engine(
+    engine = create_async_engine(
         DATABASE_URL,
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
 else:
-    engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    engine = create_async_engine(DATABASE_URL)
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+AsyncSessionLocal = async_sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autoflush=False
+)
+
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
+
+# Function to create tables if they don't exist
+async def init_db():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)

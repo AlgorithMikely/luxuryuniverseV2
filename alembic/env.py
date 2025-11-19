@@ -59,6 +59,9 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+import asyncio
+from sqlalchemy.ext.asyncio import async_engine_from_config
+
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode.
 
@@ -66,13 +69,13 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    connectable = engine_from_config(
+    connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
 
-    with connectable.connect() as connection:
+    async def do_run_migrations(connection):
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
@@ -82,6 +85,12 @@ def run_migrations_online() -> None:
         with context.begin_transaction():
             context.run_migrations()
 
+    async def run_async_migrations():
+        async with connectable.connect() as connection:
+            await connection.run_sync(do_run_migrations)
+        await connectable.dispose()
+
+    asyncio.run(run_async_migrations())
 
 if context.is_offline_mode():
     run_migrations_offline()

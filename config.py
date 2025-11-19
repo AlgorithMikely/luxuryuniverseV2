@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     def assemble_db_connection(self) -> 'Settings':
         if self.SQLALCHEMY_DATABASE_URI is None:
             self.SQLALCHEMY_DATABASE_URI = (
-                f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+                f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
                 f"@{self.POSTGRES_SERVER}:5432/{self.POSTGRES_DB}"
             )
         return self

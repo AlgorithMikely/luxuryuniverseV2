@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 import httpx
 
 from database import get_db
@@ -37,7 +37,7 @@ async def spotify_login(force_login: bool = False, current_user: User = Depends(
     return {"url": auth_url}
 
 @router.get("/callback")
-async def spotify_callback(code: str, state: str, db: Session = Depends(get_db)):
+async def spotify_callback(code: str, state: str, db: AsyncSession = Depends(get_db)):
     """
     Handles the callback from Spotify, exchanges the code for tokens,
     and stores them for the user.
@@ -69,7 +69,7 @@ async def spotify_callback(code: str, state: str, db: Session = Depends(get_db))
         # Store tokens in the database
         logging.info(f"Updating Spotify tokens for discord_id: {discord_id}")
         try:
-            user = user_service.update_user_spotify_tokens(
+            user = await user_service.update_user_spotify_tokens(
                 db,
                 discord_id=discord_id,
                 access_token=access_token,
@@ -88,7 +88,7 @@ async def spotify_callback(code: str, state: str, db: Session = Depends(get_db))
     return RedirectResponse(f"{settings.FRONTEND_URL}/hub")
 
 @router.get("/token")
-async def get_spotify_token(current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
+async def get_spotify_token(current_user: User = Depends(get_current_active_user), db: AsyncSession = Depends(get_db)):
     """
     Provides the frontend with a short-lived Spotify access token.
     If the current access token is expired, it uses the refresh token to get a new one.
@@ -119,7 +119,7 @@ async def get_spotify_token(current_user: User = Depends(get_current_active_user
             token_data = response.json()
 
             # Update the database with the new token info
-            current_user = user_service.update_user_spotify_tokens(
+            current_user = await user_service.update_user_spotify_tokens(
                 db=db,
                 discord_id=current_user.discord_id,
                 access_token=token_data['access_token'],
@@ -146,7 +146,7 @@ class PlayRequest(BaseModel):
 async def spotify_play(
     play_request: PlayRequest,
     current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Starts playback on the specified device.
@@ -174,7 +174,7 @@ async def spotify_play(
 async def get_spotify_track(
     track_id: str,
     current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Fetches track metadata from Spotify.

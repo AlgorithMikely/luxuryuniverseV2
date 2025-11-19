@@ -12,8 +12,8 @@ class EconomyCog(commands.Cog):
         if user.bot or not reaction.message.guild:
             return
 
-        with self.bot.SessionLocal() as db:
-            reviewer = queue_service.get_reviewer_by_channel_id(db, reaction.message.channel.id)
+        async with self.bot.SessionLocal() as db:
+            reviewer = await queue_service.get_reviewer_by_channel_id(db, reaction.message.channel.id)
             if not reviewer:
                 return
 
@@ -21,7 +21,7 @@ class EconomyCog(commands.Cog):
             if reaction.message.author.id == user.id:
                 return
 
-            config = economy_service.get_economy_config(db, reviewer.id)
+            config = await economy_service.get_economy_config(db, reviewer.id)
             # The emoji is hardcoded for now, as the current schema does not support
             # a configurable emoji trigger. The important part is that the amount is configurable.
             reaction_emoji = "👍"
@@ -29,8 +29,8 @@ class EconomyCog(commands.Cog):
             if str(reaction.emoji) == reaction_emoji:
                 # The key 'reaction' corresponds to the 'event_name' in the EconomyConfig table.
                 amount = config.get("reaction", 1)
-                reacting_user = user_service.get_or_create_user(db, str(user.id), user.name)
-                message_author = user_service.get_or_create_user(db, str(reaction.message.author.id), reaction.message.author.name)
+                reacting_user = await user_service.get_or_create_user(db, str(user.id), user.name)
+                message_author = await user_service.get_or_create_user(db, str(reaction.message.author.id), reaction.message.author.name)
 
                 await economy_service.add_coins(
                     db,
@@ -43,14 +43,14 @@ class EconomyCog(commands.Cog):
     @app_commands.command(name="balance", description="Check your coin balance.")
     @app_commands.guild_only()
     async def balance(self, interaction: discord.Interaction):
-        with self.bot.SessionLocal() as db:
-            reviewer = queue_service.get_reviewer_by_channel_id(db, interaction.channel.id)
+        async with self.bot.SessionLocal() as db:
+            reviewer = await queue_service.get_reviewer_by_channel_id(db, interaction.channel.id)
             if not reviewer:
                 await interaction.response.send_message("This is not a reviewer's channel.", ephemeral=True)
                 return
 
-            user = user_service.get_or_create_user(db, str(interaction.user.id), interaction.user.name)
-            balance = economy_service.get_balance(db, reviewer.id, user.id)
+            user = await user_service.get_or_create_user(db, str(interaction.user.id), interaction.user.name)
+            balance = await economy_service.get_balance(db, reviewer.id, user.id)
             await interaction.response.send_message(f"You have {balance} Luxury Coins.", ephemeral=True)
 
 async def setup(bot):

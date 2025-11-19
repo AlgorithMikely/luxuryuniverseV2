@@ -6,6 +6,7 @@ import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 from config import settings
 import logging
+import asyncio
 
 class PassiveSubmissionCog(commands.Cog):
     def __init__(self, bot):
@@ -34,7 +35,7 @@ class PassiveSubmissionCog(commands.Cog):
         if not files_and_links_channel:
             return None
 
-        user_profile = user_service.get_user_by_discord_id(db, user.discord_id)
+        user_profile = await user_service.get_user_by_discord_id(db, user.discord_id)
         tiktok_str = f"(TikTok: {user_profile.tiktok_username})" if user_profile and user_profile.tiktok_username else ""
 
         archive_message = None
@@ -56,8 +57,8 @@ class PassiveSubmissionCog(commands.Cog):
         logging.info(f"Processing message from {message.author.name} in channel {message.channel.name}")
 
         # Use a context manager for the database session
-        with self.bot.SessionLocal() as db:
-            reviewer = queue_service.get_reviewer_by_channel_id(db, message.channel.id)
+        async with self.bot.SessionLocal() as db:
+            reviewer = await queue_service.get_reviewer_by_channel_id(db, message.channel.id)
 
             # We only care about messages in reviewer channels where the queue is open
             if not reviewer or reviewer.queue_status != "open":
@@ -67,6 +68,7 @@ class PassiveSubmissionCog(commands.Cog):
 
             submission_content = message.content
             is_valid = False
+            error_message = None
 
             # --- Validation ---
             track_title = None
@@ -79,15 +81,37 @@ class PassiveSubmissionCog(commands.Cog):
                 except Exception as e:
                     logging.error(f"Error processing Spotify link: {e}")
                     is_valid = False
+                    error_message = "Invalid Spotify link."
             # 1. Check for URL
             elif "http" in submission_content:
                 try:
-                    with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True, 'force_generic_extractor': True}) as ydl:
-                        info = ydl.extract_info(submission_content, download=False)
-                        track_title = info.get('title', 'Unknown Title')
-                    is_valid = True
+                    # Run yt-dlp in a thread to avoid blocking the event loop
+                    def validate_url():
+                        with yt_dlp.YoutubeDL({'quiet': True, 'extract_flat': True, 'force_generic_extractor': True}) as ydl:
+                            info = ydl.extract_info(submission_content, download=False)
+                            return info
+                    
+                    info = await asyncio.to_thread(validate_url)
+                    
+                    if info:
+                        duration = info.get('duration')
+                        if duration and duration > 600: # 10 minutes in seconds
+                            is_valid = False
+                            error_message = "Track length exceeds 10 minutes."
+                        else:
+                            track_title = info.get('title', 'Unknown Title')
+                            is_valid = True
+                    else:
+                         is_valid = False
+                         error_message = "Could not extract info from URL."
+
                 except yt_dlp.utils.DownloadError:
                     is_valid = False # Invalid URL
+                    error_message = "Invalid URL or content not found."
+                except Exception as e:
+                    logging.error(f"Error validating URL: {e}")
+                    is_valid = False
+                    error_message = "Error validating URL."
 
             # 2. Check for attachments if no valid URL was found
             elif message.attachments:
@@ -98,7 +122,7 @@ class PassiveSubmissionCog(commands.Cog):
             # --- Process Valid Submission ---
             if is_valid:
                 try:
-                    active_session = queue_service.get_active_session_by_reviewer(db, reviewer.id)
+                    active_session = await queue_service.get_active_session_by_reviewer(db, reviewer.id)
                     if not active_session:
                         logging.warning(f"No active session found for reviewer {reviewer.user.username}. Rejecting submission.")
                         await message.reply("Sorry, the queue is currently closed because there is no active review session.")
@@ -106,7 +130,7 @@ class PassiveSubmissionCog(commands.Cog):
 
                     logging.info(f"Found active session: {active_session.id} for reviewer: {reviewer.user.username}")
 
-                    user = user_service.get_or_create_user(db, str(message.author.id), message.author.name)
+                    user = await user_service.get_or_create_user(db, str(message.author.id), message.author.name)
 
                     logging.info(f"Processing submission for user {user.username}. Content: {submission_content}")
 
@@ -129,7 +153,7 @@ class PassiveSubmissionCog(commands.Cog):
                     )
                     logging.info(f"Submission saved successfully for {user.username}. Archived URL: {jump_url}")
 
-                    await message.delete()
+                    await message.add_reaction("✅")
 
                 except Exception as e:
                     logging.error(f"Error processing valid submission: {e}")
@@ -139,10 +163,15 @@ class PassiveSubmissionCog(commands.Cog):
             else:
                 try:
                     await message.add_reaction("❌")
-                    await message.author.send(
-                        f"Sorry, your submission in #{message.channel.name} was invalid. "
-                        "Please submit a valid URL or a file attachment."
-                    )
+                    if error_message:
+                         await message.author.send(
+                            f"Sorry, your submission in #{message.channel.name} was invalid: {error_message}"
+                        )
+                    else:
+                        await message.author.send(
+                            f"Sorry, your submission in #{message.channel.name} was invalid. "
+                            "Please submit a valid URL or a file attachment."
+                        )
                 except discord.Forbidden:
                     pass # Can't send DMs
 

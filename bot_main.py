@@ -6,7 +6,7 @@ import uvicorn
 from fastapi import FastAPI
 
 from config import settings
-from database import SessionLocal
+from database import AsyncSessionLocal, init_db
 import bot_instance as bot_instance_module
 from api_main import create_app
 
@@ -14,11 +14,16 @@ from api_main import create_app
 class UniverseBot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.SessionLocal: sessionmaker = SessionLocal
+        self.SessionLocal = AsyncSessionLocal
         self.api_app: FastAPI = create_app()
         self.api_server: uvicorn.Server | None = None
 
     async def setup_hook(self):
+        # Initialize database tables
+        print("Initializing database...")
+        await init_db()
+        print("Database initialized.")
+
         # This is called when the bot is preparing to start
         print("Loading cogs...")
         # In the future, this could auto-discover cogs

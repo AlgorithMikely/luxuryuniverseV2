@@ -1,5 +1,4 @@
 from sqlalchemy import (
-    create_engine,
     Column,
     Integer,
     String,
@@ -17,7 +16,7 @@ from sqlalchemy.types import TypeDecorator, TEXT
 
 Base = declarative_base()
 
-# ✅ Custom type required by Alembic migration file
+# Custom type required by Alembic migration file
 class JsonEncodedList(TypeDecorator):
     """
     Stores Python lists as JSON strings in the database.
@@ -44,7 +43,8 @@ class User(Base):
     tiktok_username = Column(String, unique=True, nullable=True)
     spotify_access_token = Column(String, nullable=True)
     spotify_refresh_token = Column(String, nullable=True)
-    spotify_token_expires_at = Column(DateTime, nullable=True)
+    # Fixed: Added timezone=True
+    spotify_token_expires_at = Column(DateTime(timezone=True), nullable=True)
 
     reviewer_profile = relationship("Reviewer", back_populates="user", uselist=False)
     submissions = relationship("Submission", back_populates="user")
@@ -75,9 +75,11 @@ class Submission(Base):
     track_title = Column(String, nullable=True)
     archived_url = Column(String, nullable=True)
     status = Column(String, default="pending", nullable=False)
-    submitted_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.UTC))
+    # Fixed: Added timezone=True
+    submitted_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.UTC))
     score = Column(Float, nullable=True)
     notes = Column(String, nullable=True)
+    is_priority = Column(Boolean, default=False, nullable=False)
 
     reviewer = relationship("Reviewer", back_populates="submissions")
     user = relationship("User", back_populates="submissions")
@@ -103,7 +105,8 @@ class Transaction(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     amount = Column(Integer, nullable=False)
     reason = Column(String, nullable=False)
-    timestamp = Column(DateTime, server_default=func.now())
+    # Fixed: Added timezone=True
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
 
     reviewer = relationship("Reviewer", back_populates="transactions")
     user = relationship("User", back_populates="transactions")
@@ -133,7 +136,8 @@ class ReviewSession(Base):
     reviewer_id = Column(Integer, ForeignKey("reviewers.id"), nullable=False)
     name = Column(String, nullable=False)
     is_active = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.UTC))
+    # Fixed: Added timezone=True
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.UTC))
 
     reviewer = relationship("Reviewer")
     submissions = relationship("Submission", back_populates="session")

@@ -1,7 +1,7 @@
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 import schemas
 import security
@@ -20,7 +20,7 @@ async def login():
     )
 
 @router.get("/callback")
-async def callback(code: str, db: Session = Depends(get_db)):
+async def callback(code: str, db: AsyncSession = Depends(get_db)):
     """Handles the callback from Discord, creates/updates the user, and returns a JWT."""
     async with httpx.AsyncClient() as client:
         # Exchange the code for an access token
@@ -47,22 +47,32 @@ async def callback(code: str, db: Session = Depends(get_db)):
         discord_user = user_response.json()
 
     # Create or update the user in the database
-    user = user_service.get_or_create_user(
+    user = await user_service.get_or_create_user(
         db, discord_id=discord_user["id"], username=discord_user["username"]
     )
 
     # Determine the user's roles
     roles = ["user"]
+    reviewer_ids = []
     if user.reviewer_profile:
         roles.append("reviewer")
+        reviewer_ids.append(user.reviewer_profile.id)
+    
     # Check if the user is an admin
     if user.discord_id in settings.ADMIN_DISCORD_IDS:
         if "admin" not in roles:
             roles.append("admin")
+        # Admins implicitly have access to all reviewers, but we might not list them all here
+        # unless needed by the frontend. For now, let's keep it simple.
 
     # Create a JWT for the user
     jwt_token = security.create_access_token(
-        data={"sub": user.discord_id, "username": user.username, "roles": roles}
+        data={
+            "sub": user.discord_id, 
+            "username": user.username, 
+            "roles": roles,
+            "reviewer_ids": reviewer_ids
+        }
     )
 
     # Redirect to the frontend with the token

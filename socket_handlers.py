@@ -1,9 +1,8 @@
 from fastapi import HTTPException
-from sqlalchemy.orm import Session
 from sio_instance import sio
 import security
 from services import user_service, queue_service
-from database import SessionLocal
+from database import AsyncSessionLocal
 import schemas
 
 import logging
@@ -20,8 +19,8 @@ async def connect(sid, environ, auth):
         logging.warning(f"Connection refused for {sid}: Invalid token")
         raise ConnectionRefusedError("Authentication failed")
 
-    with SessionLocal() as db:
-        user = user_service.get_or_create_user(db, token_data.discord_id, token_data.username)
+    async with AsyncSessionLocal() as db:
+        user = await user_service.get_or_create_user(db, token_data.discord_id, token_data.username)
         if not user:
             logging.error(f"Could not get or create user for {sid} with discord_id {token_data.discord_id}")
             raise ConnectionRefusedError("Could not get or create user")
@@ -34,15 +33,15 @@ async def connect(sid, environ, auth):
         logging.info(f"Added {sid} to room {user_room}")
 
         # If the user is a reviewer, add them to their reviewer room and send initial state
-        reviewer = queue_service.get_reviewer_by_user_id(db, user.id)
+        reviewer = await queue_service.get_reviewer_by_user_id(db, user.id)
         if reviewer:
             reviewer_room = f"reviewer_room_{reviewer.id}"
             await sio.enter_room(sid, reviewer_room)
             logging.info(f"Added {sid} to room {reviewer_room}")
 
             # Fetch initial queue and history
-            pending_queue = queue_service.get_pending_queue(db, reviewer.id)
-            played_history = queue_service.get_played_queue(db, reviewer.id)
+            pending_queue = await queue_service.get_pending_queue(db, reviewer.id)
+            played_history = await queue_service.get_played_queue(db, reviewer.id)
 
             # Serialize data
             queue_schemas = [schemas.Submission.model_validate(s) for s in pending_queue]

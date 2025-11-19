@@ -1,5 +1,4 @@
 from sio_instance import sio
-
 import logging
 
 async def emit_queue_update(reviewer_id: int, queue_data: list):

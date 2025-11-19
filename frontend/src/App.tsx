@@ -11,6 +11,7 @@ import AdminPage from "./pages/AdminPage";
 import ArchivedSessionPage from './pages/ArchivedSessionPage';
 import ErrorPage from "./pages/ErrorPage";
 import Navbar from './components/Navbar';
+import Overlay from './components/Overlay';
 import { Toaster } from "react-hot-toast";
 import { ErrorBoundary } from "react-error-boundary";
 
@@ -46,6 +47,7 @@ function App() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
+            <Route path="/overlay/:reviewerId" element={<Overlay />} />
 
             {/* Routes with Navbar */}
             <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>

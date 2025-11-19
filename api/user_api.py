@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 import models
 import schemas
@@ -13,15 +13,20 @@ router = APIRouter(prefix="/user", tags=["User"])
 async def get_me(
     db_user: models.User = Depends(security.get_current_active_user),
     token: schemas.TokenData = Depends(security.get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     # Manually construct the UserProfile to include roles from the token
+    moderated_reviewers = []
+    if "admin" in token.roles:
+        moderated_reviewers = await user_service.get_all_reviewers(db)
+
     user_profile = schemas.UserProfile(
         id=db_user.id,
         discord_id=db_user.discord_id,
         username=db_user.username,
         reviewer_profile=db_user.reviewer_profile,
         roles=token.roles,
-        moderated_reviewers=user_service.get_all_reviewers(get_db().__next__()) if "admin" in token.roles else [],
+        moderated_reviewers=moderated_reviewers,
     )
     return user_profile
 
@@ -29,14 +34,14 @@ async def get_me(
 async def get_my_balance(
     reviewer_id: int = Query(...),
     current_user: models.User = Depends(security.get_current_active_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    balance = economy_service.get_balance(db, reviewer_id=reviewer_id, user_id=current_user.id)
+    balance = await economy_service.get_balance(db, reviewer_id=reviewer_id, user_id=current_user.id)
     return {"balance": balance}
 
 @router.get("/me/submissions")
 async def get_my_submissions(
     current_user: models.User = Depends(security.get_current_active_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
-    return queue_service.get_submissions_by_user(db, user_id=current_user.id)
+    return await queue_service.get_submissions_by_user(db, user_id=current_user.id)
