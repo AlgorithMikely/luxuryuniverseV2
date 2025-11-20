@@ -75,7 +75,7 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
 
-    async def do_run_migrations(connection):
+    def do_run_migrations(connection):
         context.configure(
             connection=connection,
             target_metadata=target_metadata,

@@ -13,6 +13,7 @@ from sqlalchemy.sql import func
 import datetime
 import json
 from sqlalchemy.types import TypeDecorator, TEXT
+from sqlalchemy.dialects.postgresql import JSON
 
 Base = declarative_base()
 
@@ -31,6 +32,8 @@ class JsonEncodedList(TypeDecorator):
 
     def process_result_value(self, value, dialect):
         if value is not None:
+            if isinstance(value, (list, dict)):
+                return value
             return json.loads(value)
         return None
 
@@ -45,6 +48,7 @@ class User(Base):
     spotify_refresh_token = Column(String, nullable=True)
     # Fixed: Added timezone=True
     spotify_token_expires_at = Column(DateTime(timezone=True), nullable=True)
+    avatar = Column(String, nullable=True)
 
     reviewer_profile = relationship("Reviewer", back_populates="user", uselist=False)
     submissions = relationship("Submission", back_populates="user")
@@ -64,6 +68,10 @@ class Reviewer(Base):
     economy_configs = relationship("EconomyConfig", back_populates="reviewer")
     transactions = relationship("Transaction", back_populates="reviewer")
 
+    @property
+    def username(self):
+        return self.user.username if self.user else None
+
 
 class Submission(Base):
     __tablename__ = "submissions"
@@ -80,6 +88,9 @@ class Submission(Base):
     score = Column(Float, nullable=True)
     notes = Column(String, nullable=True)
     is_priority = Column(Boolean, default=False, nullable=False)
+    priority_value = Column(Integer, default=0, nullable=False)
+    bookmarked = Column(Boolean, default=False, nullable=False)
+    spotlighted = Column(Boolean, default=False, nullable=False)
 
     reviewer = relationship("Reviewer", back_populates="submissions")
     user = relationship("User", back_populates="submissions")
@@ -138,6 +149,7 @@ class ReviewSession(Base):
     is_active = Column(Boolean, default=False, nullable=False)
     # Fixed: Added timezone=True
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.UTC))
+    open_queue_tiers = Column(JSON, default=[0, 5, 10, 15, 20, 25, 50], nullable=False)
 
     reviewer = relationship("Reviewer")
     submissions = relationship("Submission", back_populates="session")

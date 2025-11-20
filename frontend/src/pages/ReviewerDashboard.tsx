@@ -8,6 +8,7 @@ import SubmissionQueue from '../components/Dashboard/QueuePanel';
 import ReviewHub from '../components/Dashboard/ReviewHub';
 import WebPlayer from '../components/Dashboard/WebPlayer';
 import RightPanelTabs from '../components/Dashboard/RightPanelTabs';
+import SessionManager from '../components/Dashboard/SessionManager';
 
 const ReviewerDashboard: React.FC = () => {
   const { reviewerId } = useParams<{ reviewerId: string }>();
@@ -22,6 +23,7 @@ const ReviewerDashboard: React.FC = () => {
     // The user object's presence confirms the token has been validated by the backend.
     if (token && user && reviewerId) {
       connect(token, reviewerId);
+      useQueueStore.getState().fetchInitialStateHttp(reviewerId);
     }
 
     // The cleanup function will be called when the component unmounts or dependencies change.
@@ -37,7 +39,10 @@ const ReviewerDashboard: React.FC = () => {
 
   return (
     <div className="bg-gray-900 text-white min-h-screen p-4">
-       <div className="grid grid-cols-12 gap-4 h-[calc(100vh-2rem)]">
+      <div className="mb-4">
+        <SessionManager reviewerId={reviewerId} />
+      </div>
+      <div className="grid grid-cols-12 gap-4 h-[calc(100vh-2rem)]">
         {/* --- Left Column: Submission Queue --- */}
         <div className="col-span-3 flex flex-col gap-4">
           <SubmissionQueue />
@@ -47,13 +52,13 @@ const ReviewerDashboard: React.FC = () => {
         <div className="col-span-6 flex flex-col gap-4 h-full">
           <WebPlayer />
           <div className="flex-1 min-h-0">
-             <ReviewHub />
+            <ReviewHub />
           </div>
         </div>
 
         {/* --- Right Column: Tabs (History, Bookmarks, etc.) --- */}
         <div className="col-span-3 flex flex-col gap-4 h-full">
-            <RightPanelTabs />
+          <RightPanelTabs reviewerId={reviewerId} />
         </div>
       </div>
     </div>

@@ -4,18 +4,17 @@ import api from '../services/api';
 import { useSessionStore } from './sessionStore';
 
 export interface ReviewerProfile {
-    id: number;
-    discord_channel_id: string | null;
-    tiktok_handle: string | null;
-}
-export interface UserProfile {
   id: number;
-  discord_id: string;
-  username: string;
-  reviewer_profile: ReviewerProfile | null;
-  roles: string[];
-  moderated_reviewers?: ReviewerProfile[];
+  discord_channel_id: string | null;
+  tiktok_handle: string | null;
+  queue_status?: 'open' | 'closed';
+  username?: string;
 }
+
+import { UserProfile } from '../types';
+
+// Remove local ReviewerProfile if it duplicates types.ts, but for now just UserProfile
+
 
 interface AuthState {
   token: string | null;

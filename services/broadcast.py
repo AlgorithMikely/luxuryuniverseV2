@@ -23,3 +23,10 @@ async def emit_balance_update(reviewer_id: int, user_id: int, new_balance: int):
         {"new_balance": new_balance},
         room=f"user_room_{user_id}"
     )
+
+async def emit_current_track_update(reviewer_id: int, submission_data: dict | None):
+    """Emits a current track update to the specified reviewer's room."""
+    room = f"reviewer_room_{reviewer_id}"
+    logging.info(f"Emitting 'current_track_updated' to room {room} with data: {submission_data}")
+    await sio.emit("current_track_updated", submission_data, room=room)
+    logging.info("'current_track_updated' event emitted.")

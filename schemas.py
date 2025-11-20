@@ -1,15 +1,13 @@
-from pydantic import BaseModel
-from typing import List
-from typing import Optional
+from pydantic import BaseModel, ConfigDict
+from typing import List, Optional
 
 class UserBase(BaseModel):
     discord_id: str
     username: str
+    avatar: Optional[str] = None
 
 class UserCreate(UserBase):
     pass
-
-from pydantic import ConfigDict
 
 class User(UserBase):
     id: int
@@ -19,17 +17,14 @@ class ReviewerProfile(BaseModel):
     id: int
     tiktok_handle: str | None = None
     discord_channel_id: str | None = None
+    username: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
 class UserProfile(User):
     reviewer_profile: ReviewerProfile | None = None
     roles: List[str] = []
     moderated_reviewers: List[ReviewerProfile] = []
-    pass
 
-    pass
-
-# Restored missing classes
 class ReviewerCreate(BaseModel):
     discord_id: str
     tiktok_handle: Optional[str] = None
@@ -55,6 +50,7 @@ class DiscordUser(BaseModel):
 
 class Submission(BaseModel):
     id: int
+    reviewer_id: int
     track_url: str
     track_title: Optional[str] = None
     archived_url: Optional[str] = None
@@ -64,6 +60,7 @@ class Submission(BaseModel):
     user: User
     bookmarked: bool = False
     spotlighted: bool = False
+    priority_value: int = 0
     model_config = ConfigDict(from_attributes=True)
 
 class ReviewSessionBase(BaseModel):
@@ -81,6 +78,7 @@ class ReviewSession(ReviewSessionBase):
     id: int
     reviewer_id: int
     is_active: bool
+    open_queue_tiers: List[int] = [0, 5, 10, 15, 20, 25, 50]
     submissions: List[Submission] = []
     model_config = ConfigDict(from_attributes=True)
 
@@ -89,3 +87,4 @@ class FullQueueState(BaseModel):
     history: List[Submission]
     bookmarks: List[Submission]
     spotlight: List[Submission]
+    current_track: Optional[Submission] = None

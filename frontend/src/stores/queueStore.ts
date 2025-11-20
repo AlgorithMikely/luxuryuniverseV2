@@ -11,6 +11,7 @@ export interface FullQueueState {
   history: Submission[];
   bookmarks: Submission[];
   spotlight: Submission[];
+  current_track?: Submission | null;
 }
 
 interface QueueState {
@@ -43,14 +44,15 @@ export const useQueueStore = create<QueueState>()(
 
       fetchInitialStateHttp: async (reviewerId) => {
         try {
-          const response = await api.get<FullQueueState>(`/reviewer/${reviewerId}/queue/initial-state`);
+          const response = await api.get<FullQueueState>(`/${reviewerId}/queue/initial-state`);
+          console.log('fetchInitialStateHttp response:', response.data);
           set({
             queue: response.data.queue || [],
             history: response.data.history || [],
             bookmarks: response.data.bookmarks || [],
             spotlight: response.data.spotlight || [],
-            // Set the first track in the queue as the current track
-            currentTrack: response.data.queue?.[0] || null,
+            // Set the current track from the response, or fallback to first in queue if not provided (legacy behavior, though backend now provides it)
+            currentTrack: response.data.current_track || response.data.queue?.[0] || null,
           });
         } catch (error) {
           console.error("Failed to fetch initial state via HTTP:", error);
@@ -75,6 +77,8 @@ export const useQueueStore = create<QueueState>()(
 
         newSocket.on('connect', () => {
           set({ socket: newSocket, socketStatus: 'connected' });
+          console.log(`Connected to socket, joining reviewer room: ${reviewerId}`);
+          newSocket.emit('join_reviewer_room', reviewerId);
         });
 
         newSocket.on('disconnect', () => {
@@ -93,12 +97,21 @@ export const useQueueStore = create<QueueState>()(
             history: state.history || [],
             bookmarks: state.bookmarks || [],
             spotlight: state.spotlight || [],
-            currentTrack: state.queue?.[0] || null,
+            currentTrack: state.current_track || state.queue?.[0] || null,
           });
         });
 
         newSocket.on('queue_updated', (newQueue: Submission[]) => set({ queue: newQueue }));
         newSocket.on('history_updated', (newHistory: Submission[]) => set({ history: newHistory }));
+        newSocket.on('history_updated', (newHistory: Submission[]) => set({ history: newHistory }));
+        newSocket.on('current_track_updated', (track: Submission | null) => {
+          // If we receive a null update (clearing player) but we have a track loaded locally,
+          // ignore it to prevent interrupting the reviewer's preview/playback.
+          if (track === null && get().currentTrack !== null) {
+            return;
+          }
+          set({ currentTrack: track });
+        });
       },
 
       disconnect: () => {
@@ -106,7 +119,15 @@ export const useQueueStore = create<QueueState>()(
         if (socket) {
           socket.disconnect();
         }
-        set({ socket: null, socketStatus: 'disconnected' });
+        set({
+          socket: null,
+          socketStatus: 'disconnected',
+          queue: [],
+          history: [],
+          bookmarks: [],
+          spotlight: [],
+          currentTrack: null
+        });
       },
 
       setCurrentTrack: (track) => set({ currentTrack: track }),
@@ -124,31 +145,47 @@ export const useQueueStore = create<QueueState>()(
         }));
       },
 
-      toggleBookmark: (trackId) => {
+      toggleBookmark: async (trackId) => {
         const { queue, history, bookmarks } = get();
         const allTracks = [...queue, ...history, ...bookmarks];
         const track = allTracks.find((t) => t.id === trackId);
         if (!track) return;
 
+        // Optimistic update
         const isBookmarked = bookmarks.some((b) => b.id === trackId);
         if (isBookmarked) {
           set({ bookmarks: bookmarks.filter((b) => b.id !== trackId) });
         } else {
           set({ bookmarks: [...bookmarks, { ...track, bookmarked: true }] });
         }
+
+        try {
+          await api.post(`/${track.reviewer_id}/queue/${trackId}/bookmark`);
+        } catch (error) {
+          console.error("Failed to toggle bookmark:", error);
+          // Revert on error (could be improved)
+        }
       },
 
-      toggleSpotlight: (trackId) => {
+      toggleSpotlight: async (trackId) => {
         const { queue, history, spotlight } = get();
         const allTracks = [...queue, ...history, ...spotlight];
         const track = allTracks.find((t) => t.id === trackId);
         if (!track) return;
 
+        // Optimistic update
         const isSpotlighted = spotlight.some((s) => s.id === trackId);
         if (isSpotlighted) {
           set({ spotlight: spotlight.filter((s) => s.id !== trackId) });
         } else {
           set({ spotlight: [...spotlight, { ...track, spotlighted: true }] });
+        }
+
+        try {
+          await api.post(`/${track.reviewer_id}/queue/${trackId}/spotlight`);
+        } catch (error) {
+          console.error("Failed to toggle spotlight:", error);
+          // Revert on error
         }
       },
     }),

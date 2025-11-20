@@ -48,7 +48,10 @@ async def callback(code: str, db: AsyncSession = Depends(get_db)):
 
     # Create or update the user in the database
     user = await user_service.get_or_create_user(
-        db, discord_id=discord_user["id"], username=discord_user["username"]
+        db, 
+        discord_id=discord_user["id"], 
+        username=discord_user["username"],
+        avatar=discord_user.get("avatar")
     )
 
     # Determine the user's roles

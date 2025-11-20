@@ -13,17 +13,18 @@ export interface Session {
 interface SessionState {
   activeSession: Session | null;
   isLoading: boolean;
-  fetchActiveSession: () => Promise<void>;
+  fetchActiveSession: (reviewerId?: string) => Promise<void>;
   clearActiveSession: () => void;
 }
 
 export const useSessionStore = create<SessionState>((set) => ({
   activeSession: null,
   isLoading: false,
-  fetchActiveSession: async () => {
+  fetchActiveSession: async (reviewerId?: string) => {
     set({ isLoading: true });
     try {
-      const response = await api.get<Session>('/sessions/active');
+      const url = reviewerId ? `/sessions/active?reviewer_id=${reviewerId}` : '/sessions/active';
+      const response = await api.get<Session>(url);
       set({ activeSession: response.data, isLoading: false });
     } catch (error) {
       console.error('Failed to fetch active session:', error);

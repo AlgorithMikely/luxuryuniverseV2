@@ -24,6 +24,7 @@ async def get_me(
         id=db_user.id,
         discord_id=db_user.discord_id,
         username=db_user.username,
+        avatar=db_user.avatar,
         reviewer_profile=db_user.reviewer_profile,
         roles=token.roles,
         moderated_reviewers=moderated_reviewers,

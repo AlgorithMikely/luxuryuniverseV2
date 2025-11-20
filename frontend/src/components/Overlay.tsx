@@ -1,13 +1,21 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
-import { useQueue } from '../hooks/useQueue';
+import { useQueueStore } from '../stores/queueStore';
+import { useAuthStore } from '../stores/authStore';
 import QueueList from './QueueList';
 import NowPlayingCard from './NowPlayingCard';
 
 const Overlay: React.FC = () => {
     const { reviewerId } = useParams<{ reviewerId: string }>();
     const id = parseInt(reviewerId || '0', 10);
-    const { queue, history } = useQueue(id);
+    const { queue, history, connect } = useQueueStore();
+    const { token } = useAuthStore();
+
+    React.useEffect(() => {
+        if (id && token) {
+            connect(token, id.toString());
+        }
+    }, [id, token, connect]);
 
     // Find the currently playing track (first in history if status is played, or handled by backend logic)
     // Based on queue service, 'played' items are in history. The most recent one is likely the "now playing" one if we consider the top of history as current.

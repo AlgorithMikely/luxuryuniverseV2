@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
-import { UserProfile } from '../stores/authStore';
+import { UserProfile } from '../types';
 
 // Define a type for the cached Discord users
 interface DiscordUser {

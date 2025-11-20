@@ -1,5 +1,5 @@
 import React from 'react';
-import { Submission } from '../hooks/useQueue';
+import { Submission } from '../types';
 
 interface NowPlayingCardProps {
     submission: Submission | null;

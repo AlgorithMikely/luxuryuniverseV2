@@ -32,31 +32,55 @@ async def connect(sid, environ, auth):
         await sio.enter_room(sid, user_room)
         logging.info(f"Added {sid} to room {user_room}")
 
-        # If the user is a reviewer, add them to their reviewer room and send initial state
-        reviewer = await queue_service.get_reviewer_by_user_id(db, user.id)
-        if reviewer:
-            reviewer_room = f"reviewer_room_{reviewer.id}"
-            await sio.enter_room(sid, reviewer_room)
-            logging.info(f"Added {sid} to room {reviewer_room}")
+        # Note: We no longer automatically join the reviewer room here.
+        # The client must explicitly emit 'join_reviewer_room' with the desired reviewer ID.
 
-            # Fetch initial queue and history
-            pending_queue = await queue_service.get_pending_queue(db, reviewer.id)
-            played_history = await queue_service.get_played_queue(db, reviewer.id)
-
-            # Serialize data
-            queue_schemas = [schemas.Submission.model_validate(s) for s in pending_queue]
-            history_schemas = [schemas.Submission.model_validate(s) for s in played_history]
-
-            # Emit the initial state to the connecting client
-            initial_state = {
-                "queue": [s.model_dump() for s in queue_schemas],
-                "history": [s.model_dump() for s in history_schemas],
-            }
-            await sio.emit("initial_state", initial_state, room=sid)
-            logging.info(f"Emitted 'initial_state' to {sid}")
+    return True
 
     return True
 
 @sio.on("disconnect")
 async def disconnect(sid):
     logging.info(f"Client disconnected: {sid}")
+
+@sio.on("join_reviewer_room")
+async def join_reviewer_room(sid, reviewer_id):
+    """
+    Allows a client to join a specific reviewer's room to receive updates.
+    Also sends the initial state for that reviewer.
+    """
+    try:
+        reviewer_id = int(reviewer_id)
+    except ValueError:
+        logging.error(f"Invalid reviewer_id: {reviewer_id}")
+        return
+
+    room = f"reviewer_room_{reviewer_id}"
+    await sio.enter_room(sid, room)
+    logging.info(f"Client {sid} joined room {room}")
+
+    async with AsyncSessionLocal() as db:
+        # Fetch initial queue and history for the requested reviewer
+        pending_queue = await queue_service.get_pending_queue(db, reviewer_id)
+        played_history = await queue_service.get_played_queue(db, reviewer_id)
+        bookmarks = await queue_service.get_bookmarked_submissions(db, reviewer_id)
+        spotlight = await queue_service.get_spotlighted_submissions(db, reviewer_id)
+        current_track = await queue_service.get_current_track(db, reviewer_id)
+
+        # Serialize data
+        queue_schemas = [schemas.Submission.model_validate(s) for s in pending_queue]
+        history_schemas = [schemas.Submission.model_validate(s) for s in played_history]
+        bookmarks_schemas = [schemas.Submission.model_validate(s) for s in bookmarks]
+        spotlight_schemas = [schemas.Submission.model_validate(s) for s in spotlight]
+        current_track_schema = schemas.Submission.model_validate(current_track) if current_track else None
+
+        # Emit the initial state to the connecting client
+        initial_state = {
+            "queue": [s.model_dump() for s in queue_schemas],
+            "history": [s.model_dump() for s in history_schemas],
+            "bookmarks": [s.model_dump() for s in bookmarks_schemas],
+            "spotlight": [s.model_dump() for s in spotlight_schemas],
+            "current_track": current_track_schema.model_dump() if current_track_schema else None,
+        }
+        await sio.emit("initial_state", initial_state, room=sid)
+        logging.info(f"Emitted 'initial_state' for reviewer {reviewer_id} to {sid}")

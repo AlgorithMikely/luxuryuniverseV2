@@ -14,20 +14,27 @@ async def get_user_by_discord_id(db: AsyncSession, discord_id: str) -> models.Us
     )
     return result.scalars().first()
 
-async def get_or_create_user(db: AsyncSession, discord_id: str, username: str) -> models.User:
+async def get_or_create_user(db: AsyncSession, discord_id: str, username: str, avatar: str | None = None) -> models.User:
     """
     Retrieves a user by their Discord ID, or creates a new one if they don't exist.
     """
     user = await get_user_by_discord_id(db, discord_id)
     if user:
-        # Update username if it has changed
+        # Update username or avatar if changed
+        changed = False
         if user.username != username:
             user.username = username
+            changed = True
+        if user.avatar != avatar:
+            user.avatar = avatar
+            changed = True
+        
+        if changed:
             await db.commit()
             await db.refresh(user)
         return user
 
-    new_user = models.User(discord_id=discord_id, username=username)
+    new_user = models.User(discord_id=discord_id, username=username, avatar=avatar)
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)
@@ -48,13 +55,11 @@ async def get_user_with_reviewer_profile(db: AsyncSession, discord_id: str) -> m
     result = await db.execute(select(models.User).filter(models.User.discord_id == discord_id))
     return result.scalars().first()
 
-async def get_all_reviewers(db: AsyncSession) -> list[models.User]:
-    """Retrieves all users with a reviewer profile."""
-    # FIXED: Added selectinload to eagerly load the reviewer_profile relationship
+async def get_all_reviewers(db: AsyncSession) -> list[models.Reviewer]:
+    """Retrieves all reviewers with their associated user data."""
     result = await db.execute(
-        select(models.User)
-        .options(selectinload(models.User.reviewer_profile))
-        .join(models.Reviewer)
+        select(models.Reviewer)
+        .options(joinedload(models.Reviewer.user))
     )
     return result.scalars().all()
 

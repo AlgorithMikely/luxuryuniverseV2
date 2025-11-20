@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import api from "../services/api";
 import { useAuthStore } from "../stores/authStore";
 import toast from "react-hot-toast";
@@ -54,6 +55,30 @@ const UserHubPage = () => {
       <div className="p-4 sm:p-8">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-3xl font-bold mb-4">Your Hub</h1>
+
+          {/* Managed Queues Section */}
+          {user?.moderated_reviewers && user.moderated_reviewers.length > 0 && (
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold mb-4 border-b border-gray-700 pb-2">Managed Queues</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {user.moderated_reviewers.map((reviewer) => (
+                  <div key={reviewer.id} className="bg-gray-800 p-4 rounded-lg shadow hover:bg-gray-700 transition-colors">
+                    <h3 className="text-xl font-semibold mb-2">{reviewer.tiktok_handle || reviewer.username || `Reviewer #${reviewer.id}`}</h3>
+                    <p className="text-gray-400 text-sm mb-4">
+                      Status: <span className={reviewer.queue_status === 'open' ? 'text-green-400' : 'text-red-400'}>{reviewer.queue_status}</span>
+                    </p>
+                    <Link
+                      to={`/reviewer/${reviewer.id}`}
+                      className="block w-full text-center bg-purple-600 hover:bg-purple-700 text-white py-2 rounded font-medium"
+                    >
+                      Go to Dashboard
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div>
             <h2 className="text-2xl font-bold mb-2">Your Submissions</h2>
             {submissions.length > 0 ? (

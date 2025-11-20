@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 from sqlalchemy.ext.asyncio import AsyncSession
 import schemas
@@ -40,12 +40,17 @@ async def check_is_reviewer(
 async def get_queue(reviewer_id: int, db: AsyncSession = Depends(get_db)):
     return await queue_service.get_pending_queue(db, reviewer_id=reviewer_id)
 
-@router.post("/{reviewer_id}/queue/next", response_model=schemas.Submission, dependencies=[Depends(check_is_reviewer)])
+@router.post("/{reviewer_id}/queue/next", response_model=Optional[schemas.Submission], dependencies=[Depends(check_is_reviewer)])
 async def next_track(reviewer_id: int, db: AsyncSession = Depends(get_db)):
     submission = await queue_service.advance_queue(db, reviewer_id=reviewer_id)
     if not submission:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Queue is empty")
+        return None
     return submission
+
+@router.post("/{reviewer_id}/queue/return-active", dependencies=[Depends(check_is_reviewer)])
+async def return_active(reviewer_id: int, db: AsyncSession = Depends(get_db)):
+    await queue_service.return_active_to_queue(db, reviewer_id=reviewer_id)
+    return {"status": "success"}
 
 @router.get("/{reviewer_id}/queue/played", response_model=List[schemas.Submission], dependencies=[Depends(check_is_reviewer)])
 async def get_played_queue(reviewer_id: int, db: AsyncSession = Depends(get_db)):
@@ -54,6 +59,29 @@ async def get_played_queue(reviewer_id: int, db: AsyncSession = Depends(get_db))
 @router.post("/{reviewer_id}/queue/review/{submission_id}", response_model=schemas.Submission, dependencies=[Depends(check_is_reviewer)])
 async def review_submission(submission_id: int, review: schemas.ReviewCreate, db: AsyncSession = Depends(get_db)):
     return await queue_service.review_submission(db, submission_id, review)
+
+@router.post("/{reviewer_id}/queue/{submission_id}/bookmark", response_model=schemas.Submission, dependencies=[Depends(check_is_reviewer)])
+async def toggle_bookmark(submission_id: int, db: AsyncSession = Depends(get_db)):
+    submission = await queue_service.toggle_bookmark(db, submission_id)
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    return submission
+
+@router.post("/{reviewer_id}/queue/{submission_id}/spotlight", response_model=schemas.Submission, dependencies=[Depends(check_is_reviewer)])
+async def toggle_spotlight(submission_id: int, db: AsyncSession = Depends(get_db)):
+    submission = await queue_service.toggle_spotlight(db, submission_id)
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    return submission
+
+@router.post("/{reviewer_id}/queue/{submission_id}/priority", response_model=schemas.Submission, dependencies=[Depends(check_is_reviewer)])
+async def update_priority(submission_id: int, priority_value: int, db: AsyncSession = Depends(get_db)):
+    submission = await queue_service.update_priority(db, submission_id, priority_value)
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    return submission
 
 @router.get("/{reviewer_id}/queue/initial-state", response_model=schemas.FullQueueState, dependencies=[Depends(check_is_reviewer)])
 async def get_initial_state(reviewer_id: int, db: AsyncSession = Depends(get_db)):
