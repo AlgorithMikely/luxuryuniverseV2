@@ -37,6 +37,7 @@ class UserProfile(User):
 class ReviewerCreate(BaseModel):
     discord_id: str
     tiktok_handle: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
 
 class ReviewerSettingsUpdate(BaseModel):
     tiktok_handle: Optional[str] = None
