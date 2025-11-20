@@ -8,6 +8,7 @@ import DashboardRedirect from "./pages/DashboardPage";
 import ReviewerDashboard from "./pages/ReviewerDashboard";
 import UserHubPage from "./pages/UserHubPage";
 import AdminPage from "./pages/AdminPage";
+import ReviewerSettingsPage from "./pages/ReviewerSettingsPage";
 import ArchivedSessionPage from './pages/ArchivedSessionPage';
 import ErrorPage from "./pages/ErrorPage";
 import Navbar from './components/Navbar';
@@ -53,6 +54,7 @@ function App() {
             <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
               <Route path="/dashboard" element={<DashboardRedirect />} />
               <Route path="/reviewer/:reviewerId" element={<ReviewerDashboard />} />
+              <Route path="/settings/reviewer" element={<ReviewerSettingsPage />} />
               <Route path="/hub" element={<UserHubPage />} />
               <Route path="/session/:sessionId" element={<ArchivedSessionPage />} />
               <Route path="/admin" element={<ProtectedRoute adminOnly={true}><AdminPage /></ProtectedRoute>} />

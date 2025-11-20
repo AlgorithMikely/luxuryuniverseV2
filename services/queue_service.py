@@ -114,7 +114,7 @@ async def get_reviewer_by_user_id(db: AsyncSession, user_id: int) -> Optional[mo
         .options(joinedload(models.Reviewer.user))
         .filter(models.Reviewer.user_id == user_id)
     )
-    return result.scalars().first()
+    return _merge_reviewer_config(result.scalars().first())
 
 async def get_reviewer_by_channel_id(db: AsyncSession, channel_id: str) -> Optional[models.Reviewer]:
     result = await db.execute(
@@ -122,7 +122,81 @@ async def get_reviewer_by_channel_id(db: AsyncSession, channel_id: str) -> Optio
         .options(joinedload(models.Reviewer.user))
         .filter(models.Reviewer.discord_channel_id == str(channel_id))
     )
-    return result.scalars().first()
+    return _merge_reviewer_config(result.scalars().first())
+
+def _merge_reviewer_config(reviewer: Optional[models.Reviewer]) -> Optional[models.Reviewer]:
+    """
+    Merges the reviewer's configuration with default values.
+    Ensures that even if configuration is None, defaults are provided for critical settings.
+    """
+    if not reviewer:
+        return None
+
+    default_tiers = [
+        {"value": 0, "label": "Free", "color": "gray"},
+        {"value": 5, "label": "$5 Tier", "color": "green"},
+        {"value": 10, "label": "$10 Tier", "color": "blue"},
+        {"value": 15, "label": "$15 Tier", "color": "purple"},
+        {"value": 20, "label": "$20 Tier", "color": "yellow"},
+        {"value": 25, "label": "$25 Tier", "color": "red"},
+        {"value": 50, "label": "50+ Tier", "color": "pink"},
+    ]
+
+    if not reviewer.configuration:
+        reviewer.configuration = {"priority_tiers": default_tiers}
+    elif "priority_tiers" not in reviewer.configuration:
+         # If config exists but no tiers, merge defaults
+        reviewer.configuration["priority_tiers"] = default_tiers
+
+    # Ensure the configuration is a valid dict (though SQLAlchemy handles JSON decoding)
+    if isinstance(reviewer.configuration, str):
+        import json
+        try:
+            reviewer.configuration = json.loads(reviewer.configuration)
+        except json.JSONDecodeError:
+             reviewer.configuration = {"priority_tiers": default_tiers}
+
+    return reviewer
+
+async def update_reviewer_settings(db: AsyncSession, reviewer_id: int, settings_update: schemas.ReviewerSettingsUpdate) -> Optional[models.Reviewer]:
+    result = await db.execute(select(models.Reviewer).filter(models.Reviewer.id == reviewer_id))
+    reviewer = result.scalars().first()
+
+    if not reviewer:
+        return None
+
+    update_data = settings_update.model_dump(exclude_unset=True)
+
+    if "tiktok_handle" in update_data:
+        reviewer.tiktok_handle = update_data["tiktok_handle"]
+    if "discord_channel_id" in update_data:
+        reviewer.discord_channel_id = update_data["discord_channel_id"]
+    if "configuration" in update_data and update_data["configuration"] is not None:
+        # If updating configuration, we should merge or replace.
+        # Since the input is a full configuration object, we can replace the specific keys.
+        # However, we need to convert Pydantic models to dicts for JSON storage
+        new_config = update_data["configuration"]
+        # Pydantic v2 model_dump handles recursive dict conversion
+        # If reviewer.configuration is None, init it
+        current_config = reviewer.configuration or {}
+        if isinstance(current_config, str): # Should be dict if using JSON type but safe check
+             import json
+             try:
+                 current_config = json.loads(current_config)
+             except:
+                 current_config = {}
+
+        # Update priority tiers if present
+        if "priority_tiers" in new_config:
+             current_config["priority_tiers"] = new_config["priority_tiers"]
+
+        reviewer.configuration = current_config
+
+    await db.commit()
+    await db.refresh(reviewer)
+
+    # Re-fetch with user to return full object
+    return await get_reviewer_by_user_id(db, reviewer.user_id)
 
 async def get_submissions_by_user(db: AsyncSession, user_id: int) -> list[models.Submission]:
     result = await db.execute(

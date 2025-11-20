@@ -100,6 +100,19 @@ const Navbar = () => {
                   </div>
                 )}
 
+                {/* Reviewer Settings Link */}
+                {user?.reviewer_profile && (
+                  <div className="py-1 border-b border-gray-800">
+                    <Link
+                      to="/settings/reviewer"
+                      className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white"
+                      onClick={() => setIsProfileOpen(false)}
+                    >
+                      Reviewer Settings
+                    </Link>
+                  </div>
+                )}
+
                 <div className="py-1">
                   <button
                     onClick={handleLogout}
