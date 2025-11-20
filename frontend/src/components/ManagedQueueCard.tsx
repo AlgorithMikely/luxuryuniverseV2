@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import QueueStatCard from './QueueStatCard';
 import api from '../services/api';
 import { toast } from 'react-hot-toast';
@@ -59,6 +60,27 @@ const ManagedQueueCard: React.FC<ManagedQueueCardProps> = ({ reviewer }) => {
             title={reviewerName}
             dashboardLink={dashboardLink}
         />
+    return (
+        <div className="space-y-2">
+            <div className="flex items-center justify-between px-1">
+                <h3 className="text-lg font-bold text-gray-300">
+                    {reviewer.tiktok_handle || reviewer.username || `Reviewer #${reviewer.id}`}
+                </h3>
+                <Link
+                    to={`/reviewer/${reviewer.id}`}
+                    className="text-xs text-purple-400 hover:text-purple-300"
+                >
+                    Visit Dashboard &rarr;
+                </Link>
+            </div>
+            <QueueStatCard
+                queueLength={stats.length}
+                avgWaitTime={stats.avg_wait_time}
+                status={stats.status as 'open'|'closed'}
+                onToggleStatus={handleToggleStatus}
+                isReviewer={true}
+            />
+        </div>
     );
 };
 

@@ -15,6 +15,11 @@ interface QueueStatCardProps {
 const QueueStatCard: React.FC<QueueStatCardProps> = ({ queueLength, avgWaitTime, status, onToggleStatus, isReviewer, title, dashboardLink }) => {
   return (
     <div className="bg-gray-800/50 backdrop-blur-md border border-gray-700 rounded-xl p-6 shadow-lg text-white relative h-full flex flex-col justify-between">
+}
+
+const QueueStatCard: React.FC<QueueStatCardProps> = ({ queueLength, avgWaitTime, status, onToggleStatus, isReviewer }) => {
+  return (
+    <div className="bg-gray-800/50 backdrop-blur-md border border-gray-700 rounded-xl p-6 shadow-lg text-white relative">
       {status === 'open' && (
          <span className="absolute top-4 right-4 flex h-3 w-3">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
@@ -57,6 +62,22 @@ const QueueStatCard: React.FC<QueueStatCardProps> = ({ queueLength, avgWaitTime,
                     <div className="flex flex-col items-end text-red-400">
                         <ToggleLeft className="w-8 h-8" />
                          <span className="text-[10px] font-bold uppercase mt-0.5">Closed</span>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-bold flex items-center">
+            <ListMusic className="w-5 h-5 mr-2 text-blue-400" />
+            Queue Status
+        </h3>
+        {isReviewer && onToggleStatus && (
+            <button onClick={onToggleStatus} className="focus:outline-none transition-transform active:scale-95">
+                {status === 'open' ? (
+                    <div className="flex items-center text-green-400">
+                        <span className="mr-2 text-sm font-medium">Open</span>
+                        <ToggleRight className="w-8 h-8" />
+                    </div>
+                ) : (
+                    <div className="flex items-center text-red-400">
+                        <span className="mr-2 text-sm font-medium">Closed</span>
+                        <ToggleLeft className="w-8 h-8" />
                     </div>
                 )}
             </button>
@@ -69,6 +90,7 @@ const QueueStatCard: React.FC<QueueStatCardProps> = ({ queueLength, avgWaitTime,
       </div>
 
       <div className="grid grid-cols-2 gap-4 mt-auto">
+      <div className="grid grid-cols-2 gap-4">
         <div className="bg-gray-900/50 p-3 rounded-lg">
             <p className="text-gray-400 text-xs uppercase">Waiting</p>
             <p className="text-2xl font-bold text-white">{queueLength}</p>

@@ -346,6 +346,7 @@ async def get_initial_state(db: AsyncSession, reviewer_id: int) -> schemas.FullQ
 
 async def get_reviewer_stats(db: AsyncSession, reviewer_id: int) -> schemas.QueueStats:
     queue = await get_pending_queue(db, reviewer_id)
+    reviewer = await get_reviewer_by_user_id(db, reviewer_id) # Wait, get_reviewer_by_user_id takes user_id, not reviewer_id
 
     # We need to get reviewer by ID to check status
     result = await db.execute(select(models.Reviewer).filter(models.Reviewer.id == reviewer_id))
