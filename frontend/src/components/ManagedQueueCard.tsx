@@ -47,6 +47,19 @@ const ManagedQueueCard: React.FC<ManagedQueueCardProps> = ({ reviewer }) => {
         }
     };
 
+    const reviewerName = reviewer.tiktok_handle || reviewer.username || `Reviewer #${reviewer.id}`;
+    const dashboardLink = `/reviewer/${reviewer.id}`;
+
+    return (
+        <QueueStatCard
+            queueLength={stats.length}
+            avgWaitTime={stats.avg_wait_time}
+            status={stats.status as 'open'|'closed'}
+            onToggleStatus={handleToggleStatus}
+            isReviewer={true}
+            title={reviewerName}
+            dashboardLink={dashboardLink}
+        />
     return (
         <div className="space-y-2">
             <div className="flex items-center justify-between px-1">

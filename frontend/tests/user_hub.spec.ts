@@ -119,6 +119,9 @@ test('UserHubPage visual and functional verification', async ({ page }) => {
   await expect(page.getByText('Your Balance')).toBeVisible();
 
   // Verify Queue Stats (fetched via API)
+  // "Queue Status" title is replaced by "@testreviewer"
+  await expect(page.getByText('@testreviewer')).toBeVisible();
+
   await expect(page.getByText('Queue Status')).toBeVisible();
   // "Open" should appear.
   await expect(page.getByText('Open').first()).toBeVisible();
