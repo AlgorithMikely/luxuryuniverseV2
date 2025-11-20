@@ -7,7 +7,7 @@ import { Save, Trash2, Plus, RotateCcw } from 'lucide-react';
 
 const ReviewerSettingsPage: React.FC = () => {
     const navigate = useNavigate();
-    const { user, fetchUser } = useAuthStore();
+    const { user, checkAuth } = useAuthStore();
     const [reviewerProfile, setReviewerProfile] = useState<ReviewerProfile | null>(null);
 
     // Form States
@@ -93,7 +93,7 @@ const ReviewerSettingsPage: React.FC = () => {
 
             await api.patch(`/${reviewerProfile.id}/settings`, updateData);
             setMessage({ text: "Settings saved successfully!", type: 'success' });
-            await fetchUser(); // Refresh global user state
+            await checkAuth(); // Refresh global user state
         } catch (err) {
             console.error("Failed to save settings", err);
             setMessage({ text: "Failed to save settings.", type: 'error' });
