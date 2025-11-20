@@ -12,7 +12,10 @@ async def get_user_by_discord_id(db: AsyncSession, discord_id: str) -> models.Us
         .options(joinedload(models.User.reviewer_profile))
         .filter(models.User.discord_id == discord_id)
     )
-    return result.scalars().first()
+    user = result.scalars().first()
+    if user:
+        user.level = calculate_level(user.xp)
+    return user
 
 async def get_or_create_user(db: AsyncSession, discord_id: str, username: str, avatar: str | None = None) -> models.User:
     """
@@ -39,6 +42,22 @@ async def get_or_create_user(db: AsyncSession, discord_id: str, username: str, a
     await db.commit()
     # Use get_user_by_discord_id to reload with relationships eager loaded
     return await get_user_by_discord_id(db, discord_id)
+
+async def add_xp(db: AsyncSession, user_id: int, amount: int) -> models.User:
+    """Adds XP to a user and calculates their new level."""
+    result = await db.execute(select(models.User).filter(models.User.id == user_id))
+    user = result.scalars().first()
+    if user:
+        user.xp += amount
+        await db.commit()
+        await db.refresh(user)
+    return user
+
+def calculate_level(xp: int) -> int:
+    """Calculates level based on XP. Formula: Level = floor(sqrt(XP / 10))"""
+    import math
+    if xp < 0: return 0
+    return math.floor(math.sqrt(xp / 10))
 
 async def get_user_by_username(db: AsyncSession, username: str) -> models.User | None:
     """Retrieves a user by their username."""

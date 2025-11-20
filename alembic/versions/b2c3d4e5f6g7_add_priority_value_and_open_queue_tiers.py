@@ -27,7 +27,11 @@ def upgrade() -> None:
     op.execute("UPDATE review_sessions SET open_queue_tiers = '[0, 5, 10, 15, 20, 25]' WHERE open_queue_tiers IS NULL")
     
     # Set not null constraint
-    op.alter_column('review_sessions', 'open_queue_tiers', nullable=False, server_default='[0, 5, 10, 15, 20, 25]')
+    if op.get_context().dialect.name != 'sqlite':
+        op.alter_column('review_sessions', 'open_queue_tiers', nullable=False, server_default='[0, 5, 10, 15, 20, 25]')
+    else:
+        with op.batch_alter_table('review_sessions') as batch_op:
+            batch_op.alter_column('open_queue_tiers', nullable=False, server_default='[0, 5, 10, 15, 20, 25]')
 
 
 def downgrade() -> None:

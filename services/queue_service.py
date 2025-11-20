@@ -5,6 +5,7 @@ import models
 import schemas
 from typing import Optional
 from services import broadcast as broadcast_service
+from services import user_service
 import datetime
 
 async def create_submission(db: AsyncSession, reviewer_id: int, user_id: int, track_url: str, track_title: str, archived_url: str, session_id: Optional[int] = None) -> models.Submission:
@@ -19,6 +20,10 @@ async def create_submission(db: AsyncSession, reviewer_id: int, user_id: int, tr
         priority_value=0 # Default to 0 (Free)
     )
     db.add(new_submission)
+
+    # Award XP for submission
+    await user_service.add_xp(db, user_id, 10) # Award 10 XP per submission
+
     await db.commit()
 
     # FIXED: Re-fetch the submission to eager-load the 'user' relationship for the API response
@@ -316,12 +321,20 @@ async def get_current_track(db: AsyncSession, reviewer_id: int) -> Optional[mode
     )
     return result.scalars().first()
 
+AVERAGE_REVIEW_TIME_MINUTES = 4
+
 async def get_initial_state(db: AsyncSession, reviewer_id: int) -> schemas.FullQueueState:
     queue = await get_pending_queue(db, reviewer_id)
     history = await get_played_queue(db, reviewer_id)
     bookmarks = await get_bookmarked_submissions(db, reviewer_id)
     spotlight = await get_spotlighted_submissions(db, reviewer_id)
     current_track = await get_current_track(db, reviewer_id)
+
+    # Logic for wait time is implicitly handled by frontend or can be added to a Stats object
+    # But since FullQueueState structure is fixed in schemas, we might need to add stats there if needed
+    # The user asked for "Live Stats" on the card. Frontend can calculate it from queue.length * 4.
+    # But let's make sure we export the constant or handle it.
+    # For now, frontend calculation is sufficient given the schema.
 
     return schemas.FullQueueState(
         queue=[schemas.Submission.model_validate(s) for s in queue],
@@ -330,6 +343,67 @@ async def get_initial_state(db: AsyncSession, reviewer_id: int) -> schemas.FullQ
         spotlight=[schemas.Submission.model_validate(s) for s in spotlight],
         current_track=schemas.Submission.model_validate(current_track) if current_track else None,
     )
+
+async def get_reviewer_stats(db: AsyncSession, reviewer_id: int) -> schemas.QueueStats:
+    queue = await get_pending_queue(db, reviewer_id)
+
+    # We need to get reviewer by ID to check status
+    result = await db.execute(select(models.Reviewer).filter(models.Reviewer.id == reviewer_id))
+    reviewer_obj = result.scalars().first()
+    status = reviewer_obj.queue_status if reviewer_obj else "closed"
+
+    return schemas.QueueStats(
+        length=len(queue),
+        avg_wait_time=len(queue) * AVERAGE_REVIEW_TIME_MINUTES,
+        status=status
+    )
+
+async def update_submission_details(db: AsyncSession, submission_id: int, update_data: schemas.SubmissionUpdate) -> models.Submission:
+    result = await db.execute(
+        select(models.Submission)
+        .options(joinedload(models.Submission.user))
+        .filter(models.Submission.id == submission_id)
+    )
+    submission = result.scalars().first()
+    if not submission:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    # Update submission fields
+    if update_data.track_title is not None:
+        submission.track_title = update_data.track_title
+    if update_data.start_time is not None:
+        submission.start_time = update_data.start_time
+    if update_data.end_time is not None:
+        submission.end_time = update_data.end_time
+    if update_data.genre is not None:
+        submission.genre = update_data.genre
+    if update_data.tags is not None:
+        submission.tags = update_data.tags
+
+    # Update User Profile fields if provided
+    if update_data.tiktok_handle is not None:
+        # Update the user's tiktok handle
+        # We can access submission.user directly
+        submission.user.tiktok_username = update_data.tiktok_handle
+
+    await db.commit()
+    await db.refresh(submission)
+
+    # Emit queue update because details changed
+    # We need to know if it is in pending queue or history to emit to right channel?
+    # Actually, simplest is to emit to both or just check status.
+    # If pending, emit queue update.
+    if submission.status == 'pending':
+        new_queue = await get_pending_queue(db, submission.reviewer_id)
+        queue_schemas = [schemas.Submission.model_validate(s) for s in new_queue]
+        await broadcast_service.emit_queue_update(submission.reviewer_id, [s.model_dump() for s in queue_schemas])
+    elif submission.status in ['played', 'reviewed']:
+        # If history, emit history update?
+        # Maybe not strictly necessary for editing history items, but good for consistency.
+        pass
+
+    return submission
 
 async def review_submission(db: AsyncSession, submission_id: int, review: schemas.ReviewCreate) -> models.Submission:
     # FIXED: Load user
