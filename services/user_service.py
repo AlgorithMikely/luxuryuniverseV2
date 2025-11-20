@@ -55,11 +55,12 @@ async def get_user_with_reviewer_profile(db: AsyncSession, discord_id: str) -> m
     result = await db.execute(select(models.User).filter(models.User.discord_id == discord_id))
     return result.scalars().first()
 
-async def get_all_reviewers(db: AsyncSession) -> list[models.Reviewer]:
-    """Retrieves all reviewers with their associated user data."""
+async def get_all_reviewers(db: AsyncSession) -> list[models.User]:
+    """Retrieves all users who have a reviewer profile."""
     result = await db.execute(
-        select(models.Reviewer)
-        .options(joinedload(models.Reviewer.user))
+        select(models.User)
+        .join(models.Reviewer)
+        .options(joinedload(models.User.reviewer_profile))
     )
     return result.scalars().all()
 
