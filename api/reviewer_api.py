@@ -128,3 +128,14 @@ async def update_reviewer_settings(reviewer_id: int, settings: schemas.ReviewerS
     if not updated_reviewer:
         raise HTTPException(status_code=404, detail="Reviewer not found")
     return updated_reviewer
+
+@router.get("/{reviewer_id}/stats", response_model=schemas.QueueStats, dependencies=[Depends(check_is_reviewer)])
+async def get_reviewer_stats(reviewer_id: int, db: AsyncSession = Depends(get_db)):
+    return await queue_service.get_reviewer_stats(db, reviewer_id)
+
+@router.post("/{reviewer_id}/queue/status", response_model=schemas.QueueStats, dependencies=[Depends(check_is_reviewer)])
+async def set_queue_status(reviewer_id: int, status_update: schemas.QueueStatusUpdate, db: AsyncSession = Depends(get_db)):
+    # Update the status
+    await queue_service.set_queue_status(db, reviewer_id, status_update.status)
+    # Return updated stats
+    return await queue_service.get_reviewer_stats(db, reviewer_id)

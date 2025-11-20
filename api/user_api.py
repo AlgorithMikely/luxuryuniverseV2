@@ -46,3 +46,26 @@ async def get_my_submissions(
     db: AsyncSession = Depends(get_db),
 ):
     return await queue_service.get_submissions_by_user(db, user_id=current_user.id)
+
+@router.patch("/submissions/{submission_id}", response_model=schemas.Submission)
+async def update_submission(
+    submission_id: int,
+    submission_update: schemas.SubmissionUpdate,
+    current_user: models.User = Depends(security.get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    # Verify ownership
+    from sqlalchemy import select
+    result = await db.execute(select(models.Submission).filter(models.Submission.id == submission_id))
+    submission = result.scalars().first()
+
+    if not submission:
+         from fastapi import HTTPException
+         raise HTTPException(status_code=404, detail="Submission not found")
+
+    if submission.user_id != current_user.id:
+         from fastapi import HTTPException
+         raise HTTPException(status_code=403, detail="Not authorized to edit this submission")
+
+    updated_submission = await queue_service.update_submission_details(db, submission_id, submission_update)
+    return updated_submission

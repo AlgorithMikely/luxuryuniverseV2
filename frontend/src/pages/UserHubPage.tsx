@@ -1,101 +1,126 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../services/api";
 import { useAuthStore } from "../stores/authStore";
 import toast from "react-hot-toast";
-
-interface Submission {
-  track_url: string;
-  status: string;
-}
-
-interface UserSubmissionsResponse {
-  submissions: Submission[];
-}
+import WalletCard from "../components/WalletCard";
+import ManagedQueueCard from "../components/ManagedQueueCard";
+import SubmissionItem from "../components/SubmissionItem";
+import EditSubmissionDrawer from "../components/EditSubmissionDrawer";
+import { Submission } from "../types";
 
 const UserHubPage = () => {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const { user } = useAuthStore();
+  const [editingSubmission, setEditingSubmission] = useState<Submission | null>(null);
+  const { user, checkAuth } = useAuthStore();
+
+  const fetchSubmissions = async () => {
+    setIsLoading(true);
+    try {
+      const response = await api.get<Submission[]>("/user/me/submissions");
+      if (Array.isArray(response.data)) {
+        setSubmissions(response.data);
+      } else {
+        setSubmissions([]);
+      }
+    } catch (error) {
+      console.error("Failed to fetch submissions:", error);
+      toast.error("Could not load your submissions.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (user) {
-      const fetchSubmissions = async () => {
-        setIsLoading(true);
-        try {
-          const response = await api.get<Submission[]>("/user/me/submissions");
-          if (Array.isArray(response.data)) {
-            setSubmissions(response.data);
-          } else if (response.data && Array.isArray((response.data as any).submissions)) {
-            // Fallback for previous structure if needed
-            setSubmissions((response.data as any).submissions);
-          } else {
-            console.error("Submissions data is not in the expected format:", response.data);
-            setSubmissions([]);
-          }
-        } catch (error) {
-          console.error("Failed to fetch submissions:", error);
-          toast.error("Could not load your submissions. Please try again later.");
-        } finally {
-          setIsLoading(false);
-        }
-      };
       fetchSubmissions();
-    } else {
-      setIsLoading(false);
     }
   }, [user]);
 
-  if (isLoading) {
-    return <div className="text-white text-center p-8">Loading your hub...</div>;
-  }
+  const handleEdit = (submission: Submission) => {
+    setEditingSubmission(submission);
+  };
+
+  const handleSaveSubmission = async (updatedSubmission: Submission) => {
+      // Update local state
+      setSubmissions(prev => prev.map(s => s.id === updatedSubmission.id ? updatedSubmission : s));
+      // Refresh user profile to get updated social handles if changed
+      await checkAuth();
+  };
+
+  if (!user) return null;
 
   return (
-    <div className="bg-gray-900 text-white min-h-screen">
-      <div className="p-4 sm:p-8">
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-3xl font-bold mb-4">Your Hub</h1>
+    <div className="bg-gray-900 text-white min-h-screen pb-20">
+      <div className="p-4 sm:p-8 max-w-7xl mx-auto space-y-8">
 
-          {/* Managed Queues Section */}
-          {user?.moderated_reviewers && user.moderated_reviewers.length > 0 && (
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold mb-4 border-b border-gray-700 pb-2">Managed Queues</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {user.moderated_reviewers.map((reviewer) => (
-                  <div key={reviewer.id} className="bg-gray-800 p-4 rounded-lg shadow hover:bg-gray-700 transition-colors">
-                    <h3 className="text-xl font-semibold mb-2">{reviewer.tiktok_handle || reviewer.username || `Reviewer #${reviewer.id}`}</h3>
-                    <p className="text-gray-400 text-sm mb-4">
-                      Status: <span className={reviewer.queue_status === 'open' ? 'text-green-400' : 'text-red-400'}>{reviewer.queue_status}</span>
-                    </p>
-                    <Link
-                      to={`/reviewer/${reviewer.id}`}
-                      className="block w-full text-center bg-purple-600 hover:bg-purple-700 text-white py-2 rounded font-medium"
-                    >
-                      Go to Dashboard
-                    </Link>
-                  </div>
-                ))}
-              </div>
+        {/* Top Row: Wallet & Managed Queues */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            {/* Wallet Card (Left, 4 columns) */}
+            <div className="lg:col-span-4">
+                <WalletCard
+                    balance={0}
+                    xp={user.xp || 0}
+                    level={user.level || 0}
+                />
             </div>
-          )}
 
-          <div>
-            <h2 className="text-2xl font-bold mb-2">Your Submissions</h2>
-            {submissions.length > 0 ? (
-              <ul className="space-y-2">
-                {submissions.map((item, index) => (
-                  <li key={index} className="p-3 bg-gray-800 rounded-lg shadow flex justify-between">
-                    <span>{item.track_url}</span>
-                    <span className="capitalize">{item.status}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>You have not made any submissions yet.</p>
-            )}
-          </div>
+            {/* Active Queue / Status Card (Right, 8 columns) */}
+            <div className="lg:col-span-8">
+                {user.moderated_reviewers && user.moderated_reviewers.length > 0 ? (
+                    <div className="space-y-4">
+                        {user.moderated_reviewers.map(reviewer => (
+                             <ManagedQueueCard key={reviewer.id} reviewer={reviewer} />
+                        ))}
+                    </div>
+                ) : (
+                    <div className="h-full bg-gray-800/50 rounded-xl p-6 flex flex-col justify-center items-center text-gray-400 border border-gray-700">
+                        <p className="mb-2">You are not managing any queues.</p>
+                        <Link to="/settings" className="text-purple-400 hover:text-purple-300 font-bold text-sm">Become a Reviewer</Link>
+                    </div>
+                )}
+            </div>
         </div>
+
+        {/* Submissions Section */}
+        <div>
+            <div className="flex justify-between items-end mb-4">
+                <h2 className="text-2xl font-bold">Your Submissions</h2>
+            </div>
+
+            <div className="bg-gray-900/50 rounded-xl min-h-[300px]">
+                {isLoading ? (
+                    <div className="p-8 text-center text-gray-500">Loading...</div>
+                ) : submissions.length > 0 ? (
+                    <div className="grid grid-cols-1 gap-2">
+                        {submissions.map((submission) => (
+                            <SubmissionItem
+                                key={submission.id}
+                                submission={submission}
+                                onEdit={handleEdit}
+                            />
+                        ))}
+                    </div>
+                ) : (
+                    <div className="p-12 text-center border-2 border-dashed border-gray-800 rounded-xl">
+                        <p className="text-gray-500 mb-4">You haven't submitted any tracks yet.</p>
+                        <p className="text-sm text-gray-600">Join a reviewer's queue to get started!</p>
+                    </div>
+                )}
+            </div>
+        </div>
+
       </div>
+
+      {/* Edit Drawer */}
+      <EditSubmissionDrawer
+        isOpen={!!editingSubmission}
+        submission={editingSubmission}
+        onClose={() => setEditingSubmission(null)}
+        onSave={handleSaveSubmission}
+      />
     </div>
   );
 };
