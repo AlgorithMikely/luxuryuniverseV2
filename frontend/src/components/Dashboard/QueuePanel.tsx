@@ -1,10 +1,57 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQueueStore, Submission } from '../../stores/queueStore';
+import { useAuthStore } from '../../stores/authStore';
 import api from '../../services/api';
+import { PriorityTier, ReviewerProfile } from '../../types';
 
 const QueuePanel = () => {
   const { queue, setCurrentTrack, socketStatus, currentTrack } = useQueueStore();
+  const { user } = useAuthStore();
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [tiers, setTiers] = useState<PriorityTier[]>([
+    { value: 0, label: 'Free', color: 'gray' },
+    { value: 5, label: '$5 Tier', color: 'green' },
+    { value: 10, label: '$10 Tier', color: 'blue' },
+    { value: 15, label: '$15 Tier', color: 'purple' },
+    { value: 20, label: '$20 Tier', color: 'yellow' },
+    { value: 25, label: '$25+ Tier', color: 'red' },
+    { value: 50, label: '50+ Tier', color: 'pink' },
+  ]);
+
+  useEffect(() => {
+    const loadReviewerSettings = async () => {
+        // Find the relevant reviewer ID from the queue/page context
+        // Assuming the queueStore handles the current reviewer context implicitly by queue content,
+        // but for fetching settings we need an ID.
+        // We can get it from the first item in the queue OR use a param if this component was aware of it.
+        // However, QueuePanel is used inside ReviewerDashboard which has the ID.
+        // Ideally, QueuePanel should take reviewerId as a prop or use a store selector.
+
+        // Fallback: try to get it from the URL using window.location or similar is hacky.
+        // Better: use the first submission's reviewer_id if queue is not empty.
+        let reviewerId: number | null = null;
+        if (queue.length > 0) {
+            reviewerId = queue[0].reviewer_id;
+        } else if (window.location.pathname.includes('/reviewer/')) {
+            const parts = window.location.pathname.split('/');
+            const id = parseInt(parts[parts.indexOf('reviewer') + 1]);
+            if (!isNaN(id)) reviewerId = id;
+        }
+
+        if (reviewerId) {
+            try {
+                const response = await api.get<ReviewerProfile>(`/${reviewerId}/settings`);
+                if (response.data.configuration?.priority_tiers) {
+                    setTiers(response.data.configuration.priority_tiers);
+                }
+            } catch (err) {
+                console.error("Failed to load reviewer settings for queue panel", err);
+            }
+        }
+    };
+    loadReviewerSettings();
+  }, [queue.length, window.location.pathname]); // Re-run if queue changes (might be first load) or route changes
+
 
   const handleTrackSelect = async (track: Submission) => {
     try {
@@ -31,22 +78,38 @@ const QueuePanel = () => {
   };
 
   const getPriorityStyles = (value: number) => {
-    if (value >= 25) return 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)] bg-gray-800'; // Mythic
-    if (value >= 20) return 'border-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.5)] bg-gray-800'; // Legendary
-    if (value >= 15) return 'border-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.5)] bg-gray-800'; // Epic
-    if (value >= 10) return 'border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)] bg-gray-800'; // Rare
-    if (value >= 5) return 'border-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)] bg-gray-800'; // Common
-    return 'border-gray-600 bg-gray-700'; // Free
+    // Find the tier definition for this value
+    // If exact match not found, find the highest tier <= value (logic from original code suggesting ranges)
+    // Actually, user wants "add/remove" tiers, suggesting discrete values.
+    // But let's stick to "highest defined tier <= value" to be safe for custom amounts.
+
+    const sortedTiers = [...tiers].sort((a, b) => b.value - a.value);
+    const tier = sortedTiers.find(t => value >= t.value) || tiers.find(t => t.value === 0);
+
+    if (!tier) return 'border-gray-600 bg-gray-700';
+
+    const colorMap: Record<string, string> = {
+        red: 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]',
+        yellow: 'border-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.5)]',
+        purple: 'border-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.5)]',
+        blue: 'border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]',
+        green: 'border-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]',
+        gray: 'border-gray-600',
+        pink: 'border-pink-500 shadow-[0_0_10px_rgba(236,72,153,0.5)]',
+        cyan: 'border-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.5)]',
+    };
+
+    const style = colorMap[tier.color] || 'border-gray-600';
+    return `${style} bg-gray-800`;
   };
 
-  const priorityOptions = [
-    { value: 0, label: 'Free', color: 'text-gray-400' },
-    { value: 5, label: '$5 Tier', color: 'text-green-400' },
-    { value: 10, label: '$10 Tier', color: 'text-blue-400' },
-    { value: 15, label: '$15 Tier', color: 'text-purple-400' },
-    { value: 20, label: '$20 Tier', color: 'text-yellow-400' },
-    { value: 25, label: '$25+ Tier', color: 'text-red-400' },
-  ];
+  // Map tiers to options format, filtering out 0 (Free) for the menu if desired,
+  // but usually we want to allow moving back to free.
+  const priorityOptions = tiers.map(t => ({
+      value: t.value,
+      label: t.label,
+      color: `text-${t.color === 'gray' ? 'gray-400' : `${t.color}-400`}`
+  })).sort((a, b) => a.value - b.value);
 
   return (
     <div className="bg-gray-800 rounded-lg shadow-lg p-4 h-full flex flex-col" onClick={() => setOpenMenuId(null)}>

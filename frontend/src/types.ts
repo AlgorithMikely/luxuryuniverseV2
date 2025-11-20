@@ -14,6 +14,16 @@ export interface UserProfile extends User {
   moderated_reviewers?: ReviewerProfile[];
 }
 
+export interface PriorityTier {
+  value: number;
+  label: string;
+  color: string;
+}
+
+export interface ReviewerConfiguration {
+  priority_tiers: PriorityTier[];
+}
+
 export interface ReviewerProfile {
   id: number;
   user_id: number;
@@ -21,6 +31,7 @@ export interface ReviewerProfile {
   discord_channel_id?: string;
   queue_status: 'open' | 'closed';
   username?: string;
+  configuration?: ReviewerConfiguration;
 }
 
 // --- Submissions & Queue ---

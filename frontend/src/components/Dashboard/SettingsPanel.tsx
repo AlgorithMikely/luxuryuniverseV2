@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSessionStore } from '../../stores/sessionStore';
 import api from '../../services/api';
+import { PriorityTier, ReviewerProfile } from '../../types';
 
 interface SettingsPanelProps {
     reviewerId?: string;
@@ -8,14 +9,30 @@ interface SettingsPanelProps {
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({ reviewerId }) => {
     const { activeSession, fetchActiveSession } = useSessionStore();
+    const [tiers, setTiers] = useState<PriorityTier[]>([
+        { value: 5, label: '$5 Tier', color: 'green' },
+        { value: 10, label: '$10 Tier', color: 'blue' },
+        { value: 15, label: '$15 Tier', color: 'purple' },
+        { value: 20, label: '$20 Tier', color: 'yellow' },
+        { value: 25, label: '$25+ Tier', color: 'red' },
+        { value: 50, label: '50+ Tier', color: 'pink' },
+    ]);
 
-    const tiers = [
-        { value: 5, label: '$5 Skip' },
-        { value: 10, label: '$10 Skip' },
-        { value: 15, label: '$15 Skip' },
-        { value: 20, label: '$20 Skip' },
-        { value: 25, label: '$25+ Skip' },
-    ];
+    useEffect(() => {
+        const loadReviewerSettings = async () => {
+            if (!reviewerId) return;
+            try {
+                const response = await api.get<ReviewerProfile>(`/${reviewerId}/settings`);
+                if (response.data.configuration?.priority_tiers) {
+                    // Filter out 0 (Free) as it is handled separately
+                    setTiers(response.data.configuration.priority_tiers.filter(t => t.value > 0).sort((a, b) => a.value - b.value));
+                }
+            } catch (err) {
+                console.error("Failed to load reviewer settings for session panel", err);
+            }
+        };
+        loadReviewerSettings();
+    }, [reviewerId]);
 
     const toggleGate = async (tier: number) => {
         if (!activeSession) return;

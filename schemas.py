@@ -13,11 +13,20 @@ class User(UserBase):
     id: int
     model_config = ConfigDict(from_attributes=True)
 
+class PriorityTier(BaseModel):
+    value: int
+    label: str
+    color: str
+
+class ReviewerConfiguration(BaseModel):
+    priority_tiers: List[PriorityTier]
+
 class ReviewerProfile(BaseModel):
     id: int
     tiktok_handle: str | None = None
     discord_channel_id: str | None = None
     username: str | None = None
+    configuration: Optional[ReviewerConfiguration] = None
     model_config = ConfigDict(from_attributes=True)
 
 class UserProfile(User):
@@ -28,6 +37,11 @@ class UserProfile(User):
 class ReviewerCreate(BaseModel):
     discord_id: str
     tiktok_handle: Optional[str] = None
+
+class ReviewerSettingsUpdate(BaseModel):
+    tiktok_handle: Optional[str] = None
+    discord_channel_id: Optional[str] = None
+    configuration: Optional[ReviewerConfiguration] = None
 
 class ReviewCreate(BaseModel):
     score: Optional[float] = None
