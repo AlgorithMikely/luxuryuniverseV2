@@ -14,17 +14,9 @@ const Navbar = () => {
   // Construct Discord Avatar URL
   // Format: https://cdn.discordapp.com/avatars/{user_id}/{user_avatar}.png
   // Since we don't have the hash in the User type yet, we'll use a default or try to fetch it if available in future.
-  // For now, we'll use a placeholder or the default Discord avatar if no hash.
-  // If the backend provides `avatar` or `avatar_url` in the future, use that.
-  // Assuming `user.discord_id` is available.
   const avatarUrl = user?.discord_id && user?.avatar
     ? `https://cdn.discordapp.com/avatars/${user.discord_id}/${user.avatar}.png`
     : "https://cdn.discordapp.com/embed/avatars/0.png";
-  // Note: (user as any).avatar is a temporary workaround until type is updated. 
-  // If avatar hash is missing, this link will fail (404), so we should handle error or use default.
-  // Better approach: Use a default image if we can't be sure.
-  // However, for the sake of the request "user image which shoud be the discord server profile picture",
-  // we will try to use the avatar if the backend sends it (even if not typed).
 
   const handleLogout = () => {
     logout();

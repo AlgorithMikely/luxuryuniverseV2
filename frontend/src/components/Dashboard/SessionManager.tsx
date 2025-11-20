@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSessionStore, Session } from '../../stores/sessionStore';
 import api from '../../services/api';
+import { PriorityTier, ReviewerProfile } from '../../types';
 
 interface SessionManagerProps {
   reviewerId?: string;
@@ -12,6 +13,15 @@ const SessionManager: React.FC<SessionManagerProps> = ({ reviewerId }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [tiers, setTiers] = useState<PriorityTier[]>([
+    { value: 0, label: 'Free', color: 'gray' },
+    { value: 5, label: '$5 Tier', color: 'green' },
+    { value: 10, label: '$10 Tier', color: 'blue' },
+    { value: 15, label: '$15 Tier', color: 'purple' },
+    { value: 20, label: '$20 Tier', color: 'yellow' },
+    { value: 25, label: '$25+ Tier', color: 'red' },
+    { value: 50, label: '50+ Tier', color: 'pink' },
+  ]);
 
   const { activeSession, fetchActiveSession } = useSessionStore();
 
@@ -30,10 +40,29 @@ const SessionManager: React.FC<SessionManagerProps> = ({ reviewerId }) => {
     }
   };
 
+  const fetchSettings = async () => {
+    if (!reviewerId) return;
+    try {
+      const response = await api.get<ReviewerProfile>(`/${reviewerId}/settings`);
+      if (response.data.configuration?.priority_tiers) {
+        setTiers(response.data.configuration.priority_tiers);
+      }
+    } catch (err) {
+      console.error("Failed to load reviewer settings for session manager", err);
+    }
+  };
+
   useEffect(() => {
     fetchSessions();
     fetchActiveSession(reviewerId);
+    fetchSettings();
   }, [reviewerId]);
+
+  useEffect(() => {
+    if (isDropdownOpen) {
+      fetchSettings();
+    }
+  }, [isDropdownOpen]);
 
   const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,7 +72,10 @@ const SessionManager: React.FC<SessionManagerProps> = ({ reviewerId }) => {
     setError(null);
     try {
       const url = reviewerId ? `/sessions?reviewer_id=${reviewerId}` : '/sessions';
-      await api.post(url, { name: newSessionName });
+      await api.post(url, {
+        name: newSessionName,
+        open_queue_tiers: tiers.map(t => t.value)
+      });
       setNewSessionName('');
       await fetchSessions();
       await fetchActiveSession(reviewerId);
@@ -105,6 +137,30 @@ const SessionManager: React.FC<SessionManagerProps> = ({ reviewerId }) => {
     }
   };
 
+  const getTierStyles = (color: string) => {
+    const colorMap: Record<string, { border: string, text: string, shadow: string }> = {
+      red: { border: 'border-red-500', text: 'text-red-500', shadow: 'shadow-[0_0_15px_rgba(239,68,68,0.5)]' },
+      orange: { border: 'border-orange-500', text: 'text-orange-500', shadow: 'shadow-[0_0_15px_rgba(249,115,22,0.5)]' },
+      amber: { border: 'border-amber-500', text: 'text-amber-500', shadow: 'shadow-[0_0_15px_rgba(245,158,11,0.5)]' },
+      yellow: { border: 'border-yellow-400', text: 'text-yellow-400', shadow: 'shadow-[0_0_15px_rgba(250,204,21,0.5)]' },
+      lime: { border: 'border-lime-500', text: 'text-lime-500', shadow: 'shadow-[0_0_15px_rgba(132,204,22,0.5)]' },
+      green: { border: 'border-green-500', text: 'text-green-500', shadow: 'shadow-[0_0_15px_rgba(34,197,94,0.5)]' },
+      emerald: { border: 'border-emerald-500', text: 'text-emerald-500', shadow: 'shadow-[0_0_15px_rgba(16,185,129,0.5)]' },
+      teal: { border: 'border-teal-500', text: 'text-teal-500', shadow: 'shadow-[0_0_15px_rgba(20,184,166,0.5)]' },
+      cyan: { border: 'border-cyan-500', text: 'text-cyan-500', shadow: 'shadow-[0_0_15px_rgba(6,182,212,0.5)]' },
+      sky: { border: 'border-sky-500', text: 'text-sky-500', shadow: 'shadow-[0_0_15px_rgba(14,165,233,0.5)]' },
+      blue: { border: 'border-blue-500', text: 'text-blue-500', shadow: 'shadow-[0_0_15px_rgba(59,130,246,0.5)]' },
+      indigo: { border: 'border-indigo-500', text: 'text-indigo-500', shadow: 'shadow-[0_0_15px_rgba(99,102,241,0.5)]' },
+      violet: { border: 'border-violet-500', text: 'text-violet-500', shadow: 'shadow-[0_0_15px_rgba(139,92,246,0.5)]' },
+      purple: { border: 'border-purple-500', text: 'text-purple-500', shadow: 'shadow-[0_0_15px_rgba(168,85,247,0.5)]' },
+      fuchsia: { border: 'border-fuchsia-500', text: 'text-fuchsia-500', shadow: 'shadow-[0_0_15px_rgba(217,70,239,0.5)]' },
+      pink: { border: 'border-pink-500', text: 'text-pink-500', shadow: 'shadow-[0_0_15px_rgba(236,72,153,0.5)]' },
+      rose: { border: 'border-rose-500', text: 'text-rose-500', shadow: 'shadow-[0_0_15px_rgba(244,63,94,0.5)]' },
+      gray: { border: 'border-gray-500', text: 'text-gray-500', shadow: 'shadow-[0_0_15px_rgba(107,114,128,0.5)]' },
+    };
+    return colorMap[color] || colorMap['gray'];
+  };
+
   return (
     <div className="bg-gray-800 p-4 rounded-lg mb-4 relative">
       <div className="flex justify-between items-center cursor-pointer" onClick={() => setIsDropdownOpen(!isDropdownOpen)}>
@@ -136,22 +192,15 @@ const SessionManager: React.FC<SessionManagerProps> = ({ reviewerId }) => {
               <div className="bg-gray-900 p-3 rounded text-sm text-gray-400 mb-4">
                 <h3 className="font-semibold text-white mb-2">Queue Configuration</h3>
                 <div className="flex flex-wrap gap-2">
-                  {[
-                    { value: 0, label: 'Free', borderColor: 'border-green-500', textColor: 'text-green-500', shadowColor: 'shadow-[0_0_15px_rgba(34,197,94,0.5)]' },
-                    { value: 5, label: '$5 Skip', borderColor: 'border-blue-500', textColor: 'text-blue-500', shadowColor: 'shadow-[0_0_15px_rgba(59,130,246,0.5)]' },
-                    { value: 10, label: '$10 Skip', borderColor: 'border-indigo-500', textColor: 'text-indigo-500', shadowColor: 'shadow-[0_0_15px_rgba(99,102,241,0.5)]' },
-                    { value: 15, label: '$15 Skip', borderColor: 'border-purple-500', textColor: 'text-purple-500', shadowColor: 'shadow-[0_0_15px_rgba(168,85,247,0.5)]' },
-                    { value: 20, label: '$20 Skip', borderColor: 'border-pink-500', textColor: 'text-pink-500', shadowColor: 'shadow-[0_0_15px_rgba(236,72,153,0.5)]' },
-                    { value: 25, label: '$25 Skip', borderColor: 'border-red-500', textColor: 'text-red-500', shadowColor: 'shadow-[0_0_15px_rgba(239,68,68,0.5)]' },
-                    { value: 50, label: '$50 Skip', borderColor: 'border-amber-500', textColor: 'text-amber-500', shadowColor: 'shadow-[0_0_15px_rgba(245,158,11,0.5)]' },
-                  ].map((tier) => {
+                  {tiers.map((tier) => {
                     const isOpen = activeSession.open_queue_tiers?.includes(tier.value);
+                    const styles = getTierStyles(tier.color);
                     return (
                       <button
                         key={tier.value}
                         onClick={() => toggleGate(tier.value)}
                         className={`px-4 py-2 rounded-lg font-bold transition-all duration-200 border flex flex-col items-center justify-center ${isOpen
-                          ? `bg-transparent ${tier.borderColor} ${tier.textColor} ${tier.shadowColor}`
+                          ? `bg-transparent ${styles.border} ${styles.text} ${styles.shadow}`
                           : 'bg-gray-700 border-transparent text-gray-500 hover:bg-gray-600 hover:text-gray-300'
                           }`}
                       >

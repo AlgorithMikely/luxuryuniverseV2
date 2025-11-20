@@ -4,7 +4,11 @@ import { useAuthStore } from '../../stores/authStore';
 import api from '../../services/api';
 import { PriorityTier, ReviewerProfile } from '../../types';
 
-const QueuePanel = () => {
+interface QueuePanelProps {
+  reviewerId?: string | number;
+}
+
+const QueuePanel: React.FC<QueuePanelProps> = ({ reviewerId: propReviewerId }) => {
   const { queue, setCurrentTrack, socketStatus, currentTrack } = useQueueStore();
   const { user } = useAuthStore();
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
@@ -20,37 +24,32 @@ const QueuePanel = () => {
 
   useEffect(() => {
     const loadReviewerSettings = async () => {
-        // Find the relevant reviewer ID from the queue/page context
-        // Assuming the queueStore handles the current reviewer context implicitly by queue content,
-        // but for fetching settings we need an ID.
-        // We can get it from the first item in the queue OR use a param if this component was aware of it.
-        // However, QueuePanel is used inside ReviewerDashboard which has the ID.
-        // Ideally, QueuePanel should take reviewerId as a prop or use a store selector.
+      // Use prop if available, otherwise try to infer
+      let id = propReviewerId;
 
-        // Fallback: try to get it from the URL using window.location or similar is hacky.
-        // Better: use the first submission's reviewer_id if queue is not empty.
-        let reviewerId: number | null = null;
+      if (!id) {
         if (queue.length > 0) {
-            reviewerId = queue[0].reviewer_id;
+          id = queue[0].reviewer_id;
         } else if (window.location.pathname.includes('/reviewer/')) {
-            const parts = window.location.pathname.split('/');
-            const id = parseInt(parts[parts.indexOf('reviewer') + 1]);
-            if (!isNaN(id)) reviewerId = id;
+          const parts = window.location.pathname.split('/');
+          const parsedId = parseInt(parts[parts.indexOf('reviewer') + 1]);
+          if (!isNaN(parsedId)) id = parsedId;
         }
+      }
 
-        if (reviewerId) {
-            try {
-                const response = await api.get<ReviewerProfile>(`/${reviewerId}/settings`);
-                if (response.data.configuration?.priority_tiers) {
-                    setTiers(response.data.configuration.priority_tiers);
-                }
-            } catch (err) {
-                console.error("Failed to load reviewer settings for queue panel", err);
-            }
+      if (id) {
+        try {
+          const response = await api.get<ReviewerProfile>(`/${id}/settings`);
+          if (response.data.configuration?.priority_tiers) {
+            setTiers(response.data.configuration.priority_tiers);
+          }
+        } catch (err) {
+          console.error("Failed to load reviewer settings for queue panel", err);
         }
+      }
     };
     loadReviewerSettings();
-  }, [queue.length, window.location.pathname]); // Re-run if queue changes (might be first load) or route changes
+  }, [queue.length, window.location.pathname, propReviewerId]);
 
 
   const handleTrackSelect = async (track: Submission) => {
@@ -78,37 +77,84 @@ const QueuePanel = () => {
   };
 
   const getPriorityStyles = (value: number) => {
-    // Find the tier definition for this value
-    // If exact match not found, find the highest tier <= value (logic from original code suggesting ranges)
-    // Actually, user wants "add/remove" tiers, suggesting discrete values.
-    // But let's stick to "highest defined tier <= value" to be safe for custom amounts.
-
     const sortedTiers = [...tiers].sort((a, b) => b.value - a.value);
     const tier = sortedTiers.find(t => value >= t.value) || tiers.find(t => t.value === 0);
 
     if (!tier) return 'border-gray-600 bg-gray-700';
 
     const colorMap: Record<string, string> = {
-        red: 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]',
-        yellow: 'border-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.5)]',
-        purple: 'border-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.5)]',
-        blue: 'border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]',
-        green: 'border-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]',
-        gray: 'border-gray-600',
-        pink: 'border-pink-500 shadow-[0_0_10px_rgba(236,72,153,0.5)]',
-        cyan: 'border-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.5)]',
+      red: 'border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]',
+      orange: 'border-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.5)]',
+      amber: 'border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]',
+      yellow: 'border-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.5)]',
+      lime: 'border-lime-500 shadow-[0_0_10px_rgba(132,204,22,0.5)]',
+      green: 'border-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]',
+      emerald: 'border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]',
+      teal: 'border-teal-500 shadow-[0_0_10px_rgba(20,184,166,0.5)]',
+      cyan: 'border-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.5)]',
+      sky: 'border-sky-500 shadow-[0_0_10px_rgba(14,165,233,0.5)]',
+      blue: 'border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]',
+      indigo: 'border-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]',
+      violet: 'border-violet-500 shadow-[0_0_10px_rgba(139,92,246,0.5)]',
+      purple: 'border-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.5)]',
+      fuchsia: 'border-fuchsia-500 shadow-[0_0_10px_rgba(217,70,239,0.5)]',
+      pink: 'border-pink-500 shadow-[0_0_10px_rgba(236,72,153,0.5)]',
+      rose: 'border-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]',
+      gray: 'border-gray-600',
     };
 
     const style = colorMap[tier.color] || 'border-gray-600';
     return `${style} bg-gray-800`;
   };
 
-  // Map tiers to options format, filtering out 0 (Free) for the menu if desired,
-  // but usually we want to allow moving back to free.
+  // Map for text colors to avoid dynamic class issues
+  const textColorMap: Record<string, string> = {
+    red: 'text-red-400',
+    orange: 'text-orange-400',
+    amber: 'text-amber-400',
+    yellow: 'text-yellow-400',
+    lime: 'text-lime-400',
+    green: 'text-green-400',
+    emerald: 'text-emerald-400',
+    teal: 'text-teal-400',
+    cyan: 'text-cyan-400',
+    sky: 'text-sky-400',
+    blue: 'text-blue-400',
+    indigo: 'text-indigo-400',
+    violet: 'text-violet-400',
+    purple: 'text-purple-400',
+    fuchsia: 'text-fuchsia-400',
+    pink: 'text-pink-400',
+    rose: 'text-rose-400',
+    gray: 'text-gray-400',
+  };
+
+  const bgColorMap: Record<string, string> = {
+    red: 'bg-red-400',
+    orange: 'bg-orange-400',
+    amber: 'bg-amber-400',
+    yellow: 'bg-yellow-400',
+    lime: 'bg-lime-400',
+    green: 'bg-green-400',
+    emerald: 'bg-emerald-400',
+    teal: 'bg-teal-400',
+    cyan: 'bg-cyan-400',
+    sky: 'bg-sky-400',
+    blue: 'bg-blue-400',
+    indigo: 'bg-indigo-400',
+    violet: 'bg-violet-400',
+    purple: 'bg-purple-400',
+    fuchsia: 'bg-fuchsia-400',
+    pink: 'bg-pink-400',
+    rose: 'bg-rose-400',
+    gray: 'bg-gray-400',
+  };
+
   const priorityOptions = tiers.map(t => ({
-      value: t.value,
-      label: t.label,
-      color: `text-${t.color === 'gray' ? 'gray-400' : `${t.color}-400`}`
+    value: t.value,
+    label: t.label,
+    textColor: textColorMap[t.color] || 'text-gray-400',
+    bgColor: bgColorMap[t.color] || 'bg-gray-400'
   })).sort((a, b) => a.value - b.value);
 
   return (
@@ -136,8 +182,8 @@ const QueuePanel = () => {
                   key={submission.id}
                   onClick={() => handleTrackSelect(submission)}
                   className={`p-3 rounded-lg cursor-pointer transition-all duration-200 border-2 relative ${isActive
-                      ? 'bg-purple-900/40 border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.3)]'
-                      : getPriorityStyles(priorityValue)
+                    ? 'bg-purple-900/40 border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.3)]'
+                    : getPriorityStyles(priorityValue)
                     } hover:bg-gray-600`}
                 >
                   <div className="flex justify-between items-start">
@@ -151,11 +197,18 @@ const QueuePanel = () => {
                           <span className="ml-2 text-pink-400">(@{submission.user.tiktok_username})</span>
                         )}
                       </p>
-                      {priorityValue > 0 && (
-                        <span className="text-xs font-bold mt-1 inline-block px-2 py-0.5 rounded bg-gray-900 text-white border border-gray-600">
-                          Priority: {priorityValue}
-                        </span>
-                      )}
+                      {priorityValue > 0 && (() => {
+                        const tier = tiers.slice().sort((a, b) => b.value - a.value).find(t => priorityValue >= t.value);
+                        const color = tier ? tier.color : 'gray';
+                        const textColor = textColorMap[color] || 'text-gray-400';
+                        const borderColor = color === 'gray' ? 'border-gray-600' : `border-${color}-500`;
+
+                        return (
+                          <span className={`text-xs font-bold mt-1 inline-block px-2 py-0.5 rounded bg-gray-900 ${textColor} ${borderColor} border`}>
+                            Priority: {priorityValue}
+                          </span>
+                        );
+                      })()}
                     </div>
 
                     {/* Kebab Menu */}
@@ -176,9 +229,9 @@ const QueuePanel = () => {
                             <button
                               key={option.value}
                               onClick={(e) => handleMove(e, submission, option.value)}
-                              className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-800 flex items-center ${option.color}`}
+                              className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-800 flex items-center ${option.textColor}`}
                             >
-                              <span className={`w-2 h-2 rounded-full mr-2 ${option.color.replace('text-', 'bg-')}`}></span>
+                              <span className={`w-2 h-2 rounded-full mr-2 ${option.bgColor}`}></span>
                               Set to {option.label}
                             </button>
                           ))}

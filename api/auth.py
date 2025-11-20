@@ -44,6 +44,7 @@ async def callback(code: str, db: AsyncSession = Depends(get_db)):
             headers={"Authorization": f"Bearer {access_token}"},
         )
         user_response.raise_for_status()
+        user_response.raise_for_status()
         discord_user = user_response.json()
 
     # Create or update the user in the database

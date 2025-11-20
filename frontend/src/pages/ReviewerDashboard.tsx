@@ -45,7 +45,7 @@ const ReviewerDashboard: React.FC = () => {
       <div className="grid grid-cols-12 gap-4 h-[calc(100vh-2rem)]">
         {/* --- Left Column: Submission Queue --- */}
         <div className="col-span-3 flex flex-col gap-4">
-          <SubmissionQueue />
+          <SubmissionQueue reviewerId={reviewerId} />
         </div>
 
         {/* --- Middle Column: Player and Review Hub --- */}

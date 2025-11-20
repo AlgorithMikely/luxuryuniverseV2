@@ -82,7 +82,7 @@ class ReviewSessionBase(BaseModel):
     name: str
 
 class ReviewSessionCreate(ReviewSessionBase):
-    pass
+    open_queue_tiers: Optional[List[int]] = None
 
 class ReviewSessionUpdate(BaseModel):
     name: Optional[str] = None

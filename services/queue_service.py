@@ -177,14 +177,18 @@ async def update_reviewer_settings(db: AsyncSession, reviewer_id: int, settings_
         # However, we need to convert Pydantic models to dicts for JSON storage
         new_config = update_data["configuration"]
         # Pydantic v2 model_dump handles recursive dict conversion
+        # Pydantic v2 model_dump handles recursive dict conversion
         # If reviewer.configuration is None, init it
-        current_config = reviewer.configuration or {}
-        if isinstance(current_config, str): # Should be dict if using JSON type but safe check
+        raw_config = reviewer.configuration
+        if isinstance(raw_config, str):
              import json
              try:
-                 current_config = json.loads(current_config)
+                 current_config = json.loads(raw_config)
              except:
                  current_config = {}
+        else:
+             # Create a copy to ensure SQLAlchemy detects the change
+             current_config = dict(raw_config) if raw_config else {}
 
         # Update priority tiers if present
         if "priority_tiers" in new_config:
@@ -394,7 +398,7 @@ async def review_submission(db: AsyncSession, submission_id: int, review: schema
 
     return submission
 
-async def create_session(db: AsyncSession, reviewer_id: int, name: str) -> models.ReviewSession:
+async def create_session(db: AsyncSession, reviewer_id: int, name: str, open_queue_tiers: Optional[list[int]] = None) -> models.ReviewSession:
     await db.execute(
         update(models.ReviewSession)
         .where(models.ReviewSession.reviewer_id == reviewer_id)
@@ -404,7 +408,8 @@ async def create_session(db: AsyncSession, reviewer_id: int, name: str) -> model
     new_session = models.ReviewSession(
         reviewer_id=reviewer_id,
         name=name,
-        is_active=True
+        is_active=True,
+        open_queue_tiers=open_queue_tiers
     )
     db.add(new_session)
     await db.commit()

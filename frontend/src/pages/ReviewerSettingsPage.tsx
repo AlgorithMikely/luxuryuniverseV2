@@ -25,15 +25,36 @@ const ReviewerSettingsPage: React.FC = () => {
     const [newTierLabel, setNewTierLabel] = useState('');
     const [newTierColor, setNewTierColor] = useState('gray');
 
+    const [isColorDropdownOpen, setIsColorDropdownOpen] = useState(false);
+    const [activeColorDropdown, setActiveColorDropdown] = useState<number | null>(null);
+
+    const handleTierChange = (index: number, field: keyof PriorityTier, value: any) => {
+        const newTiers = [...tiers];
+        newTiers[index] = { ...newTiers[index], [field]: value };
+        // If value changed, re-sort? Maybe not while editing to avoid jumping rows.
+        // Let's just update state. Sorting can happen on save or add.
+        setTiers(newTiers);
+    };
+
     const colorOptions = [
-        { name: 'Gray', value: 'gray' },
-        { name: 'Green', value: 'green' },
-        { name: 'Blue', value: 'blue' },
-        { name: 'Purple', value: 'purple' },
-        { name: 'Yellow', value: 'yellow' },
-        { name: 'Red', value: 'red' },
-        { name: 'Pink', value: 'pink' },
-        { name: 'Cyan', value: 'cyan' },
+        { name: 'Gray', value: 'gray', hex: '#9ca3af' },
+        { name: 'Red', value: 'red', hex: '#ef4444' },
+        { name: 'Orange', value: 'orange', hex: '#f97316' },
+        { name: 'Amber', value: 'amber', hex: '#f59e0b' },
+        { name: 'Yellow', value: 'yellow', hex: '#eab308' },
+        { name: 'Lime', value: 'lime', hex: '#84cc16' },
+        { name: 'Green', value: 'green', hex: '#22c55e' },
+        { name: 'Emerald', value: 'emerald', hex: '#10b981' },
+        { name: 'Teal', value: 'teal', hex: '#14b8a6' },
+        { name: 'Cyan', value: 'cyan', hex: '#06b6d4' },
+        { name: 'Sky', value: 'sky', hex: '#0ea5e9' },
+        { name: 'Blue', value: 'blue', hex: '#3b82f6' },
+        { name: 'Indigo', value: 'indigo', hex: '#6366f1' },
+        { name: 'Violet', value: 'violet', hex: '#8b5cf6' },
+        { name: 'Purple', value: 'purple', hex: '#a855f7' },
+        { name: 'Fuchsia', value: 'fuchsia', hex: '#d946ef' },
+        { name: 'Pink', value: 'pink', hex: '#ec4899' },
+        { name: 'Rose', value: 'rose', hex: '#f43f5e' },
     ];
 
     const defaultTiers: PriorityTier[] = [
@@ -121,6 +142,7 @@ const ReviewerSettingsPage: React.FC = () => {
         setNewTierValue(0);
         setNewTierLabel('');
         setNewTierColor('gray');
+        setIsColorDropdownOpen(false);
     };
 
     const handleDeleteTier = (value: number) => {
@@ -131,6 +153,10 @@ const ReviewerSettingsPage: React.FC = () => {
         if (window.confirm("Are you sure you want to reset priority tiers to defaults?")) {
             setTiers(defaultTiers);
         }
+    };
+
+    const getSelectedColorObj = () => {
+        return colorOptions.find(c => c.value === newTierColor) || colorOptions[0];
     };
 
     if (isLoading) return <div className="p-10 text-center text-white">Loading settings...</div>;
@@ -200,27 +226,71 @@ const ReviewerSettingsPage: React.FC = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {tiers.map((tier) => (
-                                        <tr key={tier.value} className="border-t border-gray-700 hover:bg-gray-700/30 transition-colors">
-                                            <td className="p-3">{tier.value}</td>
-                                            <td className="p-3">{tier.label}</td>
-                                            <td className="p-3">
-                                                <div className="flex items-center gap-2">
-                                                    <span className={`w-3 h-3 rounded-full`} style={{ backgroundColor: tier.color === 'gray' ? 'var(--gray-400, #9ca3af)' : `var(--${tier.color}-500)` }}></span>
-                                                    <span className="capitalize text-sm text-gray-300">{tier.color}</span>
-                                                </div>
-                                            </td>
-                                            <td className="p-3 text-right">
-                                                <button
-                                                    onClick={() => handleDeleteTier(tier.value)}
-                                                    className="text-red-400 hover:text-red-300 p-1"
-                                                    title="Remove Tier"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {tiers.map((tier, index) => {
+                                        const colorObj = colorOptions.find(c => c.value === tier.color) || { name: tier.color, hex: '#9ca3af' };
+                                        return (
+                                            <tr key={index} className="border-t border-gray-700 hover:bg-gray-700/30 transition-colors">
+                                                <td className="p-3">
+                                                    <input
+                                                        type="number"
+                                                        value={tier.value}
+                                                        onChange={(e) => handleTierChange(index, 'value', parseInt(e.target.value) || 0)}
+                                                        className="bg-gray-800 border border-gray-600 rounded px-2 py-1 w-20 text-sm focus:outline-none focus:border-purple-500"
+                                                    />
+                                                </td>
+                                                <td className="p-3">
+                                                    <input
+                                                        type="text"
+                                                        value={tier.label}
+                                                        onChange={(e) => handleTierChange(index, 'label', e.target.value)}
+                                                        className="bg-gray-800 border border-gray-600 rounded px-2 py-1 w-full text-sm focus:outline-none focus:border-purple-500"
+                                                    />
+                                                </td>
+                                                <td className="p-3 relative">
+                                                    <button
+                                                        onClick={() => setActiveColorDropdown(activeColorDropdown === index ? null : index)}
+                                                        className="flex items-center gap-2 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm focus:outline-none focus:border-purple-500 w-full justify-between"
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={`w-4 h-4 rounded-full`} style={{ backgroundColor: colorObj.hex || `var(--${tier.color}-500)` }}></span>
+                                                            <span className="capitalize text-gray-300">{colorObj.name}</span>
+                                                        </div>
+                                                        <span className="text-xs text-gray-500">▼</span>
+                                                    </button>
+
+                                                    {activeColorDropdown === index && (
+                                                        <>
+                                                            <div className="fixed inset-0 z-10" onClick={() => setActiveColorDropdown(null)}></div>
+                                                            <div className="absolute top-full mt-1 left-0 w-48 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-20 max-h-60 overflow-y-auto">
+                                                                {colorOptions.map(opt => (
+                                                                    <button
+                                                                        key={opt.value}
+                                                                        onClick={() => {
+                                                                            handleTierChange(index, 'color', opt.value);
+                                                                            setActiveColorDropdown(null);
+                                                                        }}
+                                                                        className="w-full text-left px-3 py-2 hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                                                                    >
+                                                                        <span className="w-3 h-3 rounded-full" style={{ backgroundColor: opt.hex }}></span>
+                                                                        <span className="text-sm text-gray-200">{opt.name}</span>
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </td>
+                                                <td className="p-3 text-right">
+                                                    <button
+                                                        onClick={() => handleDeleteTier(tier.value)}
+                                                        className="text-red-400 hover:text-red-300 p-1"
+                                                        title="Remove Tier"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
@@ -248,17 +318,40 @@ const ReviewerSettingsPage: React.FC = () => {
                                         className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
                                     />
                                 </div>
-                                <div className="flex-1">
+                                <div className="flex-1 relative">
                                     <label className="block text-xs text-gray-500 mb-1">Theme</label>
-                                    <select
-                                        value={newTierColor}
-                                        onChange={(e) => setNewTierColor(e.target.value)}
-                                        className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsColorDropdownOpen(!isColorDropdownOpen)}
+                                        className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-sm focus:outline-none focus:border-purple-500 flex items-center justify-between"
                                     >
-                                        {colorOptions.map(opt => (
-                                            <option key={opt.value} value={opt.value}>{opt.name}</option>
-                                        ))}
-                                    </select>
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: getSelectedColorObj().hex }}></span>
+                                            <span>{getSelectedColorObj().name}</span>
+                                        </div>
+                                        <span className="text-gray-400 text-xs">▼</span>
+                                    </button>
+
+                                    {isColorDropdownOpen && (
+                                        <>
+                                            <div className="fixed inset-0 z-10" onClick={() => setIsColorDropdownOpen(false)}></div>
+                                            <div className="absolute bottom-full mb-1 left-0 w-full bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-20 max-h-60 overflow-y-auto">
+                                                {colorOptions.map(opt => (
+                                                    <button
+                                                        key={opt.value}
+                                                        onClick={() => {
+                                                            setNewTierColor(opt.value);
+                                                            setIsColorDropdownOpen(false);
+                                                        }}
+                                                        className="w-full text-left px-3 py-2 hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                                                    >
+                                                        <span className="w-3 h-3 rounded-full" style={{ backgroundColor: opt.hex }}></span>
+                                                        <span className="text-sm text-gray-200">{opt.name}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                                 <button
                                     onClick={handleAddTier}

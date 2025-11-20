@@ -20,7 +20,7 @@ async def connect(sid, environ, auth):
         raise ConnectionRefusedError("Authentication failed")
 
     async with AsyncSessionLocal() as db:
-        user = await user_service.get_or_create_user(db, token_data.discord_id, token_data.username)
+        user = await user_service.get_user_by_discord_id(db, token_data.discord_id)
         if not user:
             logging.error(f"Could not get or create user for {sid} with discord_id {token_data.discord_id}")
             raise ConnectionRefusedError("Could not get or create user")

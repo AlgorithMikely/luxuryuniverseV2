@@ -32,9 +32,9 @@ async def create_session(
     if not target_reviewer_id:
          raise HTTPException(status_code=403, detail="User is not a reviewer and no reviewer_id provided")
 
-    return await queue_service.create_session(db, target_reviewer_id, session_create.name)
+    return await queue_service.create_session(db, target_reviewer_id, session_create.name, session_create.open_queue_tiers)
 
-    return await queue_service.create_session(db, target_reviewer_id, session_create.name)
+
 
 @router.get("", response_model=List[schemas.ReviewSession])
 async def get_sessions(
