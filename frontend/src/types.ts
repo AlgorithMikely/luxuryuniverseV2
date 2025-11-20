@@ -7,6 +7,8 @@ export interface User {
   tiktok_username?: string;
   reviewer_profile?: ReviewerProfile;
   spotify_connected?: boolean;
+  xp: number;
+  level: number;
 }
 
 export interface UserProfile extends User {
@@ -42,7 +44,7 @@ export interface Submission {
   track_url: string;
   track_title?: string;
   archived_url?: string;
-  status: 'pending' | 'playing' | 'reviewed' | 'played';
+  status: 'pending' | 'playing' | 'reviewed' | 'played' | 'rejected'; // Added rejected
   score?: number;
   notes?: string;
   note?: string; // Alias for notes to match frontend usage
@@ -52,6 +54,11 @@ export interface Submission {
   priority_value: number;
   bookmarked: boolean;
   spotlighted: boolean;
+  // New fields
+  start_time?: string;
+  end_time?: string;
+  genre?: string;
+  tags?: string[];
 }
 
 export interface Session {

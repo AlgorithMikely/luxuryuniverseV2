@@ -11,6 +11,9 @@ class UserCreate(UserBase):
 
 class User(UserBase):
     id: int
+    xp: int = 0
+    level: int = 0
+
     model_config = ConfigDict(from_attributes=True)
 
 class PriorityTier(BaseModel):
@@ -76,7 +79,33 @@ class Submission(BaseModel):
     bookmarked: bool = False
     spotlighted: bool = False
     priority_value: int = 0
+
+    # New fields
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    genre: Optional[str] = None
+    tags: Optional[List[str]] = None
+
     model_config = ConfigDict(from_attributes=True)
+
+class SubmissionUpdate(BaseModel):
+    track_title: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    genre: Optional[str] = None
+    tags: Optional[List[str]] = None
+    # Fields for user profile update
+    tiktok_handle: Optional[str] = None
+    instagram_handle: Optional[str] = None # If we add this
+    twitter_handle: Optional[str] = None # If we add this
+
+class QueueStats(BaseModel):
+    length: int
+    avg_wait_time: int # in minutes
+    status: str
+
+class QueueStatusUpdate(BaseModel):
+    status: str
 
 class ReviewSessionBase(BaseModel):
     name: str

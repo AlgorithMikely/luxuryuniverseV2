@@ -49,6 +49,7 @@ class User(Base):
     # Fixed: Added timezone=True
     spotify_token_expires_at = Column(DateTime(timezone=True), nullable=True)
     avatar = Column(String, nullable=True)
+    xp = Column(Integer, default=0, nullable=False)
 
     reviewer_profile = relationship("Reviewer", back_populates="user", uselist=False)
     submissions = relationship("Submission", back_populates="user")
@@ -92,6 +93,12 @@ class Submission(Base):
     priority_value = Column(Integer, default=0, nullable=False)
     bookmarked = Column(Boolean, default=False, nullable=False)
     spotlighted = Column(Boolean, default=False, nullable=False)
+
+    # New fields for submission details
+    start_time = Column(String, nullable=True) # e.g. "0:45"
+    end_time = Column(String, nullable=True)   # e.g. "2:30"
+    genre = Column(String, nullable=True)
+    tags = Column(JsonEncodedList, nullable=True) # Uses the custom type for compatibility
 
     reviewer = relationship("Reviewer", back_populates="submissions")
     user = relationship("User", back_populates="submissions")
