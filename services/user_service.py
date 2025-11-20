@@ -37,8 +37,8 @@ async def get_or_create_user(db: AsyncSession, discord_id: str, username: str, a
     new_user = models.User(discord_id=discord_id, username=username, avatar=avatar)
     db.add(new_user)
     await db.commit()
-    await db.refresh(new_user)
-    return new_user
+    # Use get_user_by_discord_id to reload with relationships eager loaded
+    return await get_user_by_discord_id(db, discord_id)
 
 async def get_user_by_username(db: AsyncSession, username: str) -> models.User | None:
     """Retrieves a user by their username."""
