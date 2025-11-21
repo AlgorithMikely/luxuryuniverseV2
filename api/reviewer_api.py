@@ -75,11 +75,6 @@ async def submit_smart(
             raise HTTPException(status_code=400, detail=f"Insufficient balance. Required: {total_cost}, Available: {current_balance}")
 
         # Deduct coins
-        # Using add_coins with negative amount or similar logic.
-        # The economy_service typically has 'add_coins'.
-        # I should add 'deduct_balance' or just add negative coins if logic permits.
-        # Looking at economy_service.py (memory), it does wallet.balance += amount.
-        # So adding negative amount works.
         await economy_service.add_coins(db, reviewer_id, current_user.id, -total_cost, "submission_fee")
 
     # 2. Handle Files and Create Submissions
@@ -88,18 +83,10 @@ async def submit_smart(
 
     created_submissions = []
 
-    # Map files to sequence_order if present
-    # Logic: The frontend sends files in the 'files' list.
-    # We assume the order in 'files' corresponds to the order of items in 'payload.submissions' that have a file marker?
-    # Or simpler: The frontend should NOT send files if it's a link.
-    # If it's a file, it's in the 'files' array.
-    # How to map?
-    # The SmartSubmissionItem in JSON can have a placeholder or we assume index matching.
-    # Let's assume the JSON items that need a file will use the file at index 0, 1 etc.
-    # BUT, SmartSubmissionItem has 'track_url'.
-    # If track_url starts with 'blob:', it implies a file upload is needed.
-
     file_index = 0
+
+    # Allowed extensions for security
+    ALLOWED_EXTENSIONS = {".mp3", ".wav", ".ogg", ".flac", ".m4a"}
 
     for item in payload.submissions:
         final_track_url = item.track_url
@@ -109,13 +96,17 @@ async def submit_smart(
             uploaded_file = files[file_index]
             file_index += 1
 
+            # Check file extension
+            file_ext = os.path.splitext(uploaded_file.filename)[1].lower()
+            if file_ext not in ALLOWED_EXTENSIONS:
+                raise HTTPException(status_code=400, detail=f"Invalid file type: {file_ext}. Allowed: {', '.join(ALLOWED_EXTENSIONS)}")
+
             # Save file locally
             # We need a 'uploads' directory.
             upload_dir = "uploads"
             os.makedirs(upload_dir, exist_ok=True)
 
             # Secure filename
-            file_ext = os.path.splitext(uploaded_file.filename)[1]
             unique_filename = f"{uuid.uuid4()}{file_ext}"
             file_path = os.path.join(upload_dir, unique_filename)
 
@@ -124,10 +115,6 @@ async def submit_smart(
                 f.write(content)
 
             # Construct public URL
-            # Assuming /api/uploads is mounted to 'uploads' dir
-            # or we use a proxy endpoint.
-            # I will assume /uploads is served by Nginx or I need to serve it via FastAPI StaticFiles.
-            # I'll serve it via FastAPI in api_main.py for now.
             final_track_url = f"/api/uploads/{unique_filename}"
 
         submission = await queue_service.create_submission(

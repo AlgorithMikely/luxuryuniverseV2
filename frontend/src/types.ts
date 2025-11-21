@@ -68,6 +68,12 @@ export interface Submission {
   end_time?: string;
   genre?: string;
   tags?: string[];
+
+  // Smart-Zone Fields
+  batch_id?: string;
+  sequence_order?: number;
+  hook_start_time?: number;
+  hook_end_time?: number;
 }
 
 export interface Session {
