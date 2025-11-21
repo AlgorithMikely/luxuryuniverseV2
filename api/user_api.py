@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func, desc
 
 import models
 import schemas
@@ -47,6 +48,66 @@ async def get_my_submissions(
     db: AsyncSession = Depends(get_db),
 ):
     return await queue_service.get_submissions_by_user(db, user_id=current_user.id)
+
+@router.get("/recent-tracks", response_model=list[schemas.RecentTrack])
+async def get_recent_tracks(
+    current_user: models.User = Depends(security.get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Returns the most recent submission data for each unique song title/artist combo
+    the user has uploaded. Uses a Window Function to filter duplicates.
+    """
+    # Subquery to rank submissions by created_at per track_title (case insensitive)
+    # Note: We group by track_title. Ideally we should group by artist too,
+    # but currently Submission model doesn't strictly have 'artist' separate from title unless parsed.
+    # The spec query says "PARTITION BY LOWER(song_title)".
+    # We will assume track_title contains the song name.
+
+    subquery = (
+        select(
+            models.Submission,
+            func.row_number().over(
+                partition_by=func.lower(models.Submission.track_title),
+                order_by=desc(models.Submission.submitted_at)
+            ).label("rn")
+        )
+        .filter(models.Submission.user_id == current_user.id)
+        .filter(models.Submission.track_title.is_not(None))
+        .subquery()
+    )
+
+    # Select from the subquery where row_number (rn) == 1
+    # We need to alias the subquery to select columns from it
+    # SQLAlchemy Core usage:
+    stmt = (
+        select(subquery)
+        .where(subquery.c.rn == 1)
+        .order_by(subquery.c.submitted_at.desc())
+        .limit(20)
+    )
+
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    # Map result rows to schema
+    # The row contains all columns of Submission plus 'rn'.
+    # We map to RecentTrack schema.
+    recent_tracks = []
+    for row in rows:
+        # accessing columns by name from the row tuple/mapping
+        track = schemas.RecentTrack(
+            id=row.id,
+            track_title=row.track_title,
+            artist_name=current_user.username, # Default to user's name as artist if not stored separately
+            cover_art_url=None, # Not currently stored in Submission model, maybe retrieve from OEmbed or metadata later
+            file_url=row.track_url,
+            hook_start_time=row.hook_start_time,
+            created_at=row.submitted_at
+        )
+        recent_tracks.append(track)
+
+    return recent_tracks
 
 @router.patch("/submissions/{submission_id}", response_model=schemas.Submission)
 async def update_submission(

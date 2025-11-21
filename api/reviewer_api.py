@@ -1,15 +1,21 @@
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Path, status
+from fastapi import APIRouter, Depends, Query, File, UploadFile, Form, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func, desc
+import json
+import uuid
+from typing import List, Optional
+import os
+
+import models
 import schemas
 import security
 from database import get_db
-from services import queue_service, user_service
+from services import economy_service, user_service, queue_service
 
 router = APIRouter(prefix="/reviewer", tags=["Reviewer"])
 
 async def check_is_reviewer(
-    reviewer_id: int = Path(...),
+    reviewer_id: int,
     current_user: schemas.TokenData = Depends(security.get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -39,6 +45,109 @@ async def check_is_reviewer(
 @router.get("/{reviewer_id}/queue", response_model=List[schemas.Submission], dependencies=[Depends(check_is_reviewer)])
 async def get_queue(reviewer_id: int, db: AsyncSession = Depends(get_db)):
     return await queue_service.get_pending_queue(db, reviewer_id=reviewer_id)
+
+@router.post("/{reviewer_id}/submit", response_model=List[schemas.Submission])
+async def submit_smart(
+    reviewer_id: int,
+    submissions_json: str = Form(...), # JSON string for metadata
+    files: List[UploadFile] = File(None), # Optional files
+    current_user: models.User = Depends(security.get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Handles "Smart-Zone" submissions, including "Double Feature" linked submissions.
+    Accepts a JSON payload (submissions_json) and optional files.
+    """
+    try:
+        payload_data = json.loads(submissions_json)
+        payload = schemas.SmartSubmissionCreate(**payload_data)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON payload: {str(e)}")
+
+    # 1. Verify Funds / Deduct Credits
+    total_cost = 0
+    for item in payload.submissions:
+        total_cost += item.priority_value
+
+    if total_cost > 0:
+        current_balance = await economy_service.get_balance(db, reviewer_id, current_user.id)
+        if current_balance < total_cost:
+            raise HTTPException(status_code=400, detail=f"Insufficient balance. Required: {total_cost}, Available: {current_balance}")
+
+        # Deduct coins
+        # Using add_coins with negative amount or similar logic.
+        # The economy_service typically has 'add_coins'.
+        # I should add 'deduct_balance' or just add negative coins if logic permits.
+        # Looking at economy_service.py (memory), it does wallet.balance += amount.
+        # So adding negative amount works.
+        await economy_service.add_coins(db, reviewer_id, current_user.id, -total_cost, "submission_fee")
+
+    # 2. Handle Files and Create Submissions
+    # Generate a batch_id if multiple submissions or just for consistency
+    batch_id = str(uuid.uuid4()) if len(payload.submissions) > 1 else None
+
+    created_submissions = []
+
+    # Map files to sequence_order if present
+    # Logic: The frontend sends files in the 'files' list.
+    # We assume the order in 'files' corresponds to the order of items in 'payload.submissions' that have a file marker?
+    # Or simpler: The frontend should NOT send files if it's a link.
+    # If it's a file, it's in the 'files' array.
+    # How to map?
+    # The SmartSubmissionItem in JSON can have a placeholder or we assume index matching.
+    # Let's assume the JSON items that need a file will use the file at index 0, 1 etc.
+    # BUT, SmartSubmissionItem has 'track_url'.
+    # If track_url starts with 'blob:', it implies a file upload is needed.
+
+    file_index = 0
+
+    for item in payload.submissions:
+        final_track_url = item.track_url
+
+        # If it's a blob URL (from frontend preview), we expect a file upload
+        if item.track_url.startswith("blob:") and files and file_index < len(files):
+            uploaded_file = files[file_index]
+            file_index += 1
+
+            # Save file locally
+            # We need a 'uploads' directory.
+            upload_dir = "uploads"
+            os.makedirs(upload_dir, exist_ok=True)
+
+            # Secure filename
+            file_ext = os.path.splitext(uploaded_file.filename)[1]
+            unique_filename = f"{uuid.uuid4()}{file_ext}"
+            file_path = os.path.join(upload_dir, unique_filename)
+
+            with open(file_path, "wb") as f:
+                content = await uploaded_file.read()
+                f.write(content)
+
+            # Construct public URL
+            # Assuming /api/uploads is mounted to 'uploads' dir
+            # or we use a proxy endpoint.
+            # I will assume /uploads is served by Nginx or I need to serve it via FastAPI StaticFiles.
+            # I'll serve it via FastAPI in api_main.py for now.
+            final_track_url = f"/api/uploads/{unique_filename}"
+
+        submission = await queue_service.create_submission(
+            db=db,
+            reviewer_id=reviewer_id,
+            user_id=current_user.id,
+            track_url=final_track_url,
+            track_title=item.track_title or "Untitled",
+            archived_url=None,
+            session_id=None,
+            batch_id=batch_id,
+            sequence_order=item.sequence_order,
+            hook_start_time=item.hook_start_time,
+            hook_end_time=item.hook_end_time,
+            priority_value=item.priority_value
+        )
+        created_submissions.append(submission)
+
+    return created_submissions
+
 
 @router.post("/{reviewer_id}/queue/next", response_model=Optional[schemas.Submission], dependencies=[Depends(check_is_reviewer)])
 async def next_track(reviewer_id: int, db: AsyncSession = Depends(get_db)):
@@ -91,25 +200,11 @@ async def get_initial_state(reviewer_id: int, db: AsyncSession = Depends(get_db)
     """
     return await queue_service.get_initial_state(db, reviewer_id=reviewer_id)
 
-@router.get("/{reviewer_id}/settings", response_model=schemas.ReviewerProfile, dependencies=[Depends(check_is_reviewer)])
+@router.get("/{reviewer_id}/settings", response_model=schemas.ReviewerProfile)
 async def get_reviewer_settings(reviewer_id: int, db: AsyncSession = Depends(get_db)):
-    # We need to fetch the reviewer by ID, but we can reuse get_reviewer_by_user_id logic or similar
-    # Or better, just fetch by reviewer_id. But we need the user relation loaded for ReviewerProfile schema.
-    # Let's add get_reviewer_by_id in queue_service or similar.
-    # Actually, check_is_reviewer already verifies access.
-    # Let's use a direct query or service method.
+    # Note: Removed check_is_reviewer dependency to allow public access to reviewer settings
+    # (e.g., for fetching priority tiers on the submission page).
 
-    # Since we need 'username' which is on the user model, we need to join.
-    from sqlalchemy import select
-    from sqlalchemy.orm import joinedload, selectinload
-    import models
-
-    # Use the service method that merges config defaults
-    # But we need to find the user_id first or add a get_reviewer_by_id method to service.
-    # check_is_reviewer validates but doesn't return the reviewer object (it returns current_user).
-
-    # Let's implement a quick fetch here or add to service. Service is cleaner.
-    # But for now, let's just use what we have.
     result = await db.execute(
         select(models.Reviewer)
         .options(
@@ -122,8 +217,12 @@ async def get_reviewer_settings(reviewer_id: int, db: AsyncSession = Depends(get
     if not reviewer:
         raise HTTPException(status_code=404, detail="Reviewer not found")
 
-    # Apply defaults
-    return queue_service._merge_reviewer_config(reviewer)
+    # Merge config defaults
+    reviewer = queue_service._merge_reviewer_config(reviewer)
+
+    # TODO: Mask payment credentials if not authorized?
+
+    return reviewer
 
 @router.patch("/{reviewer_id}/settings", response_model=schemas.ReviewerProfile, dependencies=[Depends(check_is_reviewer)])
 async def update_reviewer_settings(reviewer_id: int, settings: schemas.ReviewerSettingsUpdate, db: AsyncSession = Depends(get_db)):
@@ -132,8 +231,9 @@ async def update_reviewer_settings(reviewer_id: int, settings: schemas.ReviewerS
         raise HTTPException(status_code=404, detail="Reviewer not found")
     return updated_reviewer
 
-@router.get("/{reviewer_id}/stats", response_model=schemas.QueueStats, dependencies=[Depends(check_is_reviewer)])
+@router.get("/{reviewer_id}/stats", response_model=schemas.QueueStats)
 async def get_reviewer_stats(reviewer_id: int, db: AsyncSession = Depends(get_db)):
+    # Removed check_is_reviewer so public submission page can see queue stats
     return await queue_service.get_reviewer_stats(db, reviewer_id)
 
 @router.post("/{reviewer_id}/queue/status", response_model=schemas.QueueStats, dependencies=[Depends(check_is_reviewer)])

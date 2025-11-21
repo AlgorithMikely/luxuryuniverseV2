@@ -18,6 +18,12 @@ def create_app():
     app.include_router(session_api.router, prefix="/api/sessions", tags=["sessions"])
     app.include_router(stripe_api.router, prefix="/api")
 
+    # Serve uploads (local file storage for Smart-Zone)
+    from fastapi.staticfiles import StaticFiles
+    import os
+    os.makedirs("uploads", exist_ok=True)
+    app.mount("/api/uploads", StaticFiles(directory="uploads"), name="uploads")
+
     socket_app = socketio.ASGIApp(sio)
     app.mount("/socket.io", socket_app)
 

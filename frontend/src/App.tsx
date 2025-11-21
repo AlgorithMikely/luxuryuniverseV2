@@ -11,6 +11,7 @@ import WalletHistoryPage from "./pages/WalletHistoryPage";
 import AdminPage from "./pages/AdminPage";
 import ReviewerSettingsPage from "./pages/ReviewerSettingsPage";
 import ArchivedSessionPage from './pages/ArchivedSessionPage';
+import SubmissionPage from "./pages/SubmissionPage";
 import ErrorPage from "./pages/ErrorPage";
 import Navbar from './components/Navbar';
 import Overlay from './components/Overlay';
@@ -53,6 +54,7 @@ function App() {
 
             {/* Routes with Navbar */}
             <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
+              <Route path="/submit/:reviewerId" element={<SubmissionPage />} />
               <Route path="/dashboard" element={<DashboardRedirect />} />
               <Route path="/reviewer/:reviewerId" element={<ReviewerDashboard />} />
               <Route path="/settings/reviewer" element={<ReviewerSettingsPage />} />

@@ -1,9 +1,9 @@
 
 > frontend@0.0.0 dev
-> vite
+> vite --host 0.0.0.0
 
 
-  VITE v3.2.11  ready in 543 ms
+  VITE v3.2.11  ready in 544 ms
 
   ➜  Local:   http://localhost:5173/
-  ➜  Network: use --host to expose
+  ➜  Network: http://192.168.0.2:5173/

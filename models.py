@@ -112,6 +112,12 @@ class Submission(Base):
     genre = Column(String, nullable=True)
     tags = Column(JsonEncodedList, nullable=True) # Uses the custom type for compatibility
 
+    # New fields for Smart-Zone and Double Feature
+    batch_id = Column(String, nullable=True, index=True) # UUID string to link submissions
+    sequence_order = Column(Integer, default=1, nullable=False) # 1 or 2
+    hook_start_time = Column(Integer, nullable=True) # Seconds
+    hook_end_time = Column(Integer, nullable=True) # Seconds
+
     reviewer = relationship("Reviewer", back_populates="submissions")
     user = relationship("User", back_populates="submissions")
     session = relationship("ReviewSession", back_populates="submissions")

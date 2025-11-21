@@ -108,6 +108,12 @@ class Submission(BaseModel):
     genre: Optional[str] = None
     tags: Optional[List[str]] = None
 
+    # New Smart-Zone fields
+    batch_id: Optional[str] = None
+    sequence_order: int = 1
+    hook_start_time: Optional[int] = None
+    hook_end_time: Optional[int] = None
+
     model_config = ConfigDict(from_attributes=True)
 
 class SubmissionWithReviewer(Submission):
@@ -123,6 +129,33 @@ class SubmissionUpdate(BaseModel):
     tiktok_handle: Optional[str] = None
     instagram_handle: Optional[str] = None # If we add this
     twitter_handle: Optional[str] = None # If we add this
+
+    hook_start_time: Optional[int] = None
+    hook_end_time: Optional[int] = None
+
+class SmartSubmissionItem(BaseModel):
+    track_url: str
+    track_title: Optional[str] = None
+    hook_start_time: Optional[int] = None
+    hook_end_time: Optional[int] = None
+    priority_value: int = 0 # Individual priority if needed, but usually batch uses the same
+    sequence_order: int = 1
+
+class SmartSubmissionCreate(BaseModel):
+    submissions: List[SmartSubmissionItem]
+    is_priority: bool = False
+    total_cost: int = 0 # For verification
+
+class RecentTrack(BaseModel):
+    id: int
+    track_title: str
+    artist_name: Optional[str] = None # Derived from user.username usually, but distinct logic might use submission user
+    cover_art_url: Optional[str] = None
+    file_url: str # track_url
+    hook_start_time: Optional[int] = None
+    created_at: datetime.datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 class QueueStats(BaseModel):
     length: int

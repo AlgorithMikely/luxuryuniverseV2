@@ -3,12 +3,13 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import joinedload, selectinload
 import models
 import schemas
-from typing import Optional
+from typing import Optional, List
 from services import broadcast as broadcast_service
 from services import user_service
 import datetime
+import uuid
 
-async def create_submission(db: AsyncSession, reviewer_id: int, user_id: int, track_url: str, track_title: str, archived_url: str, session_id: Optional[int] = None) -> models.Submission:
+async def create_submission(db: AsyncSession, reviewer_id: int, user_id: int, track_url: str, track_title: str, archived_url: str, session_id: Optional[int] = None, batch_id: Optional[str] = None, sequence_order: int = 1, hook_start_time: Optional[int] = None, hook_end_time: Optional[int] = None, priority_value: int = 0) -> models.Submission:
     new_submission = models.Submission(
         reviewer_id=reviewer_id,
         user_id=user_id,
@@ -17,7 +18,13 @@ async def create_submission(db: AsyncSession, reviewer_id: int, user_id: int, tr
         archived_url=archived_url,
         status='pending',
         session_id=session_id,
-        priority_value=0 # Default to 0 (Free)
+        priority_value=priority_value,
+        # Smart-Zone fields
+        batch_id=batch_id,
+        sequence_order=sequence_order,
+        hook_start_time=hook_start_time,
+        hook_end_time=hook_end_time,
+        is_priority=priority_value > 0
     )
     db.add(new_submission)
 
@@ -393,6 +400,10 @@ async def update_submission_details(db: AsyncSession, submission_id: int, update
         submission.genre = update_data.genre
     if update_data.tags is not None:
         submission.tags = update_data.tags
+    if update_data.hook_start_time is not None:
+        submission.hook_start_time = update_data.hook_start_time
+    if update_data.hook_end_time is not None:
+        submission.hook_end_time = update_data.hook_end_time
 
     # Update User Profile fields if provided
     if update_data.tiktok_handle is not None:
