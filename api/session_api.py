@@ -66,21 +66,19 @@ async def get_active_session(
         db: AsyncSession = Depends(get_db),
         token: schemas.TokenData = Depends(get_current_user),
 ):
-    user = await user_service.get_user_by_discord_id(db, discord_id=token.discord_id)
-    if not user:
-        raise HTTPException(status_code=403, detail="User not found")
-
-    target_reviewer_id = user.reviewer_profile.id if user.reviewer_profile else None
+    target_reviewer_id = None
 
     if reviewer_id:
-        # If requesting a specific reviewer, check permissions
-        if "admin" in token.roles:
-            target_reviewer_id = reviewer_id
-        elif target_reviewer_id != reviewer_id:
-            raise HTTPException(status_code=403, detail="Not authorized to view this reviewer's session")
+        # Public access: Anyone can view a reviewer's active session
+        target_reviewer_id = reviewer_id
+    else:
+        # Default to current user's reviewer profile if no ID provided
+        user = await user_service.get_user_by_discord_id(db, discord_id=token.discord_id)
+        if user and user.reviewer_profile:
+            target_reviewer_id = user.reviewer_profile.id
 
     if not target_reviewer_id:
-         raise HTTPException(status_code=403, detail="User is not a reviewer and no reviewer_id provided")
+         raise HTTPException(status_code=400, detail="Reviewer ID is required")
 
     session = await queue_service.get_active_session_by_reviewer(db, target_reviewer_id)
     if not session:

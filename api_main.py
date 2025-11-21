@@ -8,7 +8,7 @@ def create_app():
     app = FastAPI(title="Universe Bot Main App")
 
     # Import and include routers here to avoid circular imports
-    from api import auth, reviewer_api, user_api, admin_api, proxy_api, session_api, spotify_api
+    from api import auth, reviewer_api, user_api, admin_api, proxy_api, session_api, spotify_api, stripe_api
     app.include_router(auth.router, prefix="/api")
     app.include_router(spotify_api.router, prefix="/api")
     app.include_router(reviewer_api.router, prefix="/api")
@@ -16,6 +16,7 @@ def create_app():
     app.include_router(admin_api.router, prefix="/api")
     app.include_router(proxy_api.router, prefix="/api")
     app.include_router(session_api.router, prefix="/api/sessions", tags=["sessions"])
+    app.include_router(stripe_api.router, prefix="/api")
 
     socket_app = socketio.ASGIApp(sio)
     app.mount("/socket.io", socket_app)

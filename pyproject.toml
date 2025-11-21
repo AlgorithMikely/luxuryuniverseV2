@@ -30,6 +30,7 @@ trio = "^0.32.0"
 python-multipart = "^0.0.9"
 spotipy = "^2.25.1"
 aiosqlite = "^0.21.0"
+stripe = "^10.12.0"
 
 [build-system]
 requires = ["poetry-core"]

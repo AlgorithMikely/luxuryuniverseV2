@@ -22,8 +22,8 @@ async def connect(sid, environ, auth):
     async with AsyncSessionLocal() as db:
         user = await user_service.get_user_by_discord_id(db, token_data.discord_id)
         if not user:
-            logging.error(f"Could not get or create user for {sid} with discord_id {token_data.discord_id}")
-            raise ConnectionRefusedError("Could not get or create user")
+            logging.warning(f"Connection refused for {sid}: User {token_data.discord_id} not found in DB (Stale Token?)")
+            raise ConnectionRefusedError("User not found")
 
         logging.info(f"Client connected: {sid}, User: {user.username} ({user.id})")
 

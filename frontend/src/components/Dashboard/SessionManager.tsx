@@ -43,7 +43,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ reviewerId }) => {
   const fetchSettings = async () => {
     if (!reviewerId) return;
     try {
-      const response = await api.get<ReviewerProfile>(`/${reviewerId}/settings`);
+      const response = await api.get<ReviewerProfile>(`/reviewer/${reviewerId}/settings`);
       if (response.data.configuration?.priority_tiers) {
         setTiers(response.data.configuration.priority_tiers);
       }

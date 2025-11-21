@@ -71,9 +71,22 @@ const ReviewerSettingsPage: React.FC = () => {
         const loadData = async () => {
             if (!user?.reviewer_profile) return;
 
+            // Check for Stripe Connect return
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('stripe_connect') === 'return' && params.get('account_id')) {
+                try {
+                    await api.post('/stripe/finalize-connection', { account_id: params.get('account_id') });
+                    setMessage({ text: "Stripe account connected successfully!", type: 'success' });
+                    // Clean URL
+                    window.history.replaceState({}, '', window.location.pathname);
+                } catch (err) {
+                    setMessage({ text: "Failed to finalize Stripe connection.", type: 'error' });
+                }
+            }
+
             try {
                 // Fetch full settings to ensure we get the config with defaults
-                const response = await api.get<ReviewerProfile>(`/${user.reviewer_profile.id}/settings`);
+                const response = await api.get<ReviewerProfile>(`/reviewer/${user.reviewer_profile.id}/settings`);
                 const profile = response.data;
 
                 setReviewerProfile(profile);
@@ -112,7 +125,7 @@ const ReviewerSettingsPage: React.FC = () => {
                 }
             };
 
-            await api.patch(`/${reviewerProfile.id}/settings`, updateData);
+            await api.patch(`/reviewer/${reviewerProfile.id}/settings`, updateData);
             setMessage({ text: "Settings saved successfully!", type: 'success' });
             await checkAuth(); // Refresh global user state
         } catch (err) {
@@ -358,6 +371,63 @@ const ReviewerSettingsPage: React.FC = () => {
                                     className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded flex items-center gap-2 text-sm h-10"
                                 >
                                     <Plus size={16} /> Add
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Payment Configuration */}
+                    <section className="bg-gray-800 rounded-xl p-6 shadow-lg">
+                        <h2 className="text-xl font-semibold mb-4 text-purple-400">Payment Methods</h2>
+                        <p className="text-gray-400 text-sm mb-6">
+                            Connect your payment accounts to receive direct payments from users for priority requests.
+                        </p>
+
+                        <div className="space-y-4">
+                            {/* Stripe */}
+                            <div className="bg-gray-700/50 p-4 rounded-lg flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                    <div className="bg-[#635BFF] p-2 rounded text-white font-bold">Stripe</div>
+                                    <div>
+                                        <h3 className="font-medium text-white">Stripe Connect</h3>
+                                        <p className="text-xs text-gray-400">Accept Cards, Apple Pay, Google Pay, and Cash App.</p>
+                                    </div>
+                                </div>
+                                <div>
+                                    {reviewerProfile?.payment_configs?.find(c => c.provider === 'stripe' && c.is_enabled) ? (
+                                        <div className="flex items-center gap-2 text-green-400 bg-green-900/30 px-3 py-1 rounded-full border border-green-800">
+                                            <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                                            <span className="text-sm font-medium">Connected</span>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            onClick={async () => {
+                                                try {
+                                                    const res = await api.post('/stripe/connect');
+                                                    window.location.href = res.data.url;
+                                                } catch (err) {
+                                                    setMessage({ text: "Failed to initiate Stripe connection.", type: 'error' });
+                                                }
+                                            }}
+                                            className="bg-[#635BFF] hover:bg-[#534be0] text-white px-4 py-2 rounded text-sm font-medium transition-colors"
+                                        >
+                                            Connect Stripe
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* PayPal (Coming Soon) */}
+                            <div className="bg-gray-700/30 p-4 rounded-lg flex items-center justify-between opacity-60">
+                                <div className="flex items-center gap-4">
+                                    <div className="bg-[#003087] p-2 rounded text-white font-bold">PayPal</div>
+                                    <div>
+                                        <h3 className="font-medium text-white">PayPal</h3>
+                                        <p className="text-xs text-gray-400">Coming soon.</p>
+                                    </div>
+                                </div>
+                                <button disabled className="bg-gray-600 text-gray-400 px-4 py-2 rounded text-sm font-medium cursor-not-allowed">
+                                    Connect
                                 </button>
                             </div>
                         </div>

@@ -85,9 +85,32 @@ async def add_reviewer(
 @router.delete("/reviewers/{reviewer_id}", status_code=204)
 async def remove_reviewer(reviewer_id: int, db: AsyncSession = Depends(get_db)):
     """Remove reviewer status from a user."""
-    success = await user_service.remove_reviewer_profile(db, reviewer_id=reviewer_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Reviewer profile not found")
+    # The service returns the discord_channel_id if found, or False/None if not found
+    channel_id = await user_service.remove_reviewer_profile(db, reviewer_id=reviewer_id)
+    
+    if channel_id is False: # Handle the case where user wasn't found
+         raise HTTPException(status_code=404, detail="Reviewer profile not found")
+
+    # Trigger Discord channel deletion if a channel ID was associated
+    if channel_id:
+        try:
+            import bot_instance
+            if bot_instance.bot:
+                channel = bot_instance.bot.get_channel(int(channel_id))
+                if channel:
+                    print(f"Deleting Discord channel {channel_id} for removed reviewer {reviewer_id}")
+                    await channel.delete(reason="Reviewer profile removed via Admin API")
+                    
+                    # Also try to delete the category if it's empty
+                    if channel.category and len(channel.category.channels) == 0:
+                         print(f"Deleting empty category {channel.category.name}")
+                         await channel.category.delete(reason="Category empty after reviewer removal")
+                else:
+                    print(f"Discord channel {channel_id} not found in cache, skipping deletion.")
+        except Exception as e:
+            print(f"Failed to delete Discord channel {channel_id}: {e}")
+            # We don't raise an error here because the DB deletion was successful
+
     return {"ok": True}
 
 @router.get("/discord-users", response_model=list[schemas.DiscordUser])

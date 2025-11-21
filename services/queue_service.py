@@ -116,7 +116,10 @@ async def return_active_to_queue(db: AsyncSession, reviewer_id: int):
 async def get_reviewer_by_user_id(db: AsyncSession, user_id: int) -> Optional[models.Reviewer]:
     result = await db.execute(
         select(models.Reviewer)
-        .options(joinedload(models.Reviewer.user))
+        .options(
+            joinedload(models.Reviewer.user),
+            selectinload(models.Reviewer.payment_configs)
+        )
         .filter(models.Reviewer.user_id == user_id)
     )
     return _merge_reviewer_config(result.scalars().first())
@@ -124,7 +127,10 @@ async def get_reviewer_by_user_id(db: AsyncSession, user_id: int) -> Optional[mo
 async def get_reviewer_by_channel_id(db: AsyncSession, channel_id: str) -> Optional[models.Reviewer]:
     result = await db.execute(
         select(models.Reviewer)
-        .options(joinedload(models.Reviewer.user))
+        .options(
+            joinedload(models.Reviewer.user),
+            selectinload(models.Reviewer.payment_configs)
+        )
         .filter(models.Reviewer.discord_channel_id == str(channel_id))
     )
     return _merge_reviewer_config(result.scalars().first())
@@ -210,7 +216,13 @@ async def update_reviewer_settings(db: AsyncSession, reviewer_id: int, settings_
 async def get_submissions_by_user(db: AsyncSession, user_id: int) -> list[models.Submission]:
     result = await db.execute(
         select(models.Submission)
-        .options(joinedload(models.Submission.user)) # FIXED: Load user
+        .options(
+            joinedload(models.Submission.user),
+            joinedload(models.Submission.reviewer).options(
+                joinedload(models.Reviewer.user),
+                selectinload(models.Reviewer.payment_configs)
+            )
+        )
         .filter(models.Submission.user_id == user_id)
     )
     return result.scalars().all()

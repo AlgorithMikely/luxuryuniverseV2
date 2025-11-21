@@ -22,7 +22,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ reviewerId }) => {
         const loadReviewerSettings = async () => {
             if (!reviewerId) return;
             try {
-                const response = await api.get<ReviewerProfile>(`/${reviewerId}/settings`);
+                const response = await api.get<ReviewerProfile>(`/reviewer/${reviewerId}/settings`);
                 if (response.data.configuration?.priority_tiers) {
                     // Filter out 0 (Free) as it is handled separately
                     setTiers(response.data.configuration.priority_tiers.filter(t => t.value > 0).sort((a, b) => a.value - b.value));

@@ -32,9 +32,22 @@ async def resolve_discord_url(jump_url: str) -> str:
     _, channel_id, message_id = match.groups()
 
     try:
+        # Try to get from cache first
         channel = bot_instance.bot.get_channel(int(channel_id))
         if not channel:
-            raise HTTPException(status_code=404, detail=f"Discord channel not found: {channel_id}")
+            # If not in cache, try to fetch from API
+            try:
+                channel = await bot_instance.bot.fetch_channel(int(channel_id))
+            except Exception as e:
+                logging.error(f"Failed to fetch channel {channel_id}: {e}")
+                channel = None
+
+        if not channel:
+            logging.error(f"Channel {channel_id} not found in cache or API.")
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Discord channel {channel_id} not found. Ensure the bot is in the server and has 'View Channel' permissions."
+            )
 
         message = await channel.fetch_message(int(message_id))
         if not message.attachments:
@@ -42,6 +55,8 @@ async def resolve_discord_url(jump_url: str) -> str:
             return message.content
 
         return message.attachments[0].url
+    except HTTPException:
+        raise
     except Exception as e:
         logging.error(f"Failed to resolve Discord URL ({jump_url}): {e}")
         raise HTTPException(status_code=500, detail=f"Failed to resolve Discord URL: {e}")

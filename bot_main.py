@@ -49,6 +49,11 @@ class UniverseBot(commands.Bot):
         except Exception as e:
             print(f"Failed to sync commands: {e}")
 
+        # Log connected guilds for debugging
+        print(f"Connected to guilds: {[g.name for g in self.guilds]}")
+        for guild in self.guilds:
+            print(f" - Guild: {guild.name} (ID: {guild.id})")
+
         # Signal that the bot is ready
         print("Setting bot_ready event.")
         bot_instance_module.bot_ready.set()

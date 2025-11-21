@@ -7,6 +7,7 @@ import AuthCallbackPage from "./pages/AuthCallbackPage";
 import DashboardRedirect from "./pages/DashboardPage";
 import ReviewerDashboard from "./pages/ReviewerDashboard";
 import UserHubPage from "./pages/UserHubPage";
+import WalletHistoryPage from "./pages/WalletHistoryPage";
 import AdminPage from "./pages/AdminPage";
 import ReviewerSettingsPage from "./pages/ReviewerSettingsPage";
 import ArchivedSessionPage from './pages/ArchivedSessionPage';
@@ -56,6 +57,7 @@ function App() {
               <Route path="/reviewer/:reviewerId" element={<ReviewerDashboard />} />
               <Route path="/settings/reviewer" element={<ReviewerSettingsPage />} />
               <Route path="/hub" element={<UserHubPage />} />
+              <Route path="/wallet/history" element={<WalletHistoryPage />} />
               <Route path="/session/:sessionId" element={<ArchivedSessionPage />} />
               <Route path="/admin" element={<ProtectedRoute adminOnly={true}><AdminPage /></ProtectedRoute>} />
             </Route>

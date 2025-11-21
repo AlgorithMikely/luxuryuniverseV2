@@ -27,7 +27,7 @@ const HistoryPanel = () => {
     try {
       // Assuming we have reviewerId available in context or store, but here we might need to get it from the submission or store
       // submission.reviewer_id is available
-      await api.post(`/${submission.reviewer_id}/queue/return-active`);
+      await api.post(`/reviewer/${submission.reviewer_id}/queue/return-active`);
     } catch (error) {
       console.error("Failed to return active track to queue:", error);
     }

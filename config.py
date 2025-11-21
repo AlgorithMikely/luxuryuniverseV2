@@ -56,4 +56,7 @@ class Settings(BaseSettings):
     SPOTIFY_CLIENT_SECRET: Optional[str] = None
     SPOTIFY_REDIRECT_URI: str = "http://127.0.0.1:5173/api/spotify/callback"
 
+    # Stripe Settings
+    STRIPE_SECRET_KEY: Optional[str] = None
+
 settings = Settings()

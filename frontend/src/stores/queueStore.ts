@@ -44,7 +44,7 @@ export const useQueueStore = create<QueueState>()(
 
       fetchInitialStateHttp: async (reviewerId) => {
         try {
-          const response = await api.get<FullQueueState>(`/${reviewerId}/queue/initial-state`);
+          const response = await api.get<FullQueueState>(`/reviewer/${reviewerId}/queue/initial-state`);
           console.log('fetchInitialStateHttp response:', response.data);
           set({
             queue: response.data.queue || [],
@@ -160,7 +160,7 @@ export const useQueueStore = create<QueueState>()(
         }
 
         try {
-          await api.post(`/${track.reviewer_id}/queue/${trackId}/bookmark`);
+          await api.post(`/reviewer/${track.reviewer_id}/queue/${trackId}/bookmark`);
         } catch (error) {
           console.error("Failed to toggle bookmark:", error);
           // Revert on error (could be improved)
@@ -182,7 +182,7 @@ export const useQueueStore = create<QueueState>()(
         }
 
         try {
-          await api.post(`/${track.reviewer_id}/queue/${trackId}/spotlight`);
+          await api.post(`/reviewer/${track.reviewer_id}/queue/${trackId}/spotlight`);
         } catch (error) {
           console.error("Failed to toggle spotlight:", error);
           // Revert on error

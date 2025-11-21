@@ -6,7 +6,7 @@ import security
 from database import get_db
 from services import queue_service, user_service
 
-router = APIRouter(tags=["Reviewer"])
+router = APIRouter(prefix="/reviewer", tags=["Reviewer"])
 
 async def check_is_reviewer(
     reviewer_id: int = Path(...),
@@ -101,7 +101,7 @@ async def get_reviewer_settings(reviewer_id: int, db: AsyncSession = Depends(get
 
     # Since we need 'username' which is on the user model, we need to join.
     from sqlalchemy import select
-    from sqlalchemy.orm import joinedload
+    from sqlalchemy.orm import joinedload, selectinload
     import models
 
     # Use the service method that merges config defaults
@@ -112,7 +112,10 @@ async def get_reviewer_settings(reviewer_id: int, db: AsyncSession = Depends(get
     # But for now, let's just use what we have.
     result = await db.execute(
         select(models.Reviewer)
-        .options(joinedload(models.Reviewer.user))
+        .options(
+            joinedload(models.Reviewer.user),
+            selectinload(models.Reviewer.payment_configs)
+        )
         .filter(models.Reviewer.id == reviewer_id)
     )
     reviewer = result.scalars().first()

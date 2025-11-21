@@ -18,7 +18,8 @@ async def get_me(
     # Manually construct the UserProfile to include roles from the token
     moderated_reviewers = []
     if "admin" in token.roles:
-        moderated_reviewers = await user_service.get_all_reviewers(db)
+        users_with_profiles = await user_service.get_all_reviewers(db)
+        moderated_reviewers = [u.reviewer_profile for u in users_with_profiles if u.reviewer_profile]
 
     user_profile = schemas.UserProfile(
         id=db_user.id,
@@ -40,7 +41,7 @@ async def get_my_balance(
     balance = await economy_service.get_balance(db, reviewer_id=reviewer_id, user_id=current_user.id)
     return {"balance": balance}
 
-@router.get("/me/submissions")
+@router.get("/me/submissions", response_model=list[schemas.SubmissionWithReviewer])
 async def get_my_submissions(
     current_user: models.User = Depends(security.get_current_active_user),
     db: AsyncSession = Depends(get_db),
@@ -69,3 +70,41 @@ async def update_submission(
 
     updated_submission = await queue_service.update_submission_details(db, submission_id, submission_update)
     return updated_submission
+
+@router.get("/me/transactions", response_model=list[schemas.Transaction])
+async def get_my_transactions(
+    current_user: models.User = Depends(security.get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from sqlalchemy import select
+    result = await db.execute(
+        select(models.Transaction)
+        .filter(models.Transaction.user_id == current_user.id)
+        .order_by(models.Transaction.timestamp.desc())
+    )
+    return result.scalars().all()
+
+@router.post("/me/create-payment-intent", response_model=schemas.PaymentIntentResponse)
+async def create_payment_intent(
+    payment_intent: schemas.PaymentIntentCreate,
+    current_user: models.User = Depends(security.get_current_active_user),
+):
+    import stripe
+    import os
+    
+    stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+    if not stripe.api_key:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail="Stripe configuration missing")
+
+    try:
+        intent = stripe.PaymentIntent.create(
+            amount=payment_intent.amount,
+            currency=payment_intent.currency,
+            automatic_payment_methods={"enabled": True},
+            metadata={"user_id": current_user.id, "type": "wallet_topup"}
+        )
+        return {"client_secret": intent.client_secret}
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=str(e))

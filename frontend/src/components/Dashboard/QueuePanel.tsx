@@ -39,7 +39,7 @@ const QueuePanel: React.FC<QueuePanelProps> = ({ reviewerId: propReviewerId }) =
 
       if (id) {
         try {
-          const response = await api.get<ReviewerProfile>(`/${id}/settings`);
+          const response = await api.get<ReviewerProfile>(`/reviewer/${id}/settings`);
           if (response.data.configuration?.priority_tiers) {
             setTiers(response.data.configuration.priority_tiers);
           }
@@ -54,7 +54,7 @@ const QueuePanel: React.FC<QueuePanelProps> = ({ reviewerId: propReviewerId }) =
 
   const handleTrackSelect = async (track: Submission) => {
     try {
-      await api.post(`/${track.reviewer_id}/queue/return-active`);
+      await api.post(`/reviewer/${track.reviewer_id}/queue/return-active`);
     } catch (error) {
       console.error("Failed to return active track to queue:", error);
     }
@@ -64,7 +64,7 @@ const QueuePanel: React.FC<QueuePanelProps> = ({ reviewerId: propReviewerId }) =
   const handleMove = async (e: React.MouseEvent, track: Submission, priorityValue: number) => {
     e.stopPropagation(); // Prevent track selection
     try {
-      await api.post(`/${track.reviewer_id}/queue/${track.id}/priority?priority_value=${priorityValue}`);
+      await api.post(`/reviewer/${track.reviewer_id}/queue/${track.id}/priority?priority_value=${priorityValue}`);
       setOpenMenuId(null);
     } catch (error) {
       console.error("Failed to update priority:", error);
@@ -104,8 +104,10 @@ const QueuePanel: React.FC<QueuePanelProps> = ({ reviewerId: propReviewerId }) =
     };
 
     const style = colorMap[tier.color] || 'border-gray-600';
-    return `${style} bg-gray-800`;
+    return style;
   };
+
+  // ... (textColorMap and bgColorMap remain unchanged)
 
   // Map for text colors to avoid dynamic class issues
   const textColorMap: Record<string, string> = {
@@ -177,13 +179,16 @@ const QueuePanel: React.FC<QueuePanelProps> = ({ reviewerId: propReviewerId }) =
               const isActive = currentTrack?.id === submission.id;
               const priorityValue = submission.priority_value || 0;
 
+              const priorityStyle = getPriorityStyles(priorityValue);
+
               return (
                 <li
                   key={submission.id}
                   onClick={() => handleTrackSelect(submission)}
-                  className={`p-3 rounded-lg cursor-pointer transition-all duration-200 border-2 relative ${isActive
-                    ? 'bg-purple-900/40 border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.3)]'
-                    : getPriorityStyles(priorityValue)
+                  className={`p-3 rounded-lg cursor-pointer transition-all duration-200 border-2 relative 
+                    ${isActive
+                      ? `bg-purple-900/40 ${priorityStyle} shadow-[0_0_15px_rgba(168,85,247,0.3)]`
+                      : `${priorityStyle} bg-gray-800`
                     } hover:bg-gray-600`}
                 >
                   <div className="flex justify-between items-start">

@@ -86,7 +86,7 @@ const Navbar = () => {
                         className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white"
                         onClick={() => setIsProfileOpen(false)}
                       >
-                        {reviewer.tiktok_handle || reviewer.username || `Reviewer #${reviewer.id}`}
+                        {reviewer.tiktok_handle || reviewer.user?.username || `Reviewer #${reviewer.id}`}
                       </Link>
                     ))}
                   </div>

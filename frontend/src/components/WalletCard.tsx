@@ -2,14 +2,24 @@ import React from 'react';
 import { Coins, Zap, History } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { Link } from 'react-router-dom';
+import TopUpModal from './TopUpModal';
+import { useState } from 'react';
 
 interface WalletCardProps {
   balance: number;
   xp: number;
   level: number;
+  reviewerId?: number;
 }
 
-const WalletCard: React.FC<WalletCardProps> = ({ balance, xp, level }) => {
+const WalletCard: React.FC<WalletCardProps> = ({ balance, xp, level, reviewerId }) => {
+  const [isTopUpModalOpen, setIsTopUpModalOpen] = useState(false);
+  const { checkAuth } = useAuthStore();
+
+  const handleTopUpSuccess = () => {
+    checkAuth(); // Refresh balance
+  };
+
   return (
     <div className="bg-gradient-to-r from-purple-900 to-blue-900 rounded-xl p-6 shadow-lg text-white relative overflow-hidden">
       {/* Background Accent */}
@@ -41,14 +51,25 @@ const WalletCard: React.FC<WalletCardProps> = ({ balance, xp, level }) => {
                 style={{ width: `${(xp % 100)}%` }} // Simplified visualization
               ></div>
             </div>
-             <span className="text-xs text-gray-400 mt-1">{xp} XP</span>
+            <span className="text-xs text-gray-400 mt-1">{xp} XP</span>
           </div>
-           <button className="mt-4 bg-white text-purple-900 px-4 py-1.5 rounded-full text-sm font-bold hover:bg-gray-100 transition-colors flex items-center">
+
+          <button
+            onClick={() => setIsTopUpModalOpen(true)}
+            className="mt-4 bg-white text-purple-900 px-4 py-1.5 rounded-full text-sm font-bold hover:bg-gray-100 transition-colors flex items-center"
+          >
             <Zap className="w-3 h-3 mr-1" /> Top Up
           </button>
         </div>
       </div>
-    </div>
+
+      <TopUpModal
+        isOpen={isTopUpModalOpen}
+        onClose={() => setIsTopUpModalOpen(false)}
+        onSuccess={handleTopUpSuccess}
+        reviewerId={reviewerId}
+      />
+    </div >
   );
 };
 

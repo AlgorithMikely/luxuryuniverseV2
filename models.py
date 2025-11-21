@@ -67,12 +67,24 @@ class Reviewer(Base):
 
     user = relationship("User", back_populates="reviewer_profile")
     submissions = relationship("Submission", back_populates="reviewer")
-    economy_configs = relationship("EconomyConfig", back_populates="reviewer")
+    economy_configs = relationship("EconomyConfig", back_populates="reviewer", cascade="all, delete-orphan")
     transactions = relationship("Transaction", back_populates="reviewer")
+    payment_configs = relationship("PaymentConfig", back_populates="reviewer", cascade="all, delete-orphan")
 
     @property
     def username(self):
         return self.user.username if self.user else None
+
+
+class PaymentConfig(Base):
+    __tablename__ = "payment_configs"
+    id = Column(Integer, primary_key=True, index=True)
+    reviewer_id = Column(Integer, ForeignKey("reviewers.id"), nullable=False)
+    provider = Column(String, nullable=False) # e.g. "stripe", "paypal"
+    is_enabled = Column(Boolean, default=False, nullable=False)
+    credentials = Column(JSON, nullable=True)
+
+    reviewer = relationship("Reviewer", back_populates="payment_configs")
 
 
 class Submission(Base):

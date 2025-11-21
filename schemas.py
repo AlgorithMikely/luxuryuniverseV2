@@ -1,5 +1,35 @@
 from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
+import datetime
+
+class ReviewerConfiguration(BaseModel):
+    active_playlist_id: Optional[str] = None
+    model_config = ConfigDict(extra='allow')
+
+class PaymentConfig(BaseModel):
+    id: int
+    reviewer_id: int
+    provider: str
+    is_enabled: bool
+    credentials: Optional[dict] = None
+    model_config = ConfigDict(from_attributes=True)
+
+class PaymentConfigUpdate(BaseModel):
+    is_enabled: Optional[bool] = None
+    credentials: Optional[dict] = None
+
+    configuration: Optional[ReviewerConfiguration] = None
+
+class ReviewerCreate(BaseModel):
+    discord_id: str
+    tiktok_handle: str
+
+class ReviewerSettingsUpdate(BaseModel):
+    tiktok_handle: Optional[str] = None
+    discord_channel_id: Optional[str] = None
+    configuration: Optional[ReviewerConfiguration] = None
+
+
 
 class UserBase(BaseModel):
     discord_id: str
@@ -15,37 +45,28 @@ class User(UserBase):
     level: int = 0
 
     model_config = ConfigDict(from_attributes=True)
-
-class PriorityTier(BaseModel):
-    value: int
-    label: str
-    color: str
-
-class ReviewerConfiguration(BaseModel):
-    priority_tiers: List[PriorityTier]
-
-class ReviewerProfile(BaseModel):
-    id: int
-    tiktok_handle: str | None = None
-    discord_channel_id: str | None = None
-    username: str | None = None
-    configuration: Optional[ReviewerConfiguration] = None
-    model_config = ConfigDict(from_attributes=True)
-
-class UserProfile(User):
-    reviewer_profile: ReviewerProfile | None = None
-    roles: List[str] = []
-    moderated_reviewers: List[ReviewerProfile] = []
-
-class ReviewerCreate(BaseModel):
-    discord_id: str
-    tiktok_handle: Optional[str] = None
-    model_config = ConfigDict(from_attributes=True)
-
-class ReviewerSettingsUpdate(BaseModel):
     tiktok_handle: Optional[str] = None
     discord_channel_id: Optional[str] = None
     configuration: Optional[ReviewerConfiguration] = None
+
+class ReviewerProfile(BaseModel):
+    id: int
+    user_id: int
+    tiktok_handle: str
+    discord_channel_id: Optional[str] = None
+    queue_status: str
+    configuration: Optional[ReviewerConfiguration] = None
+    payment_configs: List[PaymentConfig] = []
+    user: Optional[User] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+class UserProfile(UserBase):
+    id: int
+    reviewer_profile: Optional[ReviewerProfile] = None
+    roles: List[str] = []
+    moderated_reviewers: List[ReviewerProfile] = []
+    model_config = ConfigDict(from_attributes=True)
 
 class ReviewCreate(BaseModel):
     score: Optional[float] = None
@@ -76,6 +97,7 @@ class Submission(BaseModel):
     score: Optional[float] = None
     notes: Optional[str] = None
     user: User
+    # reviewer field removed from base to avoid lazy load errors
     bookmarked: bool = False
     spotlighted: bool = False
     priority_value: int = 0
@@ -87,6 +109,9 @@ class Submission(BaseModel):
     tags: Optional[List[str]] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+class SubmissionWithReviewer(Submission):
+    reviewer: Optional[ReviewerProfile] = None
 
 class SubmissionUpdate(BaseModel):
     track_title: Optional[str] = None
@@ -132,3 +157,17 @@ class FullQueueState(BaseModel):
     bookmarks: List[Submission]
     spotlight: List[Submission]
     current_track: Optional[Submission] = None
+
+class Transaction(BaseModel):
+    id: int
+    amount: int
+    reason: str
+    timestamp: datetime.datetime
+    model_config = ConfigDict(from_attributes=True)
+
+class PaymentIntentCreate(BaseModel):
+    amount: int
+    currency: str = "usd"
+
+class PaymentIntentResponse(BaseModel):
+    client_secret: str

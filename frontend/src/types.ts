@@ -26,14 +26,22 @@ export interface ReviewerConfiguration {
   priority_tiers: PriorityTier[];
 }
 
+export interface PaymentConfig {
+  id: number;
+  provider: string;
+  is_enabled: boolean;
+  credentials?: Record<string, any>;
+}
+
 export interface ReviewerProfile {
   id: number;
   user_id: number;
   tiktok_handle: string;
   discord_channel_id?: string;
   queue_status: 'open' | 'closed';
-  username?: string;
   configuration?: ReviewerConfiguration;
+  payment_configs?: PaymentConfig[];
+  user?: User;
 }
 
 // --- Submissions & Queue ---
@@ -41,10 +49,11 @@ export interface Submission {
   id: number;
   reviewer_id: number;
   user: User;
+  reviewer?: ReviewerProfile;
   track_url: string;
   track_title?: string;
   archived_url?: string;
-  status: 'pending' | 'playing' | 'reviewed' | 'played' | 'rejected'; // Added rejected
+  status: 'pending' | 'playing' | 'reviewed' | 'played' | 'rejected';
   score?: number;
   notes?: string;
   note?: string; // Alias for notes to match frontend usage

@@ -3,13 +3,10 @@ import { Link } from 'react-router-dom';
 import QueueStatCard from './QueueStatCard';
 import api from '../services/api';
 import { toast } from 'react-hot-toast';
+import { ReviewerProfile } from '../types';
 
 interface ManagedQueueCardProps {
-    reviewer: {
-        id: number;
-        tiktok_handle: string | null;
-        username?: string;
-    };
+    reviewer: ReviewerProfile;
 }
 
 const ManagedQueueCard: React.FC<ManagedQueueCardProps> = ({ reviewer }) => {
@@ -47,40 +44,19 @@ const ManagedQueueCard: React.FC<ManagedQueueCardProps> = ({ reviewer }) => {
         }
     };
 
-    const reviewerName = reviewer.tiktok_handle || reviewer.username || `Reviewer #${reviewer.id}`;
+    const reviewerName = reviewer.tiktok_handle || reviewer.user?.username || `Reviewer #${reviewer.id}`;
     const dashboardLink = `/reviewer/${reviewer.id}`;
 
     return (
         <QueueStatCard
             queueLength={stats.length}
             avgWaitTime={stats.avg_wait_time}
-            status={stats.status as 'open'|'closed'}
+            status={stats.status as 'open' | 'closed'}
             onToggleStatus={handleToggleStatus}
             isReviewer={true}
             title={reviewerName}
             dashboardLink={dashboardLink}
         />
-    return (
-        <div className="space-y-2">
-            <div className="flex items-center justify-between px-1">
-                <h3 className="text-lg font-bold text-gray-300">
-                    {reviewer.tiktok_handle || reviewer.username || `Reviewer #${reviewer.id}`}
-                </h3>
-                <Link
-                    to={`/reviewer/${reviewer.id}`}
-                    className="text-xs text-purple-400 hover:text-purple-300"
-                >
-                    Visit Dashboard &rarr;
-                </Link>
-            </div>
-            <QueueStatCard
-                queueLength={stats.length}
-                avgWaitTime={stats.avg_wait_time}
-                status={stats.status as 'open'|'closed'}
-                onToggleStatus={handleToggleStatus}
-                isReviewer={true}
-            />
-        </div>
     );
 };
 

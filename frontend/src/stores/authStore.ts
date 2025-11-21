@@ -3,15 +3,9 @@ import { persist } from 'zustand/middleware';
 import api from '../services/api';
 import { useSessionStore } from './sessionStore';
 
-export interface ReviewerProfile {
-  id: number;
-  discord_channel_id: string | null;
-  tiktok_handle: string | null;
-  queue_status?: 'open' | 'closed';
-  username?: string;
-}
+import { UserProfile, ReviewerProfile } from '../types';
 
-import { UserProfile } from '../types';
+
 
 // Remove local ReviewerProfile if it duplicates types.ts, but for now just UserProfile
 

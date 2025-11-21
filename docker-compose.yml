@@ -26,6 +26,9 @@ services:
       - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
       - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
       - DISCORD_REDIRECT_URI=http://localhost:5173/api/auth/callback
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
     depends_on:
       - db
     command: [ "python", "-m", "bot_main" ]
@@ -33,6 +36,8 @@ services:
   frontend:
     build:
       context: ./frontend
+      args:
+        - VITE_STRIPE_PUBLISHABLE_KEY=${VITE_STRIPE_PUBLISHABLE_KEY}
     ports:
       - "5173:80"
     depends_on:

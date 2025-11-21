@@ -9,7 +9,9 @@ async def get_user_by_discord_id(db: AsyncSession, discord_id: str) -> models.Us
     """Retrieves a user by their Discord ID."""
     result = await db.execute(
         select(models.User)
-        .options(joinedload(models.User.reviewer_profile))
+        .options(
+            joinedload(models.User.reviewer_profile).selectinload(models.Reviewer.payment_configs)
+        )
         .filter(models.User.discord_id == discord_id)
     )
     user = result.scalars().first()
@@ -79,7 +81,9 @@ async def get_all_reviewers(db: AsyncSession) -> list[models.User]:
     result = await db.execute(
         select(models.User)
         .join(models.Reviewer)
-        .options(joinedload(models.User.reviewer_profile))
+        .options(
+            joinedload(models.User.reviewer_profile).selectinload(models.Reviewer.payment_configs)
+        )
     )
     return result.scalars().all()
 
@@ -106,16 +110,17 @@ async def add_reviewer_profile(
     # FIXED: Re-fetch the user to ensure the new reviewer_profile is loaded and ready for Pydantic
     return await get_user_by_discord_id(db, user.discord_id)
 
-async def remove_reviewer_profile(db: AsyncSession, reviewer_id: int) -> bool:
+async def remove_reviewer_profile(db: AsyncSession, reviewer_id: int) -> str | None:
     """Removes a reviewer profile from a user."""
     result = await db.execute(select(models.Reviewer).filter(models.Reviewer.id == reviewer_id))
     reviewer_profile = result.scalars().first()
     if not reviewer_profile:
         return False
 
+    channel_id = reviewer_profile.discord_channel_id
     await db.delete(reviewer_profile)
     await db.commit()
-    return True
+    return channel_id
 
 async def get_all_discord_users(db: AsyncSession) -> list[models.DiscordUserCache]:
     """Retrieves all users from the Discord user cache."""

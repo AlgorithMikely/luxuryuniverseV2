@@ -28,38 +28,75 @@ class ChannelCreatorCog(commands.Cog):
     async def create_reviewer_channels(self):
         """
         Periodically checks for new reviewers with no channel ID and creates their channels.
+        Also verifies that existing channel IDs in the DB actually exist in Discord.
         """
         logging.info("Checking for new reviewers to create channels for...")
 
         # Use async for to handle the async generator
         async for db in get_db():
             try:
-                # Use select() instead of query() for AsyncSession
-                # Use selectinload to eagerly load the 'user' relationship to avoid async IO errors
+                # 1. Check for Reviewers with NO channel ID (New Reviewers)
                 stmt = select(Reviewer).options(selectinload(Reviewer.user)).filter(Reviewer.discord_channel_id == None)
                 result = await db.execute(stmt)
                 new_reviewers = result.scalars().all()
 
-                if not new_reviewers:
-                    logging.info("No new reviewers found.")
+                # 2. Check for Reviewers WITH channel ID (Verify Existence)
+                stmt_existing = select(Reviewer).options(selectinload(Reviewer.user)).filter(Reviewer.discord_channel_id != None)
+                result_existing = await db.execute(stmt_existing)
+                existing_reviewers = result_existing.scalars().all()
+
+                # Combine lists to process
+                all_reviewers_to_check = list(new_reviewers) + list(existing_reviewers)
+
+                if not all_reviewers_to_check:
+                    logging.info("No reviewers found to check.")
                     return
 
-                for reviewer in new_reviewers:
+                guild = self._get_guild()
+                if not guild:
+                    return
+
+                for reviewer in all_reviewers_to_check:
                     # access reviewer.user safely because of selectinload
                     user = await self.bot.fetch_user(int(reviewer.user.discord_id))
                     if not user:
                         logging.warning(f"Could not find user with ID {reviewer.user.discord_id}")
                         continue
 
-                    guild = self._get_guild()
-                    if not guild:
-                        return
+                    # Check if channel exists if ID is present
+                    # Check if channel exists if ID is present
+                    if reviewer.discord_channel_id:
+                        channel = guild.get_channel(int(reviewer.discord_channel_id))
+                        if not channel:
+                            try:
+                                # Fallback to API fetch to be sure it's not just a cache miss
+                                channel = await guild.fetch_channel(int(reviewer.discord_channel_id))
+                            except discord.NotFound:
+                                channel = None
+                            except discord.Forbidden:
+                                logging.warning(f"Bot lacks permission to view channel {reviewer.discord_channel_id} for {user.name}")
+                                continue
+                            except Exception as e:
+                                logging.error(f"Error fetching channel {reviewer.discord_channel_id}: {e}")
+                                continue
+                        if channel:
+                            # Channel exists, all good
+                            logging.info(f"Channel {channel.id} verified for {user.name}")
+                            continue
+                        else:
+                            # CRITICAL FIX: Do NOT recreate if ID exists but channel not found.
+                            # This prevents the "deleting and restoring" loop if the bot just can't see it.
+                            logging.error(f"Channel {reviewer.discord_channel_id} for {user.name} NOT FOUND (ID exists in DB). Stopping to prevent recreation loop. Please check permissions or clear DB ID manually.")
+                            continue 
 
+                    # --- Creation Logic ---
+                    # Only runs if reviewer.discord_channel_id was None initially
+                    
                     # Sanitize username for channel names
                     sanitized_username = "".join(c for c in user.name if c.isalnum() or c in ('_')).lower()
                     category_name = f"{sanitized_username}-reviews"
 
-                    logging.info(f"Creating channel category for {user.name}: {category_name}")
+                    logging.info(f"Creating/Finding channel category for {user.name}: {category_name}")
 
                     try:
                         # Define permissions for the private channel
@@ -69,27 +106,44 @@ class ChannelCreatorCog(commands.Cog):
                             user: discord.PermissionOverwrite(read_messages=True)
                         }
 
-                        # Create the category
-                        category = await guild.create_category(category_name)
+                        # Check if category already exists
+                        category = discord.utils.get(guild.categories, name=category_name)
+                        
+                        submissions_channel = None
+                        if category:
+                            logging.info(f"Found existing category: {category.name} ({category.id})")
+                            submissions_channel = discord.utils.get(category.text_channels, name="submit-music-here")
+                            if submissions_channel:
+                                logging.info(f"Found existing submissions channel: {submissions_channel.name} ({submissions_channel.id})")
+                        else:
+                            # Create the category
+                            logging.info(f"Category {category_name} not found. Creating new category.")
+                            category = await guild.create_category(category_name)
 
-                        # Create the channels
-                        submissions_channel = await category.create_text_channel("submit-music-here")
-                        await category.create_text_channel("view-the-line")
-                        await category.create_text_channel("files-and-links", overwrites=overwrites)
+                        if not submissions_channel:
+                            # Create the channels if they don't exist
+                            logging.info(f"Submissions channel not found in {category.name}. Creating new channels.")
+                            submissions_channel = await category.create_text_channel("submit-music-here")
+                            await category.create_text_channel("view-the-line")
+                            await category.create_text_channel("files-and-links", overwrites=overwrites)
+                            
+                            await submissions_channel.send(
+                                f"Welcome {user.mention}! This is your new submission channel."
+                            )
+                        else:
+                             logging.info(f"Using existing submissions channel: {submissions_channel.id}")
 
                         # Update the reviewer's profile with the new channel ID
                         reviewer.discord_channel_id = str(submissions_channel.id)
                         await db.commit() # Async commit
 
-                        logging.info(f"Successfully created channels for {user.name}")
-                        await submissions_channel.send(
-                            f"Welcome {user.mention}! This is your new submission channel."
-                        )
+                        logging.info(f"Successfully linked channels for {user.name} to ID {submissions_channel.id}")
 
                     except discord.Forbidden:
                         logging.error(f"Bot does not have permission to create channels in guild {guild.name}.")
                     except Exception as e:
                         logging.error(f"An error occurred while creating channels for {user.name}: {e}")
+                        await db.rollback()
 
             except Exception as e:
                 logging.error(f"Error in create_reviewer_channels loop: {e}")
@@ -108,40 +162,9 @@ class ChannelCreatorCog(commands.Cog):
         Periodically checks for reviewer channels that no longer have a corresponding
         reviewer in the database and deletes them.
         """
-        logging.info("Checking for reviewer channels to delete...")
-        guild = self._get_guild()
-        if not guild:
-            return
-
-        async for db in get_db():
-            try:
-                # Select only the discord_channel_id column
-                stmt = select(Reviewer.discord_channel_id).where(Reviewer.discord_channel_id != None)
-                result = await db.execute(stmt)
-                reviewer_channel_ids = {str(r) for r in result.scalars().all()}
-
-                for category in guild.categories:
-                    if category.name.endswith("-reviews"):
-                        # Find a submission channel to check against the DB
-                        submission_channel = next((c for c in category.channels if c.name == "submit-music-here"), None)
-
-                        if submission_channel and str(submission_channel.id) not in reviewer_channel_ids:
-                            logging.info(f"Found orphaned reviewer category '{category.name}'. Deleting...")
-                            try:
-                                # Delete all channels in the category first
-                                for channel in category.channels:
-                                    await channel.delete(reason="Reviewer profile removed.")
-                                # Then delete the category itself
-                                await category.delete(reason="Reviewer profile removed.")
-                                logging.info(f"Successfully deleted category '{category.name}' and its channels.")
-                            except discord.Forbidden:
-                                logging.error(f"Bot lacks permission to delete channels in category '{category.name}'.")
-                            except Exception as e:
-                                logging.error(f"Error deleting category '{category.name}': {e}")
-            except Exception as e:
-                logging.error(f"Error in delete_removed_reviewer_channels loop: {e}")
-
-            return
+        # PERMANENTLY DISABLED: To prevent accidental deletion of channels.
+        # The bot should not delete channels automatically.
+        pass
 
     @delete_removed_reviewer_channels.before_loop
     async def before_delete_removed_reviewer_channels(self):

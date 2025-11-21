@@ -55,7 +55,7 @@ const ReviewHub = () => {
 
     try {
       const response = await api.post(
-        `/${reviewerId}/queue/review/${currentTrack.id}`,
+        `/reviewer/${reviewerId}/queue/review/${currentTrack.id}`,
         {
           score: score === 0 ? null : score,
           notes,
@@ -78,7 +78,7 @@ const ReviewHub = () => {
   const handleNextTrack = async () => {
     if (!reviewerId) return;
     try {
-      const response = await api.post(`/${reviewerId}/queue/next`);
+      const response = await api.post(`/reviewer/${reviewerId}/queue/next`);
       setCurrentTrack(response.data);
     } catch (error) {
       console.error('Failed to get next track:', error);
@@ -165,8 +165,8 @@ const ReviewHub = () => {
                   type="button"
                   onClick={() => setScore(star)}
                   className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-200 ${isSelected
-                      ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/30 scale-105 ring-2 ring-purple-400/50'
-                      : 'bg-white/5 text-white/20 hover:bg-white/10 hover:scale-105'
+                    ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/30 scale-105 ring-2 ring-purple-400/50'
+                    : 'bg-white/5 text-white/20 hover:bg-white/10 hover:scale-105'
                     }`}
                 >
                   <span className="font-bold text-lg">{star}</span>
@@ -190,8 +190,8 @@ const ReviewHub = () => {
                     type="button"
                     onClick={() => setScore(targetScore)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${isSelected
-                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/50'
-                        : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white'
+                      ? 'bg-purple-500/20 text-purple-300 border border-purple-500/50'
+                      : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white'
                       }`}
                   >
                     +{fraction === 0 ? '0' : fraction}
