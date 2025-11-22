@@ -662,6 +662,201 @@ class TikTokCog(commands.Cog):
         # The current implementation of _background_connect uses interaction.followup.send if interaction is not None.
         # So we are good.
 
+        # 4. Award coins if the threshold was met
+        if coins_to_award > 0:
+            reason = f"TikTok {interaction_type.title()} interaction with @{host_handle}"
+            await self.award_luxury_coins(session, user_id, coins_to_award, reviewer.id, reason)
+
+    async def award_luxury_coins(self, session: AsyncSession, user_id: int, amount: int, reviewer_id: int, reason: str = "TikTok gift rewards"):
+        # Use economy_service directly instead of Cog lookup to avoid circular deps or context issues
+        try:
+            await economy_service.add_coins(
+                session,
+                reviewer_id=reviewer_id,
+                user_id=user_id,
+                amount=amount,
+                reason=reason
+            )
+            logger.info(f"Awarded {amount} coins to user {user_id} for {reason} (Reviewer: {reviewer_id})")
+        except Exception as e:
+            logger.error(f"Error awarding luxury coins: {e}")
+
+    async def _perform_link_account(self, interaction: discord.Interaction, handle: str) -> tuple[bool, str]:
+        """Performs the logic of linking a TikTok account and returns a status message."""
+        handle = handle.replace('@', '').lower()
+        user_id = interaction.user.id
+
+        async with AsyncSessionLocal() as session:
+            # 1. Check if the handle exists
+            stmt = select(models.TikTokAccount).where(models.TikTokAccount.handle_name == handle)
+            result = await session.execute(stmt)
+            account = result.scalar_one_or_none()
+
+            if not account:
+                return False, (
+                    f"❌ **TikTok handle not found.**\n"
+                    f"The handle `@{handle}` hasn't been seen by the bot yet. "
+                    f"Please join the live stream and interact (e.g., like, comment, or share) "
+                    f"so the bot can register your account, then try this command again."
+                )
+
+            # 2. Check if linked
+            if account.user_id and account.user_id != user_id:
+                # Note: account.user_id maps to models.User.id, not Discord ID directly. 
+                # But models.User has discord_id.
+                # We need to check if the linked user_id corresponds to another discord user.
+                # For simplicity, we assume strict 1-to-1 mapping if set.
+                return False, f"❌ That TikTok handle is already linked to another Discord user."
+
+            # 3. Link
+            # Find the User record for this discord_id
+            stmt_user = select(models.User).where(models.User.discord_id == str(user_id))
+            result_user = await session.execute(stmt_user)
+            user = result_user.scalar_one_or_none()
+            
+            if not user:
+                # Create user if not exists? Or fail?
+                # Usually user should exist if they are interacting.
+                return False, "❌ You are not registered in the system."
+
+            account.user_id = user.id
+            await session.commit()
+            
+            # Backfill submissions
+            stmt_sub = update(models.Submission).where(
+                models.Submission.user_id == user.id,
+                (models.Submission.tiktok_username == None) | (models.Submission.tiktok_username == '')
+            ).values(tiktok_username=handle)
+            result_sub = await session.execute(stmt_sub)
+            update_count = result_sub.rowcount
+            await session.commit()
+
+        response_message = f"✅ Your Discord account has been successfully linked to the TikTok handle **@{handle}**."
+        if update_count > 0:
+            response_message += f"\nUpdated {update_count} of your past submissions with this handle."
+
+        # Trigger embed refresh (if cog exists)
+        embed_cog = self.bot.get_cog('EmbedRefreshCog')
+        if embed_cog:
+            embed_cog.trigger_update()
+
+        # TODO: Achievement "On the List"
+
+        return True, response_message
+
+    async def _background_connect(self, interaction: Optional[discord.Interaction], unique_id: str, persistent: bool):
+        """A background task to handle the TikTok connection lifecycle."""
+        disconnect_event = asyncio.Event()
+        max_retries = 3
+        session_id = None
+        
+        unique_id = unique_id.replace('@', '').lower()
+        
+        try:
+            for attempt in range(max_retries):
+                try:
+                    async with AsyncSessionLocal() as session:
+                        # Get active session
+                        stmt = select(models.ReviewSession).join(models.Reviewer).where(
+                            models.Reviewer.tiktok_handle == unique_id,
+                            models.ReviewSession.is_active == True
+                        ).order_by(desc(models.ReviewSession.created_at)).limit(1)
+                        result = await session.execute(stmt)
+                        active_session = result.scalar_one_or_none()
+                        
+                        if active_session:
+                            session_id = active_session.id
+                            logger.info(f"Attempting to connect to @{unique_id} using active session {session_id}")
+                        else:
+                            logger.info(f"Attempting to connect to @{unique_id} without an active session.")
+
+                    client = TikTokLiveClient(unique_id=f"@{unique_id}")
+                    self._setup_listeners(client, disconnect_event, session_id)
+
+                    self.live_clients[unique_id] = client
+                    if persistent:
+                        self.persistent_connections.add(unique_id)
+
+                    await client.start()
+
+                    # Wait until the disconnect event is set
+                    await disconnect_event.wait()
+
+                    logger.info(f"Disconnect event received for @{unique_id}. Proceeding with cleanup.")
+                    break  # Exit the retry loop
+
+                except UserNotFoundError:
+                    logger.warning(f"Connection attempt failed for @{unique_id}: User not found.")
+                    if interaction:
+                        await interaction.followup.send(f"❌ **User Not Found:** Could not connect to @{unique_id}.", ephemeral=True)
+                    break
+
+                except UserOfflineError:
+                    logger.info(f"Connection attempt failed for @{unique_id} because the user is offline.")
+                    if interaction:
+                        await interaction.followup.send(f"❌ **User Offline:** Could not connect to @{unique_id}.", ephemeral=True)
+                    break
+
+                except SignAPIError as e:
+                    logger.warning(f"Sign API Error connecting to @{unique_id}: {e}")
+                    if interaction:
+                        await interaction.followup.send(f"❌ **Sign API Error:** Could not connect to @{unique_id}. Please try again later.", ephemeral=True)
+                    break
+
+                except Exception as e:
+                    logger.error(f"Error connecting to @{unique_id}: {e}", exc_info=True)
+                    if attempt < max_retries - 1:
+                        logger.info(f"Retrying connection to @{unique_id} in 5 seconds...")
+                        await asyncio.sleep(5)
+                    else:
+                        logger.error(f"Failed to connect to @{unique_id} after {max_retries} attempts.")
+                        if interaction:
+                            await interaction.followup.send(f"❌ **Connection Failed:** Could not connect to @{unique_id} after multiple attempts.", ephemeral=True)
+        finally:
+            if unique_id in self.live_clients:
+                del self.live_clients[unique_id]
+            if persistent and unique_id in self.persistent_connections:
+                self.persistent_connections.remove(unique_id)
+
+    @app_commands.command(name="tiktok_status", description="Check the status of TikTok Live connections")
+    async def tiktok_status(self, interaction: discord.Interaction):
+        if not self.live_clients:
+            await interaction.response.send_message("No active TikTok Live connections.", ephemeral=True)
+            return
+
+        status_msg = "**Active TikTok Live Connections:**\n"
+        for handle, client in self.live_clients.items():
+            status_msg += f"- **@{handle}**: Connected (Room ID: {client.room_id})\n"
+
+        await interaction.response.send_message(status_msg, ephemeral=True)
+
+    @app_commands.command(name="link_tiktok", description="Link your TikTok account to your Discord profile")
+    async def link_tiktok(self, interaction: discord.Interaction, handle: str):
+        await interaction.response.defer(ephemeral=True)
+        success, message = await self._perform_link_account(interaction, handle)
+        await interaction.followup.send(message, ephemeral=True)
+
+    @app_commands.command(name="connect_tiktok", description="Manually connect to a TikTok Live stream")
+    async def connect_tiktok(self, interaction: discord.Interaction, handle: str):
+        """Manually connect to a TikTok Live stream."""
+        await interaction.response.defer(ephemeral=True)
+        
+        handle = handle.replace('@', '').lower()
+        
+        if handle in self.live_clients:
+            await interaction.followup.send(f"⚠️ Already connected to **@{handle}**.", ephemeral=True)
+            return
+
+        # Start background connection task
+        # We pass persistent=False because manual connections might not be intended to auto-reconnect forever 
+        # unless added to the monitored list. But for now, let's assume manual = temporary unless monitored.
+        # Actually, if the user manually connects, they probably want it to work.
+        self.bot.loop.create_task(self._background_connect(interaction, handle, persistent=False))
+        
+        # _background_connect handles the success/failure messages via interaction.followup if provided.
+        # The current implementation of _background_connect uses interaction.followup.send if interaction is not None.
+        # So we are good.
+
     @app_commands.command(name="disconnect_tiktok", description="Disconnect from a TikTok Live stream")
     async def disconnect_tiktok(self, interaction: discord.Interaction, handle: str):
         """Disconnect from a TikTok Live stream."""
@@ -675,7 +870,7 @@ class TikTokCog(commands.Cog):
 
         try:
             client = self.live_clients[handle]
-            await client.stop()
+            await client.disconnect()
             
             if handle in self.live_clients:
                 del self.live_clients[handle]
