@@ -312,6 +312,14 @@ async def return_active(reviewer_id: int, db: AsyncSession = Depends(get_db)):
 async def get_played_queue(reviewer_id: int, db: AsyncSession = Depends(get_db)):
     return await queue_service.get_played_queue(db, reviewer_id=reviewer_id)
 
+@router.get("/{reviewer_id}/queue/current", response_model=Optional[schemas.Submission])
+async def get_current_track_public(reviewer_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Public endpoint to get the currently playing track for a reviewer.
+    Designed for OBS overlays and public widgets.
+    """
+    return await queue_service.get_current_track(db, reviewer_id=reviewer_id)
+
 @router.post("/{reviewer_id}/queue/review/{submission_id}", response_model=schemas.Submission, dependencies=[Depends(check_is_reviewer)])
 async def review_submission(submission_id: int, review: schemas.ReviewCreate, db: AsyncSession = Depends(get_db)):
     return await queue_service.review_submission(db, submission_id, review)
