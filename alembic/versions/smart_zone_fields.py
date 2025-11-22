@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'smart_zone_fields'
-down_revision: Union[str, Sequence[str], None] = ('f657320e6a35', 'e5f6g7h8i9j0')
+down_revision: Union[str, Sequence[str], None] = ('5223aef398a5', '21e7ade3848d')
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

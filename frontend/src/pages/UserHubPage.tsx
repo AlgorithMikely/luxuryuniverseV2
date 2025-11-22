@@ -10,6 +10,8 @@ import EditSubmissionDrawer from "../components/EditSubmissionDrawer";
 import { Submission } from "../types";
 import CheckoutModal from "../components/CheckoutModal";
 
+import ReviewerList from "../components/ReviewerList";
+
 const UserHubPage = () => {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -107,6 +109,12 @@ const UserHubPage = () => {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Reviewers List */}
+        <div>
+          <h2 className="text-2xl font-bold mb-4">Reviewers</h2>
+          <ReviewerList />
         </div>
 
         {/* Submissions Section */}

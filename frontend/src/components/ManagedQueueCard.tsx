@@ -31,18 +31,7 @@ const ManagedQueueCard: React.FC<ManagedQueueCardProps> = ({ reviewer }) => {
         return () => clearInterval(interval);
     }, [reviewer.id]);
 
-    const handleToggleStatus = async () => {
-        const newStatus = stats.status === 'open' ? 'closed' : 'open';
-        try {
-            // Use the new explicit endpoint
-            const response = await api.post(`/reviewer/${reviewer.id}/queue/status`, { status: newStatus });
-            setStats(response.data);
-            toast.success(`Queue ${newStatus === 'open' ? 'opened' : 'closed'}!`);
-        } catch (error) {
-            console.error("Failed to toggle status:", error);
-            toast.error("Failed to update status");
-        }
-    };
+
 
     const reviewerName = reviewer.tiktok_handle || reviewer.user?.username || `Reviewer #${reviewer.id}`;
     const dashboardLink = `/reviewer/${reviewer.id}`;
@@ -52,7 +41,7 @@ const ManagedQueueCard: React.FC<ManagedQueueCardProps> = ({ reviewer }) => {
             queueLength={stats.length}
             avgWaitTime={stats.avg_wait_time}
             status={stats.status as 'open' | 'closed'}
-            onToggleStatus={handleToggleStatus}
+
             isReviewer={true}
             title={reviewerName}
             dashboardLink={dashboardLink}

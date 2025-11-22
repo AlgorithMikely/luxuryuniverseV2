@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Trash2, ArrowUp } from 'lucide-react';
 import { useQueueStore, Submission } from '../../stores/queueStore';
 import { useAuthStore } from '../../stores/authStore';
 import api from '../../services/api';
@@ -68,6 +69,17 @@ const QueuePanel: React.FC<QueuePanelProps> = ({ reviewerId: propReviewerId }) =
       setOpenMenuId(null);
     } catch (error) {
       console.error("Failed to update priority:", error);
+    }
+  };
+
+  const handleRemove = async (e: React.MouseEvent, track: Submission) => {
+    e.stopPropagation();
+    if (window.confirm(`Are you sure you want to remove "${track.track_title}" from the queue?`)) {
+      try {
+        await api.delete(`/reviewer/${track.reviewer_id}/queue/${track.id}`);
+      } catch (error) {
+        console.error("Failed to remove submission:", error);
+      }
     }
   };
 
@@ -193,9 +205,14 @@ const QueuePanel: React.FC<QueuePanelProps> = ({ reviewerId: propReviewerId }) =
                 >
                   <div className="flex justify-between items-start">
                     <div className="flex-grow min-w-0 mr-2">
-                      <a href={submission.archived_url || submission.track_url} target="_blank" rel="noopener noreferrer" className="font-semibold truncate hover:underline block text-white">
+                      <span className="font-semibold truncate block text-white">
                         {submission.track_title || submission.track_url}
-                      </a>
+                      </span>
+                      {submission.artist && (
+                        <span className="block text-xs text-purple-400 font-medium mt-0.5">
+                          {submission.artist}
+                        </span>
+                      )}
                       <p className="text-sm text-gray-400 mt-1">
                         Submitted by: {submission.user?.username || 'Unknown User'}
                         {submission.user?.tiktok_username && (
@@ -216,13 +233,21 @@ const QueuePanel: React.FC<QueuePanelProps> = ({ reviewerId: propReviewerId }) =
                       })()}
                     </div>
 
-                    {/* Kebab Menu */}
-                    <div className="relative">
+                    {/* Actions */}
+                    <div className="relative flex items-center">
+                      <button
+                        onClick={(e) => handleRemove(e, submission)}
+                        className="text-gray-400 hover:text-red-400 p-1 rounded hover:bg-gray-600 mr-1"
+                        title="Remove Submission"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={(e) => toggleMenu(e, submission.id)}
-                        className="text-gray-400 hover:text-white p-1 rounded hover:bg-gray-600"
+                        className="text-gray-400 hover:text-purple-400 p-1 rounded hover:bg-gray-600"
+                        title="Move to Skip Queue"
                       >
-                        ⋮
+                        <ArrowUp className="w-4 h-4" />
                       </button>
 
                       {openMenuId === submission.id && (

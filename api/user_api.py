@@ -30,6 +30,7 @@ async def get_me(
         reviewer_profile=db_user.reviewer_profile,
         roles=token.roles,
         moderated_reviewers=moderated_reviewers,
+        spotify_connected=bool(db_user.spotify_access_token),
     )
     return user_profile
 

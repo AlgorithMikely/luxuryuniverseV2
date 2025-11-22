@@ -99,12 +99,16 @@ async def remove_reviewer(reviewer_id: int, db: AsyncSession = Depends(get_db)):
                 channel = bot_instance.bot.get_channel(int(channel_id))
                 if channel:
                     print(f"Deleting Discord channel {channel_id} for removed reviewer {reviewer_id}")
-                    await channel.delete(reason="Reviewer profile removed via Admin API")
+                    # DISABLED: To prevent accidental deletion of channels.
+                    # await channel.delete(reason="Reviewer profile removed via Admin API")
+                    print(f"SKIPPING deletion of Discord channel {channel_id} (Safety Lock)")
                     
                     # Also try to delete the category if it's empty
                     if channel.category and len(channel.category.channels) == 0:
                          print(f"Deleting empty category {channel.category.name}")
-                         await channel.category.delete(reason="Category empty after reviewer removal")
+                         # DISABLED: To prevent accidental deletion of categories.
+                         # await channel.category.delete(reason="Category empty after reviewer removal")
+                         print(f"SKIPPING deletion of category {channel.category.name} (Safety Lock)")
                 else:
                     print(f"Discord channel {channel_id} not found in cache, skipping deletion.")
         except Exception as e:

@@ -41,7 +41,10 @@ class JsonEncodedList(TypeDecorator):
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
-    discord_id = Column(String, unique=True, index=True, nullable=False)
+    discord_id = Column(String, unique=True, index=True, nullable=True) # Changed to nullable for guests
+    email = Column(String, unique=True, index=True, nullable=True)
+    is_guest = Column(Boolean, default=False, nullable=False)
+    is_verified = Column(Boolean, default=False, nullable=False)
     username = Column(String, nullable=False)
     tiktok_username = Column(String, unique=True, nullable=True)
     spotify_access_token = Column(String, nullable=True)
@@ -95,6 +98,7 @@ class Submission(Base):
     session_id = Column(Integer, ForeignKey("review_sessions.id"), nullable=True)
     track_url = Column(String, nullable=False)
     track_title = Column(String, nullable=True)
+    artist = Column(String, nullable=True)
     archived_url = Column(String, nullable=True)
     status = Column(String, default="pending", nullable=False)
     # Fixed: Added timezone=True
@@ -117,6 +121,7 @@ class Submission(Base):
     sequence_order = Column(Integer, default=1, nullable=False) # 1 or 2
     hook_start_time = Column(Integer, nullable=True) # Seconds
     hook_end_time = Column(Integer, nullable=True) # Seconds
+    file_hash = Column(String, nullable=True, index=True) # SHA256 hash of the file
 
     reviewer = relationship("Reviewer", back_populates="submissions")
     user = relationship("User", back_populates="submissions")
@@ -142,6 +147,7 @@ class Transaction(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     amount = Column(Integer, nullable=False)
     reason = Column(String, nullable=False)
+    meta_data = Column(JSON, nullable=True) # Renamed from metadata to avoid conflict
     # Fixed: Added timezone=True
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -179,3 +185,41 @@ class ReviewSession(Base):
 
     reviewer = relationship("Reviewer")
     submissions = relationship("Submission", back_populates="session")
+
+
+class TikTokAccount(Base):
+    __tablename__ = "tiktok_accounts"
+    id = Column(Integer, primary_key=True, index=True)
+    handle_name = Column(String, unique=True, index=True, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    points = Column(Integer, default=0, nullable=False)
+    monitored = Column(Boolean, default=False, nullable=False)
+
+    user = relationship("User")
+
+
+class TikTokInteraction(Base):
+    __tablename__ = "tiktok_interactions"
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("review_sessions.id"), nullable=True)
+    tiktok_account_id = Column(Integer, ForeignKey("tiktok_accounts.id"), nullable=True)
+    host_handle = Column(String, nullable=False)
+    interaction_type = Column(String, nullable=False)
+    value = Column(String, nullable=True)
+    coin_value = Column(Integer, default=0)
+    user_level = Column(Integer, default=0)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+
+    session = relationship("ReviewSession")
+    tiktok_account = relationship("TikTokAccount")
+
+
+class TikTokRankUpdate(Base):
+    __tablename__ = "tiktok_rank_updates"
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("review_sessions.id"), nullable=True)
+    tiktok_user_id = Column(Integer, nullable=False) # TikTok's internal user ID
+    rank = Column(Integer, nullable=False)
+    score = Column(Integer, nullable=False)
+    delta = Column(Integer, nullable=False)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())

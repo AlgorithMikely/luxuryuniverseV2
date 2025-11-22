@@ -16,7 +16,7 @@ async def login():
     """Redirects the user to Discord's OAuth2 authorization URL."""
     return RedirectResponse(
         f"https://discord.com/api/oauth2/authorize?client_id={settings.DISCORD_CLIENT_ID}"
-        f"&redirect_uri={settings.DISCORD_REDIRECT_URI}&response_type=code&scope=identify"
+        f"&redirect_uri={settings.DISCORD_REDIRECT_URI}&response_type=code&scope=identify%20email"
     )
 
 @router.get("/callback")
@@ -48,12 +48,17 @@ async def callback(code: str, db: AsyncSession = Depends(get_db)):
         discord_user = user_response.json()
 
     # Create or update the user in the database
-    user = await user_service.get_or_create_user(
-        db, 
-        discord_id=discord_user["id"], 
-        username=discord_user["username"],
-        avatar=discord_user.get("avatar")
-    )
+    try:
+        user = await user_service.get_or_create_user(
+            db, 
+            discord_id=discord_user["id"], 
+            username=discord_user["username"],
+            email=discord_user.get("email"),
+            avatar=discord_user.get("avatar")
+        )
+    except ValueError as e:
+        # Handle the case where email is already in use by another account
+        raise HTTPException(status_code=400, detail=str(e))
 
     # Determine the user's roles
     roles = ["user"]

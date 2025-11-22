@@ -9,12 +9,14 @@ from services import user_service
 import datetime
 import uuid
 
-async def create_submission(db: AsyncSession, reviewer_id: int, user_id: int, track_url: str, track_title: str, archived_url: str, session_id: Optional[int] = None, batch_id: Optional[str] = None, sequence_order: int = 1, hook_start_time: Optional[int] = None, hook_end_time: Optional[int] = None, priority_value: int = 0) -> models.Submission:
+async def create_submission(db: AsyncSession, reviewer_id: int, user_id: int, track_url: str, track_title: str, archived_url: str, session_id: Optional[int] = None, batch_id: Optional[str] = None, sequence_order: int = 1, hook_start_time: Optional[int] = None, hook_end_time: Optional[int] = None, priority_value: int = 0, artist: Optional[str] = None, genre: Optional[str] = None, file_hash: Optional[str] = None) -> models.Submission:
     new_submission = models.Submission(
         reviewer_id=reviewer_id,
         user_id=user_id,
         track_url=track_url,
         track_title=track_title,
+        artist=artist,
+        genre=genre,
         archived_url=archived_url,
         status='pending',
         session_id=session_id,
@@ -24,7 +26,8 @@ async def create_submission(db: AsyncSession, reviewer_id: int, user_id: int, tr
         sequence_order=sequence_order,
         hook_start_time=hook_start_time,
         hook_end_time=hook_end_time,
-        is_priority=priority_value > 0
+        is_priority=priority_value > 0,
+        file_hash=file_hash
     )
     db.add(new_submission)
 
@@ -125,7 +128,8 @@ async def get_reviewer_by_user_id(db: AsyncSession, user_id: int) -> Optional[mo
         select(models.Reviewer)
         .options(
             joinedload(models.Reviewer.user),
-            selectinload(models.Reviewer.payment_configs)
+            selectinload(models.Reviewer.payment_configs),
+            selectinload(models.Reviewer.economy_configs)
         )
         .filter(models.Reviewer.user_id == user_id)
     )
@@ -136,9 +140,22 @@ async def get_reviewer_by_channel_id(db: AsyncSession, channel_id: str) -> Optio
         select(models.Reviewer)
         .options(
             joinedload(models.Reviewer.user),
-            selectinload(models.Reviewer.payment_configs)
+            selectinload(models.Reviewer.payment_configs),
+            selectinload(models.Reviewer.economy_configs)
         )
         .filter(models.Reviewer.discord_channel_id == str(channel_id))
+    )
+    return _merge_reviewer_config(result.scalars().first())
+
+async def get_reviewer_by_id(db: AsyncSession, reviewer_id: int) -> Optional[models.Reviewer]:
+    result = await db.execute(
+        select(models.Reviewer)
+        .options(
+            joinedload(models.Reviewer.user),
+            selectinload(models.Reviewer.payment_configs),
+            selectinload(models.Reviewer.economy_configs)
+        )
+        .filter(models.Reviewer.id == reviewer_id)
     )
     return _merge_reviewer_config(result.scalars().first())
 
@@ -213,6 +230,29 @@ async def update_reviewer_settings(db: AsyncSession, reviewer_id: int, settings_
              current_config["priority_tiers"] = new_config["priority_tiers"]
 
         reviewer.configuration = current_config
+
+    if "economy_configs" in update_data and update_data["economy_configs"] is not None:
+        new_configs = update_data["economy_configs"]
+        # We need to update or create configs
+        # First, get existing configs
+        stmt = select(models.EconomyConfig).filter(models.EconomyConfig.reviewer_id == reviewer_id)
+        result = await db.execute(stmt)
+        existing_configs = result.scalars().all()
+        existing_map = {c.event_name: c for c in existing_configs}
+
+        for config_data in new_configs:
+            event_name = config_data["event_name"]
+            amount = config_data["coin_amount"]
+            
+            if event_name in existing_map:
+                existing_map[event_name].coin_amount = amount
+            else:
+                new_config = models.EconomyConfig(
+                    reviewer_id=reviewer_id,
+                    event_name=event_name,
+                    coin_amount=amount
+                )
+                db.add(new_config)
 
     await db.commit()
     await db.refresh(reviewer)
@@ -503,6 +543,16 @@ async def create_session(db: AsyncSession, reviewer_id: int, name: str, open_que
         .values(is_active=False)
     )
 
+    # If open_queue_tiers is not provided, default to ALL tiers from reviewer config
+    if open_queue_tiers is None:
+        # Fetch reviewer to get config
+        reviewer = await get_reviewer_by_id(db, reviewer_id)
+        if reviewer and reviewer.configuration and "priority_tiers" in reviewer.configuration:
+            open_queue_tiers = [t["value"] for t in reviewer.configuration["priority_tiers"]]
+        else:
+            # Fallback defaults if no config
+            open_queue_tiers = [0, 5, 10, 15, 20, 25, 50]
+
     new_session = models.ReviewSession(
         reviewer_id=reviewer_id,
         name=name,
@@ -510,6 +560,11 @@ async def create_session(db: AsyncSession, reviewer_id: int, name: str, open_que
         open_queue_tiers=open_queue_tiers
     )
     db.add(new_session)
+    
+    # Automate Queue Status: Open if Free tier (0) is active, else Closed
+    new_status = "open" if 0 in open_queue_tiers else "closed"
+    await set_queue_status(db, reviewer_id, new_status)
+
     await db.commit()
 
     # FIXED: Nested loading of submissions and their users
@@ -578,7 +633,26 @@ async def archive_session(db: AsyncSession, reviewer_id: int, session_id: int) -
         raise HTTPException(status_code=404, detail="Session not found")
 
     session.is_active = False
+    
+    # Archive all pending submissions for this reviewer
+    # This effectively clears the queue
+    pending_result = await db.execute(
+        select(models.Submission)
+        .filter(
+            models.Submission.reviewer_id == reviewer_id,
+            models.Submission.status == 'pending'
+        )
+    )
+    pending_submissions = pending_result.scalars().all()
+    
+    for sub in pending_submissions:
+        sub.status = 'archived'
+        
     await db.commit()
+    
+    # Emit empty queue update
+    await broadcast_service.emit_queue_update(reviewer_id, [])
+    
     return session
 
 async def update_session(db: AsyncSession, reviewer_id: int, session_id: int, session_update: schemas.ReviewSessionUpdate) -> models.ReviewSession:
@@ -597,6 +671,14 @@ async def update_session(db: AsyncSession, reviewer_id: int, session_id: int, se
     update_data = session_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(session, key, value)
+
+    # Automate Queue Status on update if tiers changed
+    if "open_queue_tiers" in update_data:
+        tiers = update_data["open_queue_tiers"]
+        # If tiers is None (which shouldn't happen with exclude_unset=True unless explicitly set to None), handle it
+        if tiers is not None:
+            new_status = "open" if 0 in tiers else "closed"
+            await set_queue_status(db, reviewer_id, new_status)
 
     await db.commit()
     return session
@@ -618,3 +700,23 @@ async def get_submissions_by_session(db: AsyncSession, session_id: int) -> list[
         .filter(models.Submission.session_id == session_id)
     )
     return result.scalars().all()
+
+async def remove_submission(db: AsyncSession, submission_id: int) -> Optional[models.Submission]:
+    result = await db.execute(
+        select(models.Submission)
+        .filter(models.Submission.id == submission_id)
+    )
+    submission = result.scalars().first()
+    
+    if not submission:
+        return None
+        
+    submission.status = 'rejected'
+    await db.commit()
+    
+    # Emit queue update
+    new_queue = await get_pending_queue(db, submission.reviewer_id)
+    queue_schemas = [schemas.Submission.model_validate(s) for s in new_queue]
+    await broadcast_service.emit_queue_update(submission.reviewer_id, [s.model_dump() for s in queue_schemas])
+    
+    return submission

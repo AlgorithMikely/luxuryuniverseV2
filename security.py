@@ -11,6 +11,7 @@ from services import user_service
 import models
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 
 def create_access_token(data: dict):
     to_encode = data.copy()
@@ -65,3 +66,21 @@ def require_admin(current_user: schemas.TokenData = Depends(get_current_user)):
             detail="You do not have permission to access this resource.",
         )
     return current_user
+
+async def get_current_user_optional(
+    token: str | None = Depends(oauth2_scheme_optional),
+    db: AsyncSession = Depends(get_db),
+) -> models.User | None:
+    if not token:
+        return None
+    try:
+        # Re-use verify_token logic but handle errors gracefully
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        discord_id: str = payload.get("sub")
+        if discord_id is None:
+            return None
+        
+        user = await user_service.get_user_by_discord_id(db, discord_id=discord_id)
+        return user
+    except JWTError:
+        return None

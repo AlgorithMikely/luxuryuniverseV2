@@ -6,13 +6,13 @@ interface QueueStatCardProps {
     queueLength: number;
     avgWaitTime: number;
     status: 'open' | 'closed';
-    onToggleStatus?: () => void;
+
     isReviewer?: boolean;
     title?: string; // Optional title override
     dashboardLink?: string; // Optional link to dashboard
 }
 
-const QueueStatCard: React.FC<QueueStatCardProps> = ({ queueLength, avgWaitTime, status, onToggleStatus, isReviewer, title, dashboardLink }) => {
+const QueueStatCard: React.FC<QueueStatCardProps> = ({ queueLength, avgWaitTime, status, isReviewer, title, dashboardLink }) => {
     return (
         <div className="bg-gray-800/50 backdrop-blur-md border border-gray-700 rounded-xl p-6 shadow-lg text-white relative h-full flex flex-col justify-between">
             {status === 'open' && (
@@ -46,21 +46,7 @@ const QueueStatCard: React.FC<QueueStatCardProps> = ({ queueLength, avgWaitTime,
                     )}
                 </div>
 
-                {isReviewer && onToggleStatus && (
-                    <button onClick={onToggleStatus} className="focus:outline-none transition-transform active:scale-95 ml-4">
-                        {status === 'open' ? (
-                            <div className="flex flex-col items-end text-green-400">
-                                <ToggleRight className="w-8 h-8" />
-                                <span className="text-[10px] font-bold uppercase mt-0.5">Open</span>
-                            </div>
-                        ) : (
-                            <div className="flex flex-col items-end text-red-400">
-                                <ToggleLeft className="w-8 h-8" />
-                                <span className="text-[10px] font-bold uppercase mt-0.5">Closed</span>
-                            </div>
-                        )}
-                    </button>
-                )}
+
             </div>
 
             <div className="grid grid-cols-2 gap-4 mt-auto">

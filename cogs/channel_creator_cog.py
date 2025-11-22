@@ -84,9 +84,12 @@ class ChannelCreatorCog(commands.Cog):
                             logging.info(f"Channel {channel.id} verified for {user.name}")
                             continue
                         else:
-                            # CRITICAL FIX: Do NOT recreate if ID exists but channel not found.
-                            # This prevents the "deleting and restoring" loop if the bot just can't see it.
-                            logging.error(f"Channel {reviewer.discord_channel_id} for {user.name} NOT FOUND (ID exists in DB). Stopping to prevent recreation loop. Please check permissions or clear DB ID manually.")
+                            # Channel not found but ID exists.
+                            # We must clear the ID so it can be recreated.
+                            logging.warning(f"Channel {reviewer.discord_channel_id} for {user.name} NOT FOUND (ID exists in DB). Clearing ID to allow recreation.")
+                            reviewer.discord_channel_id = None
+                            await db.commit()
+                            # Continue to next iteration, it will be picked up as a "new reviewer" in the next loop pass
                             continue 
 
                     # --- Creation Logic ---
@@ -164,6 +167,7 @@ class ChannelCreatorCog(commands.Cog):
         """
         # PERMANENTLY DISABLED: To prevent accidental deletion of channels.
         # The bot should not delete channels automatically.
+        logging.info("SAFETY LOCK ACTIVE: delete_removed_reviewer_channels loop running but NO ACTION TAKEN.")
         pass
 
     @delete_removed_reviewer_channels.before_loop

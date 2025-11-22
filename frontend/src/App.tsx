@@ -33,15 +33,6 @@ function App() {
     );
   }
 
-  const MainLayout = () => (
-    <div className="bg-gray-900 text-white min-h-screen">
-      <Navbar />
-      <main>
-        <Outlet />
-      </main>
-    </div>
-  );
-
   return (
     <>
       <Toaster />
@@ -52,9 +43,13 @@ function App() {
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
             <Route path="/overlay/:reviewerId" element={<Overlay />} />
 
-            {/* Routes with Navbar */}
-            <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
+            {/* Public Routes */}
+            <Route element={<MainLayout />}>
               <Route path="/submit/:reviewerId" element={<SubmissionPage />} />
+            </Route>
+
+            {/* Routes with Navbar (Protected) */}
+            <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
               <Route path="/dashboard" element={<DashboardRedirect />} />
               <Route path="/reviewer/:reviewerId" element={<ReviewerDashboard />} />
               <Route path="/settings/reviewer" element={<ReviewerSettingsPage />} />
@@ -71,5 +66,14 @@ function App() {
     </>
   );
 }
+
+const MainLayout = () => (
+  <div className="bg-gray-900 text-white min-h-screen">
+    <Navbar />
+    <main>
+      <Outlet />
+    </main>
+  </div>
+);
 
 export default App;

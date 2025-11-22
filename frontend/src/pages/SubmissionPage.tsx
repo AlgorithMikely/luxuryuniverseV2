@@ -16,7 +16,7 @@ const SubmissionPage = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    checkAuth();
+    checkAuth(true);
   }, [checkAuth]);
 
   useEffect(() => {
@@ -52,7 +52,11 @@ const SubmissionPage = () => {
       {/* Dynamic Background */}
       <div
         className="absolute inset-0 bg-cover bg-center opacity-30 blur-3xl scale-110 z-0"
-        style={{ backgroundImage: user?.avatar ? `url(${user.avatar})` : 'none' }}
+        style={{
+          backgroundImage: user?.avatar
+            ? `url(${user.avatar.startsWith('http') ? user.avatar : `https://cdn.discordapp.com/avatars/${user.discord_id}/${user.avatar}.png`})`
+            : 'none'
+        }}
       />
       <div className="absolute inset-0 bg-gradient-to-b from-gray-900/80 via-gray-900/95 to-gray-900 z-0" />
 
@@ -60,17 +64,17 @@ const SubmissionPage = () => {
       <div className="relative z-10 container mx-auto px-4 py-8 h-full flex flex-col items-center justify-center min-h-screen">
 
         <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-8 text-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8 text-center"
         >
-            <h1 className="text-4xl font-bold mb-2">Submit to {reviewer.tiktok_handle || reviewer.user?.username}</h1>
-            <p className="text-gray-400">Drag & drop your track or load from library.</p>
+          <h1 className="text-4xl font-bold mb-2">Submit to {reviewer.tiktok_handle || reviewer.user?.username}</h1>
+          <p className="text-gray-400">Drag & drop your track or load from library.</p>
         </motion.div>
 
         {/* The Glass Canvas */}
         <div className="w-full max-w-5xl">
-            <SmartZone reviewer={reviewer} />
+          <SmartZone reviewer={reviewer} />
         </div>
 
       </div>
