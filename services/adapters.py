@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Callable, Awaitable, Any
 from TikTokLive import TikTokLiveClient
-from TikTokLive.types.events import ConnectEvent, GiftEvent, LikeEvent
+from TikTokLive.events import ConnectEvent, GiftEvent, LikeEvent
 import logging
 
 class LiveListener(ABC):

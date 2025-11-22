@@ -1,4 +1,9 @@
+import logging
 import asyncio
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
 import discord
 from discord.ext import commands
 from sqlalchemy.orm import sessionmaker
@@ -32,6 +37,7 @@ class UniverseBot(commands.Bot):
         await self.load_extension("cogs.economy_cog")
         await self.load_extension("cogs.user_cache_cog")
         await self.load_extension("cogs.channel_creator_cog")
+        await self.load_extension("cogs.tiktok_cog")
         print("Cogs loaded.")
 
         # Start the FastAPI server as a background task

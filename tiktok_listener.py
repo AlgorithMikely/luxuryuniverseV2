@@ -1,6 +1,6 @@
 import asyncio
 from TikTokLive import TikTokLiveClient
-from TikTokLive.types.events import CommentEvent, ConnectEvent, GiftEvent, LikeEvent
+from TikTokLive.events import CommentEvent, ConnectEvent, GiftEvent, LikeEvent
 from database import SessionLocal
 from services import economy_service, user_service
 import models
