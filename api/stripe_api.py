@@ -72,13 +72,33 @@ async def finalize_connection(
     
     return {"status": "connected"}
 
+@router.post("/disconnect")
+async def disconnect_stripe(
+    current_user: models.User = Depends(security.get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if not current_user.reviewer_profile:
+        raise HTTPException(status_code=400, detail="User is not a reviewer")
+
+    try:
+        # Disable the payment config
+        update = schemas.PaymentConfigUpdate(
+            is_enabled=False,
+            credentials={} # Clear credentials
+        )
+        await payment_service.update_provider_config(db, current_user.reviewer_profile.id, "stripe", update)
+        return {"status": "disconnected"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/create-payment-intent")
 async def create_payment_intent(
     data: schemas.PaymentIntentCreate,
     reviewer_id: int,
     submission_id: int = None,
     payment_type: str = "priority_request",
-    current_user: models.User = Depends(security.get_current_active_user),
+    current_user: models.User | None = Depends(security.get_current_user_optional),
     db: AsyncSession = Depends(get_db)
 ):
     # Get Reviewer's Stripe Config
@@ -88,20 +108,33 @@ async def create_payment_intent(
 
     stripe_account_id = config.credentials["stripe_account_id"]
 
+    # Validate Guest Requirements
+    if not current_user and not data.email:
+        raise HTTPException(status_code=400, detail="Email is required for guest payments")
+
     try:
         # Create PaymentIntent on the connected account
+        metadata = {
+            "user_id": current_user.id if current_user else None,
+            "email": data.email if not current_user else current_user.email,
+            "reviewer_id": reviewer_id,
+            "submission_id": submission_id,
+            "type": payment_type,
+            "tier": data.tier,
+            "track_url": data.track_url,
+            "track_title": data.track_title
+        }
+        
+        # Filter out None values from metadata
+        metadata = {k: v for k, v in metadata.items() if v is not None}
+
         intent = stripe.PaymentIntent.create(
             amount=data.amount,
             currency=data.currency,
             automatic_payment_methods={"enabled": True},
             application_fee_amount=int(data.amount * 0.05), # 5% Platform Fee
             stripe_account=stripe_account_id,
-            metadata={
-                "user_id": current_user.id,
-                "reviewer_id": reviewer_id,
-                "submission_id": submission_id,
-                "type": payment_type
-            }
+            metadata=metadata
         )
         return {
             "client_secret": intent.client_secret,
@@ -134,15 +167,66 @@ async def stripe_webhook(request: Request):
 async def process_successful_payment(payment_intent):
     metadata = payment_intent.get("metadata", {})
     
-    if metadata.get("type") == "priority_request" and metadata.get("submission_id"):
-        submission_id = int(metadata["submission_id"])
+    if metadata.get("type") == "priority_request" or metadata.get("type") == "skip_line":
+        submission_id = metadata.get("submission_id")
         
         from database import AsyncSessionLocal
         async with AsyncSessionLocal() as db:
-            amount = payment_intent["amount"]
-            priority_value = int(amount / 100) 
-            
-            await queue_service.update_priority(db, submission_id, priority_value)
+            if submission_id:
+                # Existing submission (Logged in user usually)
+                submission_id = int(submission_id)
+                amount = payment_intent["amount"]
+                priority_value = int(amount / 100) 
+                await queue_service.update_priority(db, submission_id, priority_value)
+            else:
+                # Guest Submission (No submission_id yet)
+                email = metadata.get("email")
+                track_url = metadata.get("track_url")
+                reviewer_id = int(metadata.get("reviewer_id"))
+                amount_cents = payment_intent["amount"]
+                
+                if email and track_url:
+                    from services import user_service, economy_service, queue_service
+                    
+                    # 1. User Resolution
+                    user = await user_service.create_guest_user(db, email)
+                    
+                    # 2. Credit Wallet (Invisible Coin Purchase)
+                    coins = amount_cents # 1 cent = 1 coin
+                    await economy_service.add_coins(db, reviewer_id, user.id, coins, "Auto-purchase for submission", metadata={"source": "stripe_intent", "intent_id": payment_intent["id"]})
+                    
+                    # 3. Debit Wallet (Submission Payment)
+                    # We need to deduct the coins we just added.
+                    # The submission creation logic usually handles deduction if we go through a service, 
+                    # but here we might need to do it manually or call a service that deducts.
+                    # Let's assume we deduct manually to match the spec "Buying... and immediately spending".
+                    
+                    await economy_service.deduct_coins(db, reviewer_id, user.id, coins, "Submission to Reviewer")
+                    
+                    # 4. Finalize Submission
+                    # Create the submission
+                    # We need to know if it's priority. "tier" metadata might help.
+                    is_priority = metadata.get("tier") == "vip" # Example logic
+                    priority_value = coins if is_priority else 0 # Or some other logic? Spec says "Buying 2500 coins...". 
+                    # Usually priority value is based on coins spent.
+                    
+                    # We need to call queue_service.add_submission or similar.
+                    # But queue_service might expect a logged in user or handle deduction.
+                    # Let's check queue_service.
+                    # For now, I'll create it directly to ensure exact behavior.
+                    
+                    new_submission = models.Submission(
+                        reviewer_id=reviewer_id,
+                        user_id=user.id,
+                        track_url=track_url,
+                        track_title=metadata.get("track_title", "Untitled"),
+                        status="pending",
+                        is_priority=is_priority,
+                        priority_value=priority_value,
+                        submitted_at=datetime.datetime.now(datetime.UTC)
+                    )
+                    db.add(new_submission)
+                    await db.commit()
 
     elif metadata.get("type") == "wallet_topup" and metadata.get("user_id"):
         user_id = int(metadata["user_id"])

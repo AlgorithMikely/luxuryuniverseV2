@@ -36,46 +36,6 @@ class QueueCog(commands.Cog):
                 return None
             return await queue_service.get_reviewer_by_user_id(db, user.id)
 
-    @app_commands.command(name="open", description="Open the submission queue.")
-    @app_commands.guild_only()
-    async def open_queue(self, interaction: discord.Interaction):
-        async with self.bot.SessionLocal() as db:
-            reviewer = None
-            # Re-implement logic here because _get_reviewer closes the session
-            admin_ids = [int(id) for id in settings.ADMIN_DISCORD_IDS]
-            if interaction.user.id in admin_ids:
-                reviewer = await queue_service.get_reviewer_by_channel_id(db, interaction.channel_id)
-            else:
-                user = await user_service.get_user_by_discord_id(db, str(interaction.user.id))
-                if user:
-                    reviewer = await queue_service.get_reviewer_by_user_id(db, user.id)
-
-            if not reviewer:
-                await interaction.response.send_message("You are not a reviewer.", ephemeral=True)
-                return
-
-            await queue_service.set_queue_status(db, reviewer.id, "open")
-            await interaction.response.send_message("Queue is now open.", ephemeral=True)
-
-    @app_commands.command(name="close", description="Close the submission queue.")
-    @app_commands.guild_only()
-    async def close_queue(self, interaction: discord.Interaction):
-        async with self.bot.SessionLocal() as db:
-            reviewer = None
-            admin_ids = [int(id) for id in settings.ADMIN_DISCORD_IDS]
-            if interaction.user.id in admin_ids:
-                reviewer = await queue_service.get_reviewer_by_channel_id(db, interaction.channel_id)
-            else:
-                user = await user_service.get_user_by_discord_id(db, str(interaction.user.id))
-                if user:
-                    reviewer = await queue_service.get_reviewer_by_user_id(db, user.id)
-
-            if not reviewer:
-                await interaction.response.send_message("You are not a reviewer.", ephemeral=True)
-                return
-
-            await queue_service.set_queue_status(db, reviewer.id, "closed")
-            await interaction.response.send_message("Queue is now closed.", ephemeral=True)
 
     @app_commands.command(name="next", description="Get the next track from the queue.")
     @app_commands.guild_only()

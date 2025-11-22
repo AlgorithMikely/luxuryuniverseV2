@@ -21,7 +21,7 @@ class PassiveSubmissionCog(commands.Cog):
         else:
             self.sp = None
 
-    async def archive_submission(self, db, user, message: discord.Message, content: str) -> str | None:
+    async def archive_submission(self, db, user, message: discord.Message, content: str, files: list[discord.File] = None) -> str | None:
         """
         Archives the submission to the 'files-and-links' channel and returns the jump_url.
         """
@@ -39,8 +39,13 @@ class PassiveSubmissionCog(commands.Cog):
         tiktok_str = f"(TikTok: {user_profile.tiktok_username})" if user_profile and user_profile.tiktok_username else ""
 
         archive_message = None
-        if message.attachments:
-            files = [await att.to_file() for att in message.attachments]
+        
+        # If files is None, check message attachments (default behavior)
+        # If files is [], we send no files.
+        if files is None and message.attachments:
+             files = [await att.to_file() for att in message.attachments]
+        
+        if files:
             archive_message = await files_and_links_channel.send(
                 f"Submission from {user.username} {tiktok_str}: {content}", files=files
             )
@@ -134,12 +139,48 @@ class PassiveSubmissionCog(commands.Cog):
 
                     logging.info(f"Processing submission for user {user.username}. Content: {submission_content}")
 
-                    # Archive and get the jump_url
-                    jump_url = await self.archive_submission(db, user, message, submission_content)
+                    final_track_url = submission_content
+                    files_to_archive = None # Default to None (check attachments)
+                    
+                    # Handle R2 Upload if attachments exist
+                    if message.attachments:
+                        try:
+                            from services.storage_service import storage_service
+                            import io
+                            import uuid
+                            import os
+                            
+                            attachment = message.attachments[0]
+                            file_data = await attachment.read()
+                            file_obj = io.BytesIO(file_data)
+                            
+                            file_ext = os.path.splitext(attachment.filename)[1]
+                            unique_filename = f"{uuid.uuid4()}{file_ext}"
+                            
+                            # Calculate Hash
+                            import hashlib
+                            file_hash = hashlib.sha256(file_data).hexdigest()
+                            
+                            # Upload
+                            r2_url = await storage_service.upload_file(
+                                file_obj, 
+                                unique_filename, 
+                                attachment.content_type or "application/octet-stream"
+                            )
+                            
+                            final_track_url = r2_url
+                            submission_content = f"{submission_content} (Stored in R2)" # Update content for archive
+                            files_to_archive = [] # Do NOT upload files to Discord archive
+                            
+                        except Exception as e:
+                            logging.error(f"R2 Upload failed: {e}")
+                            # Fallback to Discord URL (which is submission_content)
+                            # And let archive_submission handle files as usual
+                            files_to_archive = None
+                            file_hash = None
 
-                    # For file submissions, the jump_url is the track_url.
-                    # For URL submissions, the original content is the track_url.
-                    final_track_url = jump_url if message.attachments else submission_content
+                    # Archive and get the jump_url
+                    jump_url = await self.archive_submission(db, user, message, submission_content, files=files_to_archive)
 
                     logging.info(f"Creating submission for reviewer {reviewer.id} in session {active_session.id}")
                     await queue_service.create_submission(
@@ -149,7 +190,8 @@ class PassiveSubmissionCog(commands.Cog):
                         track_url=final_track_url,
                         track_title=track_title,
                         archived_url=jump_url,
-                        session_id=active_session.id
+                        session_id=active_session.id,
+                        file_hash=file_hash if message.attachments else None
                     )
                     logging.info(f"Submission saved successfully for {user.username}. Archived URL: {jump_url}")
 

@@ -75,14 +75,56 @@ async def audio_proxy(request: Request):
         except HTTPException as e:
             raise e
 
+    # Handle local uploads (legacy or fallback)
+    if url.startswith("/api/uploads/"):
+        import os
+        # Remove /api/ prefix to get relative path
+        file_path = url.lstrip("/") # e.g. api/uploads/filename.mp3
+        # Assuming the app runs from root, and uploads are in uploads/ directory?
+        # Wait, the url is /api/uploads/..., but the folder is likely just 'uploads/' relative to root or inside api?
+        # Let's check where uploads are stored. Usually 'uploads' at root.
+        # If url is /api/uploads/foo.mp3, we probably want 'uploads/foo.mp3'
+        
+        # Adjust path mapping
+        local_path = file_path.replace("api/uploads/", "uploads/")
+        
+        if not os.path.exists(local_path):
+             # Try absolute path if needed or just 'uploads'
+             if os.path.exists(file_path):
+                 local_path = file_path
+             else:
+                 # Fallback: maybe it is just in uploads/
+                 filename = os.path.basename(file_path)
+                 local_path = f"uploads/{filename}"
+
+        if os.path.exists(local_path):
+            # Serve local file
+            return StreamingResponse(open(local_path, "rb"), media_type="audio/mpeg")
+        else:
+             raise HTTPException(status_code=404, detail=f"Local file not found: {local_path}")
+
     # For non-Discord URLs, use yt-dlp to get a direct streamable URL
     if "discord.com" not in url:
-        try:
-            with yt_dlp.YoutubeDL({'format': 'bestaudio', 'quiet': True}) as ydl:
-                info = ydl.extract_info(url, download=False)
-                url = info['url']
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to extract audio from URL: {e}")
+        # Check for R2 URL
+        if url.startswith("r2://"):
+            from services.storage_service import storage_service
+            # Instead of redirecting, we get the presigned URL and then stream it ourselves
+            presigned_url = await storage_service.generate_presigned_url(url)
+            if presigned_url:
+                url = presigned_url # Update URL to be the presigned one, and let the httpx client below fetch it
+            else:
+                raise HTTPException(status_code=404, detail="File not found in storage")
+        
+        # Only use yt-dlp if it's NOT an R2 url (which we just converted to http) and NOT a direct http link we trust?
+        # Actually, if we converted R2 to presigned http url, we can skip yt-dlp.
+        elif not url.startswith("http"):
+             # If it's not http (and not r2:// handled above), try yt-dlp
+             try:
+                with yt_dlp.YoutubeDL({'format': 'bestaudio', 'quiet': True}) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                    url = info['url']
+             except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Failed to extract audio from URL: {e}")
 
     headers_to_forward = {"User-Agent": "Mozilla/5.0"}
     async with httpx.AsyncClient() as client:

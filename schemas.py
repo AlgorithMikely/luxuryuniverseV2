@@ -2,8 +2,16 @@ from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 import datetime
 
+class PriorityTier(BaseModel):
+    value: int
+    label: str
+    color: str
+    submissions_count: Optional[int] = 1
+
 class ReviewerConfiguration(BaseModel):
     active_playlist_id: Optional[str] = None
+    free_line_limit: Optional[int] = None
+    priority_tiers: Optional[List[PriorityTier]] = None
     model_config = ConfigDict(extra='allow')
 
 class PaymentConfig(BaseModel):
@@ -13,6 +21,18 @@ class PaymentConfig(BaseModel):
     is_enabled: bool
     credentials: Optional[dict] = None
     model_config = ConfigDict(from_attributes=True)
+
+class EconomyConfig(BaseModel):
+    id: int
+    reviewer_id: int
+    event_name: str
+    coin_amount: int
+    model_config = ConfigDict(from_attributes=True)
+
+class EconomyConfigUpdate(BaseModel):
+    event_name: str
+    coin_amount: int
+
 
 class PaymentConfigUpdate(BaseModel):
     is_enabled: Optional[bool] = None
@@ -27,14 +47,20 @@ class ReviewerCreate(BaseModel):
 class ReviewerSettingsUpdate(BaseModel):
     tiktok_handle: Optional[str] = None
     discord_channel_id: Optional[str] = None
+    discord_channel_id: Optional[str] = None
     configuration: Optional[ReviewerConfiguration] = None
+    economy_configs: Optional[List[EconomyConfigUpdate]] = None
+
 
 
 
 class UserBase(BaseModel):
-    discord_id: str
+    discord_id: Optional[str] = None
     username: str
+    email: Optional[str] = None
     avatar: Optional[str] = None
+    is_guest: bool = False
+    is_verified: bool = False
 
 class UserCreate(UserBase):
     pass
@@ -55,8 +81,10 @@ class ReviewerProfile(BaseModel):
     tiktok_handle: str
     discord_channel_id: Optional[str] = None
     queue_status: str
+    open_queue_tiers: Optional[List[int]] = None
     configuration: Optional[ReviewerConfiguration] = None
     payment_configs: List[PaymentConfig] = []
+    economy_configs: List[EconomyConfig] = []
     user: Optional[User] = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -66,6 +94,7 @@ class UserProfile(UserBase):
     reviewer_profile: Optional[ReviewerProfile] = None
     roles: List[str] = []
     moderated_reviewers: List[ReviewerProfile] = []
+    spotify_connected: bool = False
     model_config = ConfigDict(from_attributes=True)
 
 class ReviewCreate(BaseModel):
@@ -92,6 +121,7 @@ class Submission(BaseModel):
     reviewer_id: int
     track_url: str
     track_title: Optional[str] = None
+    artist: Optional[str] = None
     archived_url: Optional[str] = None
     status: str
     score: Optional[float] = None
@@ -108,6 +138,12 @@ class Submission(BaseModel):
     genre: Optional[str] = None
     tags: Optional[List[str]] = None
 
+    # New Smart-Zone fields
+    batch_id: Optional[str] = None
+    sequence_order: int = 1
+    hook_start_time: Optional[int] = None
+    hook_end_time: Optional[int] = None
+
     model_config = ConfigDict(from_attributes=True)
 
 class SubmissionWithReviewer(Submission):
@@ -115,6 +151,7 @@ class SubmissionWithReviewer(Submission):
 
 class SubmissionUpdate(BaseModel):
     track_title: Optional[str] = None
+    artist: Optional[str] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     genre: Optional[str] = None
@@ -123,6 +160,35 @@ class SubmissionUpdate(BaseModel):
     tiktok_handle: Optional[str] = None
     instagram_handle: Optional[str] = None # If we add this
     twitter_handle: Optional[str] = None # If we add this
+
+    hook_start_time: Optional[int] = None
+    hook_end_time: Optional[int] = None
+
+class SmartSubmissionItem(BaseModel):
+    track_url: str
+    track_title: Optional[str] = None
+    artist: Optional[str] = None
+    genre: Optional[str] = None
+    hook_start_time: Optional[int] = None
+    hook_end_time: Optional[int] = None
+    priority_value: int = 0 # Individual priority if needed, but usually batch uses the same
+    sequence_order: int = 1
+
+class SmartSubmissionCreate(BaseModel):
+    submissions: List[SmartSubmissionItem]
+    is_priority: bool = False
+    total_cost: int = 0 # For verification
+
+class RecentTrack(BaseModel):
+    id: int
+    track_title: str
+    artist_name: Optional[str] = None # Derived from user.username usually, but distinct logic might use submission user
+    cover_art_url: Optional[str] = None
+    file_url: str # track_url
+    hook_start_time: Optional[int] = None
+    created_at: datetime.datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 class QueueStats(BaseModel):
     length: int
@@ -162,12 +228,17 @@ class Transaction(BaseModel):
     id: int
     amount: int
     reason: str
+    meta_data: Optional[dict] = None
     timestamp: datetime.datetime
     model_config = ConfigDict(from_attributes=True)
 
 class PaymentIntentCreate(BaseModel):
     amount: int
     currency: str = "usd"
+    email: Optional[str] = None
+    tier: Optional[str] = None
+    track_url: Optional[str] = None
+    track_title: Optional[str] = None
 
 class PaymentIntentResponse(BaseModel):
     client_secret: str

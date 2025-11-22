@@ -11,6 +11,7 @@ import WalletHistoryPage from "./pages/WalletHistoryPage";
 import AdminPage from "./pages/AdminPage";
 import ReviewerSettingsPage from "./pages/ReviewerSettingsPage";
 import ArchivedSessionPage from './pages/ArchivedSessionPage';
+import SubmissionPage from "./pages/SubmissionPage";
 import ErrorPage from "./pages/ErrorPage";
 import Navbar from './components/Navbar';
 import Overlay from './components/Overlay';
@@ -32,15 +33,6 @@ function App() {
     );
   }
 
-  const MainLayout = () => (
-    <div className="bg-gray-900 text-white min-h-screen">
-      <Navbar />
-      <main>
-        <Outlet />
-      </main>
-    </div>
-  );
-
   return (
     <>
       <Toaster />
@@ -51,7 +43,12 @@ function App() {
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
             <Route path="/overlay/:reviewerId" element={<Overlay />} />
 
-            {/* Routes with Navbar */}
+            {/* Public Routes */}
+            <Route element={<MainLayout />}>
+              <Route path="/submit/:reviewerId" element={<SubmissionPage />} />
+            </Route>
+
+            {/* Routes with Navbar (Protected) */}
             <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
               <Route path="/dashboard" element={<DashboardRedirect />} />
               <Route path="/reviewer/:reviewerId" element={<ReviewerDashboard />} />
@@ -69,5 +66,14 @@ function App() {
     </>
   );
 }
+
+const MainLayout = () => (
+  <div className="bg-gray-900 text-white min-h-screen">
+    <Navbar />
+    <main>
+      <Outlet />
+    </main>
+  </div>
+);
 
 export default App;

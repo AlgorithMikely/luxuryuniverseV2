@@ -16,18 +16,27 @@ router = APIRouter(prefix="/spotify", tags=["Spotify"])
 SPOTIFY_SCOPES = "streaming user-read-email user-read-private user-modify-playback-state user-read-playback-state user-read-currently-playing"
 
 @router.get("/login")
-async def spotify_login(force_login: bool = False, current_user: User = Depends(get_current_active_user)):
+async def spotify_login(
+    force_login: bool = False, 
+    return_url: str = None,
+    current_user: User = Depends(get_current_active_user)
+):
     """
     Redirects the user to Spotify's authorization page.
     """
     from urllib.parse import urlencode
     
+    # Encode return_url in state if provided
+    state_value = current_user.discord_id
+    if return_url:
+        state_value = f"{current_user.discord_id}|{return_url}"
+
     params = {
         "response_type": "code",
         "client_id": settings.SPOTIFY_CLIENT_ID,
         "scope": SPOTIFY_SCOPES,
         "redirect_uri": settings.SPOTIFY_REDIRECT_URI,
-        "state": current_user.discord_id,
+        "state": state_value,
     }
     
     if force_login:
@@ -42,7 +51,10 @@ async def spotify_callback(code: str, state: str, db: AsyncSession = Depends(get
     Handles the callback from Spotify, exchanges the code for tokens,
     and stores them for the user.
     """
-    discord_id = state  # The user's discord_id was passed in the state
+    # Parse state to get discord_id and optional return_url
+    parts = state.split('|', 1)
+    discord_id = parts[0]
+    return_url = parts[1] if len(parts) > 1 else None
 
     async with httpx.AsyncClient() as client:
         token_response = await client.post(
@@ -78,6 +90,9 @@ async def spotify_callback(code: str, state: str, db: AsyncSession = Depends(get
             )
             logging.info("Successfully updated Spotify tokens")
             
+            if return_url:
+                return RedirectResponse(return_url)
+            
             if user.reviewer_profile:
                 return RedirectResponse(f"{settings.FRONTEND_URL}/reviewer/{user.reviewer_profile.id}")
             
@@ -86,6 +101,28 @@ async def spotify_callback(code: str, state: str, db: AsyncSession = Depends(get
             raise HTTPException(status_code=500, detail=f"Failed to save tokens: {str(e)}")
 
     return RedirectResponse(f"{settings.FRONTEND_URL}/hub")
+
+@router.post("/disconnect")
+async def spotify_disconnect(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Disconnects the user's Spotify account.
+    """
+    try:
+        await user_service.update_user_spotify_tokens(
+            db,
+            discord_id=current_user.discord_id,
+            access_token=None,
+            refresh_token=None,
+            expires_in=None
+        )
+        return {"status": "disconnected"}
+    except Exception as e:
+        logging.error(f"Failed to disconnect Spotify: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to disconnect: {str(e)}")
+
 
 @router.get("/token")
 async def get_spotify_token(current_user: User = Depends(get_current_active_user), db: AsyncSession = Depends(get_db)):

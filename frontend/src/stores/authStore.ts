@@ -16,7 +16,7 @@ interface AuthState {
   isLoading: boolean;
   setToken: (token: string) => Promise<void>;
   logout: () => void;
-  checkAuth: () => Promise<void>;
+  checkAuth: (background?: boolean) => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -39,10 +39,12 @@ export const useAuthStore = create<AuthState>()(
         set({ token: null, user: null, isLoading: false });
         useSessionStore.getState().clearActiveSession();
       },
-      checkAuth: async () => {
+      checkAuth: async (background = false) => {
         const { token } = get();
         if (token) {
-          set({ isLoading: true });
+          if (!background) {
+            set({ isLoading: true });
+          }
           try {
             const response = await api.get('/user/me');
             set({ user: response.data, isLoading: false });

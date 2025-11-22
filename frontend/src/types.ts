@@ -20,10 +20,12 @@ export interface PriorityTier {
   value: number;
   label: string;
   color: string;
+  submissions_count?: number;
 }
 
 export interface ReviewerConfiguration {
   priority_tiers: PriorityTier[];
+  free_line_limit?: number;
 }
 
 export interface PaymentConfig {
@@ -33,14 +35,23 @@ export interface PaymentConfig {
   credentials?: Record<string, any>;
 }
 
+export interface EconomyConfig {
+  id: number;
+  reviewer_id: number;
+  event_name: string;
+  coin_amount: number;
+}
+
 export interface ReviewerProfile {
   id: number;
   user_id: number;
   tiktok_handle: string;
   discord_channel_id?: string;
   queue_status: 'open' | 'closed';
+  open_queue_tiers?: number[];
   configuration?: ReviewerConfiguration;
   payment_configs?: PaymentConfig[];
+  economy_configs?: EconomyConfig[];
   user?: User;
 }
 
@@ -52,6 +63,7 @@ export interface Submission {
   reviewer?: ReviewerProfile;
   track_url: string;
   track_title?: string;
+  artist?: string;
   archived_url?: string;
   status: 'pending' | 'playing' | 'reviewed' | 'played' | 'rejected';
   score?: number;
@@ -68,6 +80,12 @@ export interface Submission {
   end_time?: string;
   genre?: string;
   tags?: string[];
+
+  // Smart-Zone Fields
+  batch_id?: string;
+  sequence_order?: number;
+  hook_start_time?: number;
+  hook_end_time?: number;
 }
 
 export interface Session {

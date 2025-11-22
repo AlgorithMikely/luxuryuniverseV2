@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
 import { UserProfile } from '../types';
+import { useAuthStore } from '../stores/authStore';
 
 // Define a type for the cached Discord users
 interface DiscordUser {
@@ -54,6 +55,13 @@ const AdminPage = () => {
         tiktok_handle: tiktokHandle,
       });
       fetchReviewers(); // Refresh the list
+
+      // Check if we just added ourselves, if so refresh our profile
+      const currentUser = useAuthStore.getState().user;
+      if (currentUser && currentUser.discord_id === selectedDiscordId) {
+        useAuthStore.getState().checkAuth(true);
+      }
+
       // Reset form
       if (discordUsers.length > 0) {
         setSelectedDiscordId(discordUsers[0].discord_id);

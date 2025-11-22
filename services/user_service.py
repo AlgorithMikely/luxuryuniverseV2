@@ -19,13 +19,36 @@ async def get_user_by_discord_id(db: AsyncSession, discord_id: str) -> models.Us
         user.level = calculate_level(user.xp)
     return user
 
-async def get_or_create_user(db: AsyncSession, discord_id: str, username: str, avatar: str | None = None) -> models.User:
-    """
-    Retrieves a user by their Discord ID, or creates a new one if they don't exist.
-    """
-    user = await get_user_by_discord_id(db, discord_id)
+async def get_user_by_email(db: AsyncSession, email: str) -> models.User | None:
+    """Retrieves a user by their email."""
+    result = await db.execute(
+        select(models.User)
+        .options(
+            joinedload(models.User.reviewer_profile).selectinload(models.Reviewer.payment_configs)
+        )
+        .filter(models.User.email == email)
+    )
+    user = result.scalars().first()
     if user:
-        # Update username or avatar if changed
+        user.level = calculate_level(user.xp)
+    return user
+
+async def get_or_create_user(
+    db: AsyncSession, 
+    discord_id: str, 
+    username: str, 
+    email: str | None = None, 
+    avatar: str | None = None
+) -> models.User:
+    """
+    Retrieves a user by their Discord ID, or creates a new one.
+    Handles merging if a guest user with the same email exists.
+    """
+    # 1. Try to find by Discord ID
+    user = await get_user_by_discord_id(db, discord_id)
+    
+    if user:
+        # User exists with this Discord ID. Update details.
         changed = False
         if user.username != username:
             user.username = username
@@ -33,17 +56,78 @@ async def get_or_create_user(db: AsyncSession, discord_id: str, username: str, a
         if user.avatar != avatar:
             user.avatar = avatar
             changed = True
+        # If we have an email from Discord and the user has no email, save it.
+        if email and not user.email:
+            user.email = email
+            changed = True
         
         if changed:
             await db.commit()
             await db.refresh(user)
         return user
 
-    new_user = models.User(discord_id=discord_id, username=username, avatar=avatar)
+    # 2. User not found by Discord ID. Check by Email (if provided).
+    if email:
+        existing_user_by_email = await get_user_by_email(db, email)
+        if existing_user_by_email:
+            # User exists with this email.
+            if existing_user_by_email.is_guest:
+                # Case B: User Found AND is_guest (The Guest). MERGE.
+                existing_user_by_email.discord_id = discord_id
+                existing_user_by_email.username = username
+                existing_user_by_email.avatar = avatar
+                existing_user_by_email.is_guest = False
+                existing_user_by_email.is_verified = True # Verified via Discord
+                
+                await db.commit()
+                await db.refresh(existing_user_by_email)
+                return existing_user_by_email
+            else:
+                # Case D: User Found BUT discord_id is different (implied, since we didn't find by discord_id above).
+                # Reject Login OR Merge. Spec recommends Reject.
+                # For now, we will raise an error or just return the existing user but NOT update discord_id?
+                # If we return it, the auth flow might try to use it.
+                # Let's raise a ValueError that the auth handler can catch.
+                raise ValueError(f"Email {email} is already in use by another account.")
+
+    # 3. Case A: No User Found. Create new.
+    new_user = models.User(
+        discord_id=discord_id, 
+        username=username, 
+        email=email,
+        avatar=avatar,
+        is_guest=False,
+        is_verified=True # Verified via Discord
+    )
     db.add(new_user)
     await db.commit()
     # Use get_user_by_discord_id to reload with relationships eager loaded
     return await get_user_by_discord_id(db, discord_id)
+
+async def get_or_create_guest_user(db: AsyncSession, email: str, tiktok_handle: str | None = None) -> models.User:
+    """Creates a guest user with the given email, or retrieves existing."""
+    # Check if exists first
+    existing = await get_user_by_email(db, email)
+    if existing:
+        # Update tiktok handle if provided and not set
+        if tiktok_handle and not existing.tiktok_username:
+            existing.tiktok_username = tiktok_handle
+            await db.commit()
+            await db.refresh(existing)
+        return existing
+        
+    new_user = models.User(
+        email=email,
+        username="Guest", # Default username
+        is_guest=True,
+        is_verified=False,
+        discord_id=None,
+        tiktok_username=tiktok_handle
+    )
+    db.add(new_user)
+    await db.commit()
+    await db.refresh(new_user)
+    return new_user
 
 async def add_xp(db: AsyncSession, user_id: int, amount: int) -> models.User:
     """Adds XP to a user and calculates their new level."""
@@ -142,7 +226,10 @@ async def update_user_spotify_tokens(
 
     user.spotify_access_token = access_token
     user.spotify_refresh_token = refresh_token
-    user.spotify_token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+    if expires_in is not None:
+        user.spotify_token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+    else:
+        user.spotify_token_expires_at = None
     await db.commit()
     await db.refresh(user)
     return user

@@ -280,6 +280,7 @@ const WebPlayer: React.FC = () => {
         }
 
         setIsWaveSurferReady(false); // Reset ready state
+        setIsPlaying(false); // Reset playing state
 
         const trackUrl = currentTrack?.track_url;
         // Only initialize WaveSurfer for non-Spotify/YT/SC urls (i.e., direct files)
@@ -323,7 +324,7 @@ const WebPlayer: React.FC = () => {
                 wavesurfer.current = null;
             }
         };
-    }, [currentTrack?.track_url]); // Re-run when track URL changes
+    }, [currentTrack?.track_url, currentTrack?.id]); // Re-run when track URL or ID changes
 
     const handleLogin = async () => {
         try {

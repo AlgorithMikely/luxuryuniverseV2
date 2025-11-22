@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import api from '../services/api';
-import { PriorityTier, ReviewerProfile } from '../types';
+import { PriorityTier, ReviewerProfile, EconomyConfig } from '../types';
 import { Save, Trash2, Plus, RotateCcw } from 'lucide-react';
 
 const ReviewerSettingsPage: React.FC = () => {
@@ -13,7 +13,9 @@ const ReviewerSettingsPage: React.FC = () => {
     // Form States
     const [tiktokHandle, setTiktokHandle] = useState('');
     const [discordChannelId, setDiscordChannelId] = useState('');
+    const [freeLineLimit, setFreeLineLimit] = useState<number | ''>('');
     const [tiers, setTiers] = useState<PriorityTier[]>([]);
+    const [economyConfigs, setEconomyConfigs] = useState<EconomyConfig[]>([]);
 
     // Loading/Error States
     const [isLoading, setIsLoading] = useState(true);
@@ -24,6 +26,7 @@ const ReviewerSettingsPage: React.FC = () => {
     const [newTierValue, setNewTierValue] = useState<number>(0);
     const [newTierLabel, setNewTierLabel] = useState('');
     const [newTierColor, setNewTierColor] = useState('gray');
+    const [newTierSubmissions, setNewTierSubmissions] = useState<number>(1);
 
     const [isColorDropdownOpen, setIsColorDropdownOpen] = useState(false);
     const [activeColorDropdown, setActiveColorDropdown] = useState<number | null>(null);
@@ -38,23 +41,33 @@ const ReviewerSettingsPage: React.FC = () => {
 
     const colorOptions = [
         { name: 'Gray', value: 'gray', hex: '#9ca3af' },
+        { name: 'Slate', value: 'slate', hex: '#94a3b8' },
+        { name: 'Zinc', value: 'zinc', hex: '#a1a1aa' },
+        { name: 'Neutral', value: 'neutral', hex: '#a3a3a3' },
+        { name: 'Stone', value: 'stone', hex: '#a8a29e' },
         { name: 'Red', value: 'red', hex: '#ef4444' },
+        { name: 'Crimson', value: 'crimson', hex: '#dc2626' },
         { name: 'Orange', value: 'orange', hex: '#f97316' },
         { name: 'Amber', value: 'amber', hex: '#f59e0b' },
+        { name: 'Gold', value: 'gold', hex: '#ffd700' },
         { name: 'Yellow', value: 'yellow', hex: '#eab308' },
         { name: 'Lime', value: 'lime', hex: '#84cc16' },
         { name: 'Green', value: 'green', hex: '#22c55e' },
         { name: 'Emerald', value: 'emerald', hex: '#10b981' },
+        { name: 'Mint', value: 'mint', hex: '#6ee7b7' },
         { name: 'Teal', value: 'teal', hex: '#14b8a6' },
         { name: 'Cyan', value: 'cyan', hex: '#06b6d4' },
         { name: 'Sky', value: 'sky', hex: '#0ea5e9' },
         { name: 'Blue', value: 'blue', hex: '#3b82f6' },
+        { name: 'Royal', value: 'royal', hex: '#1e40af' },
         { name: 'Indigo', value: 'indigo', hex: '#6366f1' },
         { name: 'Violet', value: 'violet', hex: '#8b5cf6' },
         { name: 'Purple', value: 'purple', hex: '#a855f7' },
+        { name: 'Lavender', value: 'lavender', hex: '#c084fc' },
         { name: 'Fuchsia', value: 'fuchsia', hex: '#d946ef' },
         { name: 'Pink', value: 'pink', hex: '#ec4899' },
         { name: 'Rose', value: 'rose', hex: '#f43f5e' },
+        { name: 'Coral', value: 'coral', hex: '#fb7185' },
     ];
 
     const defaultTiers: PriorityTier[] = [
@@ -92,12 +105,30 @@ const ReviewerSettingsPage: React.FC = () => {
                 setReviewerProfile(profile);
                 setTiktokHandle(profile.tiktok_handle || '');
                 setDiscordChannelId(profile.discord_channel_id || '');
+                setFreeLineLimit(profile.configuration?.free_line_limit ?? '');
 
                 if (profile.configuration?.priority_tiers) {
                     setTiers(profile.configuration.priority_tiers);
                 } else {
                     setTiers(defaultTiers);
                 }
+
+                // Initialize economy configs with defaults if missing
+                const defaultEvents = [
+                    { event_name: 'like', coin_amount: 10 },
+                    { event_name: 'comment', coin_amount: 5 },
+                    { event_name: 'share', coin_amount: 50 },
+                    { event_name: 'follow', coin_amount: 100 },
+                    { event_name: 'join', coin_amount: 0 },
+                ];
+
+                const currentConfigs = profile.economy_configs || [];
+                const mergedConfigs = defaultEvents.map(def => {
+                    const existing = currentConfigs.find(c => c.event_name === def.event_name);
+                    return existing || { ...def, id: 0, reviewer_id: profile.id } as EconomyConfig;
+                });
+                setEconomyConfigs(mergedConfigs);
+
             } catch (err) {
                 console.error("Failed to load reviewer settings", err);
                 setMessage({ text: "Failed to load settings.", type: 'error' });
@@ -121,8 +152,10 @@ const ReviewerSettingsPage: React.FC = () => {
                 tiktok_handle: tiktokHandle,
                 discord_channel_id: discordChannelId,
                 configuration: {
-                    priority_tiers: tiers
-                }
+                    priority_tiers: tiers,
+                    free_line_limit: freeLineLimit === '' ? null : Number(freeLineLimit)
+                },
+                economy_configs: economyConfigs.map(c => ({ event_name: c.event_name, coin_amount: c.coin_amount }))
             };
 
             await api.patch(`/reviewer/${reviewerProfile.id}/settings`, updateData);
@@ -144,7 +177,8 @@ const ReviewerSettingsPage: React.FC = () => {
         const newTier: PriorityTier = {
             value: newTierValue,
             label: newTierLabel || `${newTierValue} Tier`,
-            color: newTierColor
+            color: newTierColor,
+            submissions_count: newTierSubmissions
         };
 
         // Sort tiers by value
@@ -155,6 +189,7 @@ const ReviewerSettingsPage: React.FC = () => {
         setNewTierValue(0);
         setNewTierLabel('');
         setNewTierColor('gray');
+        setNewTierSubmissions(1);
         setIsColorDropdownOpen(false);
     };
 
@@ -171,6 +206,25 @@ const ReviewerSettingsPage: React.FC = () => {
     const getSelectedColorObj = () => {
         return colorOptions.find(c => c.value === newTierColor) || colorOptions[0];
     };
+
+    const getAvailableColors = (excludeColor?: string) => {
+        const usedColors = new Set(tiers.map(t => t.color));
+        if (excludeColor) {
+            usedColors.delete(excludeColor);
+        }
+        return colorOptions.filter(c => !usedColors.has(c.value));
+    };
+
+    // Ensure newTierColor is valid when tiers change
+    useEffect(() => {
+        const usedColors = new Set(tiers.map(t => t.color));
+        if (usedColors.has(newTierColor)) {
+            const available = colorOptions.find(c => !usedColors.has(c.value));
+            if (available) {
+                setNewTierColor(available.value);
+            }
+        }
+    }, [tiers, newTierColor]);
 
     if (isLoading) return <div className="p-10 text-center text-white">Loading settings...</div>;
     if (!user?.reviewer_profile) return <div className="p-10 text-center text-white">You must be a reviewer to access this page.</div>;
@@ -212,6 +266,17 @@ const ReviewerSettingsPage: React.FC = () => {
                                 />
                                 <p className="text-xs text-gray-500 mt-1">The ID of the channel the bot listens to.</p>
                             </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-400 mb-2">Free Line Submission Limit</label>
+                                <input
+                                    type="number"
+                                    value={freeLineLimit}
+                                    onChange={(e) => setFreeLineLimit(e.target.value === '' ? '' : parseInt(e.target.value))}
+                                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-purple-500"
+                                    placeholder="No limit"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">Limit the number of active submissions in the free queue. Leave empty for no limit.</p>
+                            </div>
                         </div>
                     </section>
 
@@ -234,6 +299,7 @@ const ReviewerSettingsPage: React.FC = () => {
                                     <tr className="bg-gray-700 text-gray-300 text-sm">
                                         <th className="p-3 font-medium">Value</th>
                                         <th className="p-3 font-medium">Label</th>
+                                        <th className="p-3 font-medium"># of Submissions</th>
                                         <th className="p-3 font-medium">Theme</th>
                                         <th className="p-3 font-medium text-right">Actions</th>
                                     </tr>
@@ -241,6 +307,8 @@ const ReviewerSettingsPage: React.FC = () => {
                                 <tbody>
                                     {tiers.map((tier, index) => {
                                         const colorObj = colorOptions.find(c => c.value === tier.color) || { name: tier.color, hex: '#9ca3af' };
+                                        const availableColors = getAvailableColors(tier.color);
+
                                         return (
                                             <tr key={index} className="border-t border-gray-700 hover:bg-gray-700/30 transition-colors">
                                                 <td className="p-3">
@@ -259,6 +327,15 @@ const ReviewerSettingsPage: React.FC = () => {
                                                         className="bg-gray-800 border border-gray-600 rounded px-2 py-1 w-full text-sm focus:outline-none focus:border-purple-500"
                                                     />
                                                 </td>
+                                                <td className="p-3">
+                                                    <input
+                                                        type="number"
+                                                        min="1"
+                                                        value={tier.submissions_count || 1}
+                                                        onChange={(e) => handleTierChange(index, 'submissions_count', parseInt(e.target.value) || 1)}
+                                                        className="bg-gray-800 border border-gray-600 rounded px-2 py-1 w-16 text-sm focus:outline-none focus:border-purple-500"
+                                                    />
+                                                </td>
                                                 <td className="p-3 relative">
                                                     <button
                                                         onClick={() => setActiveColorDropdown(activeColorDropdown === index ? null : index)}
@@ -275,7 +352,7 @@ const ReviewerSettingsPage: React.FC = () => {
                                                         <>
                                                             <div className="fixed inset-0 z-10" onClick={() => setActiveColorDropdown(null)}></div>
                                                             <div className="absolute top-full mt-1 left-0 w-48 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-20 max-h-60 overflow-y-auto">
-                                                                {colorOptions.map(opt => (
+                                                                {availableColors.map(opt => (
                                                                     <button
                                                                         key={opt.value}
                                                                         onClick={() => {
@@ -312,7 +389,7 @@ const ReviewerSettingsPage: React.FC = () => {
                         <div className="bg-gray-700 p-4 rounded-lg">
                             <h3 className="text-sm font-medium text-gray-300 mb-3">Add New Tier</h3>
                             <div className="flex flex-col md:flex-row gap-4 items-end">
-                                <div className="flex-1">
+                                <div className="w-full md:w-32">
                                     <label className="block text-xs text-gray-500 mb-1">Priority Value</label>
                                     <input
                                         type="number"
@@ -321,7 +398,7 @@ const ReviewerSettingsPage: React.FC = () => {
                                         className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
                                     />
                                 </div>
-                                <div className="flex-[2]">
+                                <div className="flex-1 w-full">
                                     <label className="block text-xs text-gray-500 mb-1">Label</label>
                                     <input
                                         type="text"
@@ -331,7 +408,17 @@ const ReviewerSettingsPage: React.FC = () => {
                                         className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
                                     />
                                 </div>
-                                <div className="flex-1 relative">
+                                <div className="w-full md:w-24">
+                                    <label className="block text-xs text-gray-500 mb-1"># of Submissions</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        value={newTierSubmissions}
+                                        onChange={(e) => setNewTierSubmissions(parseInt(e.target.value) || 1)}
+                                        className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
+                                    />
+                                </div>
+                                <div className="w-full md:w-40 relative">
                                     <label className="block text-xs text-gray-500 mb-1">Theme</label>
                                     <button
                                         type="button"
@@ -349,7 +436,7 @@ const ReviewerSettingsPage: React.FC = () => {
                                         <>
                                             <div className="fixed inset-0 z-10" onClick={() => setIsColorDropdownOpen(false)}></div>
                                             <div className="absolute bottom-full mb-1 left-0 w-full bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-20 max-h-60 overflow-y-auto">
-                                                {colorOptions.map(opt => (
+                                                {getAvailableColors().map(opt => (
                                                     <button
                                                         key={opt.value}
                                                         onClick={() => {
@@ -374,16 +461,95 @@ const ReviewerSettingsPage: React.FC = () => {
                                 </button>
                             </div>
                         </div>
+
                     </section>
 
-                    {/* Payment Configuration */}
+                    {/* TikTok Interaction Points */}
                     <section className="bg-gray-800 rounded-xl p-6 shadow-lg">
-                        <h2 className="text-xl font-semibold mb-4 text-purple-400">Payment Methods</h2>
+                        <h2 className="text-xl font-semibold mb-4 text-purple-400">TikTok Interaction Points</h2>
                         <p className="text-gray-400 text-sm mb-6">
-                            Connect your payment accounts to receive direct payments from users for priority requests.
+                            Configure how many luxury coins users earn for different TikTok interactions.
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            {economyConfigs.map((config, index) => (
+                                <div key={config.event_name}>
+                                    <label className="block text-sm font-medium text-gray-400 mb-2 capitalize">{config.event_name}</label>
+                                    <input
+                                        type="number"
+                                        value={config.coin_amount}
+                                        onChange={(e) => {
+                                            const newConfigs = [...economyConfigs];
+                                            newConfigs[index] = { ...config, coin_amount: parseInt(e.target.value) || 0 };
+                                            setEconomyConfigs(newConfigs);
+                                        }}
+                                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-purple-500"
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+
+                    {/* Integrations & Payments */}
+                    <section className="bg-gray-800 rounded-xl p-6 shadow-lg">
+                        <h2 className="text-xl font-semibold mb-4 text-purple-400">Integrations & Payments</h2>
+                        <p className="text-gray-400 text-sm mb-6">
+                            Connect your accounts to enable features and receive payments.
                         </p>
 
                         <div className="space-y-4">
+                            {/* Spotify */}
+                            <div className="bg-gray-700/50 p-4 rounded-lg flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                    <div className="bg-[#1DB954] p-2 rounded text-white font-bold">Spotify</div>
+                                    <div>
+                                        <h3 className="font-medium text-white">Spotify</h3>
+                                        <p className="text-xs text-gray-400">Connect to enable the web player and track info.</p>
+                                    </div>
+                                </div>
+                                <div>
+                                    {user?.spotify_connected ? (
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex items-center gap-2 text-green-400 bg-green-900/30 px-3 py-1 rounded-full border border-green-800">
+                                                <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                                                <span className="text-sm font-medium">Connected</span>
+                                            </div>
+                                            <button
+                                                onClick={async () => {
+                                                    if (window.confirm("Are you sure you want to disconnect Spotify?")) {
+                                                        try {
+                                                            await api.post('/spotify/disconnect');
+                                                            setMessage({ text: "Spotify disconnected successfully.", type: 'success' });
+                                                            await checkAuth();
+                                                        } catch (err) {
+                                                            setMessage({ text: "Failed to disconnect Spotify.", type: 'error' });
+                                                        }
+                                                    }
+                                                }}
+                                                className="text-gray-400 hover:text-white text-sm underline"
+                                            >
+                                                Disconnect
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            onClick={async () => {
+                                                try {
+                                                    const returnUrl = encodeURIComponent(window.location.href);
+                                                    // Add force_login=true to ensure the user can switch accounts
+                                                    const res = await api.get(`/spotify/login?return_url=${returnUrl}&force_login=true`);
+                                                    window.location.href = res.data.url;
+                                                } catch (err) {
+                                                    setMessage({ text: "Failed to initiate Spotify connection.", type: 'error' });
+                                                }
+                                            }}
+                                            className="bg-[#1DB954] hover:bg-[#1ed760] text-white px-4 py-2 rounded text-sm font-medium transition-colors"
+                                        >
+                                            Connect Spotify
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
                             {/* Stripe */}
                             <div className="bg-gray-700/50 p-4 rounded-lg flex items-center justify-between">
                                 <div className="flex items-center gap-4">
@@ -395,9 +561,29 @@ const ReviewerSettingsPage: React.FC = () => {
                                 </div>
                                 <div>
                                     {reviewerProfile?.payment_configs?.find(c => c.provider === 'stripe' && c.is_enabled) ? (
-                                        <div className="flex items-center gap-2 text-green-400 bg-green-900/30 px-3 py-1 rounded-full border border-green-800">
-                                            <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                                            <span className="text-sm font-medium">Connected</span>
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex items-center gap-2 text-green-400 bg-green-900/30 px-3 py-1 rounded-full border border-green-800">
+                                                <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                                                <span className="text-sm font-medium">Connected</span>
+                                            </div>
+                                            <button
+                                                onClick={async () => {
+                                                    if (window.confirm("Are you sure you want to disconnect Stripe?")) {
+                                                        try {
+                                                            await api.post('/stripe/disconnect');
+                                                            setMessage({ text: "Stripe disconnected successfully.", type: 'success' });
+                                                            // Refresh profile to update UI
+                                                            const response = await api.get<ReviewerProfile>(`/reviewer/${user.reviewer_profile!.id}/settings`);
+                                                            setReviewerProfile(response.data);
+                                                        } catch (err) {
+                                                            setMessage({ text: "Failed to disconnect Stripe.", type: 'error' });
+                                                        }
+                                                    }
+                                                }}
+                                                className="text-gray-400 hover:text-white text-sm underline"
+                                            >
+                                                Disconnect
+                                            </button>
                                         </div>
                                     ) : (
                                         <button
@@ -432,26 +618,26 @@ const ReviewerSettingsPage: React.FC = () => {
                             </div>
                         </div>
                     </section>
+                </div>
 
-                    {/* Action Buttons */}
-                    <div className="flex justify-end pt-4">
-                        <button
-                            onClick={() => navigate(-1)}
-                            className="mr-4 px-6 py-2 rounded text-gray-400 hover:text-white transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleSave}
-                            disabled={isSaving}
-                            className={`px-8 py-2 rounded bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold shadow-lg hover:from-purple-500 hover:to-blue-500 transition-all ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                            {isSaving ? 'Saving...' : 'Save Changes'}
-                        </button>
-                    </div>
+                {/* Action Buttons */}
+                <div className="flex justify-end pt-4">
+                    <button
+                        onClick={() => navigate(-1)}
+                        className="mr-4 px-6 py-2 rounded text-gray-400 hover:text-white transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        onClick={handleSave}
+                        disabled={isSaving}
+                        className={`px-8 py-2 rounded bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold shadow-lg hover:from-purple-500 hover:to-blue-500 transition-all ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                        {isSaving ? 'Saving...' : 'Save Changes'}
+                    </button>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

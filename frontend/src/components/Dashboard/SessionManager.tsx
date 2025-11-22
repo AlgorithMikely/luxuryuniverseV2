@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSessionStore, Session } from '../../stores/sessionStore';
+import { useQueueStore } from '../../stores/queueStore';
 import api from '../../services/api';
 import { PriorityTier, ReviewerProfile } from '../../types';
 
@@ -24,6 +25,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ reviewerId }) => {
   ]);
 
   const { activeSession, fetchActiveSession } = useSessionStore();
+  const { queue } = useQueueStore();
 
   const fetchSessions = async () => {
     setIsLoading(true);
@@ -105,6 +107,12 @@ const SessionManager: React.FC<SessionManagerProps> = ({ reviewerId }) => {
 
   const handleEndSession = async () => {
     if (!activeSession) return;
+
+    if (queue.length > 0) {
+      const confirmed = window.confirm(`There are ${queue.length} submissions in the queue. Ending the session will clear them. Are you sure you want to end the session?`);
+      if (!confirmed) return;
+    }
+
     setIsLoading(true);
     try {
       const url = reviewerId ? `/sessions/${activeSession.id}/archive?reviewer_id=${reviewerId}` : `/sessions/${activeSession.id}/archive`;
