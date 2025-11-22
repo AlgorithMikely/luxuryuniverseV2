@@ -641,5 +641,52 @@ class TikTokCog(commands.Cog):
         success, message = await self._perform_link_account(interaction, handle)
         await interaction.followup.send(message, ephemeral=True)
 
+    @app_commands.command(name="connect_tiktok", description="Manually connect to a TikTok Live stream")
+    async def connect_tiktok(self, interaction: discord.Interaction, handle: str):
+        """Manually connect to a TikTok Live stream."""
+        await interaction.response.defer(ephemeral=True)
+        
+        handle = handle.replace('@', '').lower()
+        
+        if handle in self.live_clients:
+            await interaction.followup.send(f"⚠️ Already connected to **@{handle}**.", ephemeral=True)
+            return
+
+        # Start background connection task
+        # We pass persistent=False because manual connections might not be intended to auto-reconnect forever 
+        # unless added to the monitored list. But for now, let's assume manual = temporary unless monitored.
+        # Actually, if the user manually connects, they probably want it to work.
+        self.bot.loop.create_task(self._background_connect(interaction, handle, persistent=False))
+        
+        # _background_connect handles the success/failure messages via interaction.followup if provided.
+        # The current implementation of _background_connect uses interaction.followup.send if interaction is not None.
+        # So we are good.
+
+    @app_commands.command(name="disconnect_tiktok", description="Disconnect from a TikTok Live stream")
+    async def disconnect_tiktok(self, interaction: discord.Interaction, handle: str):
+        """Disconnect from a TikTok Live stream."""
+        await interaction.response.defer(ephemeral=True)
+        
+        handle = handle.replace('@', '').lower()
+        
+        if handle not in self.live_clients:
+            await interaction.followup.send(f"❌ Not currently connected to **@{handle}**.", ephemeral=True)
+            return
+
+        try:
+            client = self.live_clients[handle]
+            await client.stop()
+            
+            if handle in self.live_clients:
+                del self.live_clients[handle]
+            
+            if handle in self.persistent_connections:
+                self.persistent_connections.remove(handle)
+                
+            await interaction.followup.send(f"✅ Disconnected from **@{handle}**.", ephemeral=True)
+        except Exception as e:
+            logger.error(f"Error disconnecting from @{handle}: {e}", exc_info=True)
+            await interaction.followup.send(f"❌ Error disconnecting from **@{handle}**: {e}", ephemeral=True)
+
 async def setup(bot: commands.Bot):
     await bot.add_cog(TikTokCog(bot))
