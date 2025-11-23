@@ -4,7 +4,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 from database import get_db
 from services import user_service
-from security import get_current_user, TokenData
+from security import get_current_user
+from schemas import TokenData
 import models
 import schemas
 from typing import List, Dict, Any
@@ -92,7 +93,9 @@ async def get_user_achievements(
             "progress": round(progress, 1),
             "current_value": current_value,
             "threshold_value": ach.threshold_value,
-            "category": ach.category
+            "category": ach.category,
+            "role_color": ach.role_color,
+            "role_icon": ach.role_icon
         })
 
     return {
