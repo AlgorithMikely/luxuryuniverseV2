@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, File, UploadFile, Form, HTTPException, status
+from fastapi import APIRouter, Depends, Query, File, UploadFile, Form, HTTPException, status, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
 from sqlalchemy.orm import joinedload, selectinload
@@ -54,7 +54,8 @@ async def get_all_reviewers(db: AsyncSession = Depends(get_db)):
         select(models.Reviewer)
         .options(
             joinedload(models.Reviewer.user),
-            selectinload(models.Reviewer.payment_configs)
+            selectinload(models.Reviewer.payment_configs),
+            selectinload(models.Reviewer.economy_configs)
         )
     )
     return result.scalars().all()
@@ -308,9 +309,50 @@ async def return_active(reviewer_id: int, db: AsyncSession = Depends(get_db)):
     await queue_service.return_active_to_queue(db, reviewer_id=reviewer_id)
     return {"status": "success"}
 
+@router.post("/{reviewer_id}/queue/{submission_id}/play", response_model=schemas.Submission, dependencies=[Depends(check_is_reviewer)])
+async def play_track(reviewer_id: int, submission_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Sets a specific track as playing, resetting any other active track to pending.
+    """
+    submission = await queue_service.set_track_playing(db, reviewer_id=reviewer_id, submission_id=submission_id)
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    return submission
+
 @router.get("/{reviewer_id}/queue/played", response_model=List[schemas.Submission], dependencies=[Depends(check_is_reviewer)])
 async def get_played_queue(reviewer_id: int, db: AsyncSession = Depends(get_db)):
     return await queue_service.get_played_queue(db, reviewer_id=reviewer_id)
+
+@router.get("/{reviewer_id}/queue/current", response_model=Optional[schemas.SubmissionPublic])
+async def get_current_track_public(reviewer_id: int, response: Response, db: AsyncSession = Depends(get_db)):
+    """
+    Public endpoint to get the currently playing track for a reviewer.
+    Designed for OBS overlays and public widgets.
+
+    Logic mirrors the frontend dashboard:
+    1. Checks for a track explicitly marked as 'playing'.
+    2. If none, falls back to the first track in the 'pending' queue.
+    """
+    # Set Cache-Control headers to prevent caching
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+
+    import logging
+    # 1. Try getting explicitly playing track
+    current = await queue_service.get_current_track(db, reviewer_id=reviewer_id)
+    if current:
+        logging.info(f"get_current_track_public: Found active track {current.id} (Title: {current.track_title})")
+        return current
+
+    # 2. Fallback to first pending track (Top of Queue)
+    pending_queue = await queue_service.get_pending_queue(db, reviewer_id=reviewer_id)
+    if pending_queue:
+        logging.info(f"get_current_track_public: No active track, falling back to pending queue top: {pending_queue[0].id}")
+        return pending_queue[0]
+
+    logging.info("get_current_track_public: No active or pending tracks.")
+    return None
 
 @router.post("/{reviewer_id}/queue/review/{submission_id}", response_model=schemas.Submission, dependencies=[Depends(check_is_reviewer)])
 async def review_submission(submission_id: int, review: schemas.ReviewCreate, db: AsyncSession = Depends(get_db)):
@@ -363,7 +405,8 @@ async def get_reviewer_settings(reviewer_id: int, db: AsyncSession = Depends(get
         select(models.Reviewer)
         .options(
             joinedload(models.Reviewer.user),
-            selectinload(models.Reviewer.payment_configs)
+            selectinload(models.Reviewer.payment_configs),
+            selectinload(models.Reviewer.economy_configs)
         )
         .filter(models.Reviewer.id == reviewer_id)
     )

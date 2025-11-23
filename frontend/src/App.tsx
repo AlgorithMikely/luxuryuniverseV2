@@ -41,6 +41,7 @@ function App() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
+            {/* Overlay Route - Public & Transparent */}
             <Route path="/overlay/:reviewerId" element={<Overlay />} />
 
             {/* Public Routes */}

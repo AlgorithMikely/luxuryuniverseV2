@@ -75,6 +75,20 @@ class User(UserBase):
     discord_channel_id: Optional[str] = None
     configuration: Optional[ReviewerConfiguration] = None
 
+class UserPublic(BaseModel):
+    """
+    Safe user profile for public endpoints (no email/PII).
+    """
+    id: int
+    username: str
+    avatar: Optional[str] = None
+    xp: int = 0
+    level: int = 0
+    tiktok_handle: Optional[str] = None
+    is_guest: bool = False
+    is_verified: bool = False
+    model_config = ConfigDict(from_attributes=True)
+
 class ReviewerProfile(BaseModel):
     id: int
     user_id: int
@@ -145,6 +159,12 @@ class Submission(BaseModel):
     hook_end_time: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+class SubmissionPublic(Submission):
+    """
+    Public submission data with sanitized user info.
+    """
+    user: UserPublic
 
 class SubmissionWithReviewer(Submission):
     reviewer: Optional[ReviewerProfile] = None

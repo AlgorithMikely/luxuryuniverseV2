@@ -55,10 +55,12 @@ const QueuePanel: React.FC<QueuePanelProps> = ({ reviewerId: propReviewerId }) =
 
   const handleTrackSelect = async (track: Submission) => {
     try {
-      await api.post(`/reviewer/${track.reviewer_id}/queue/return-active`);
+      // Call the play endpoint to set this track as active on the backend
+      await api.post(`/reviewer/${track.reviewer_id}/queue/${track.id}/play`);
     } catch (error) {
-      console.error("Failed to return active track to queue:", error);
+      console.error("Failed to set active track:", error);
     }
+    // We still set it locally for instant feedback, though the socket update will confirm it
     setCurrentTrack(track);
   };
 

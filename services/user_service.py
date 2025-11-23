@@ -10,7 +10,10 @@ async def get_user_by_discord_id(db: AsyncSession, discord_id: str) -> models.Us
     result = await db.execute(
         select(models.User)
         .options(
-            joinedload(models.User.reviewer_profile).selectinload(models.Reviewer.payment_configs)
+            joinedload(models.User.reviewer_profile).options(
+                selectinload(models.Reviewer.payment_configs),
+                selectinload(models.Reviewer.economy_configs)
+            )
         )
         .filter(models.User.discord_id == discord_id)
     )
@@ -24,7 +27,10 @@ async def get_user_by_email(db: AsyncSession, email: str) -> models.User | None:
     result = await db.execute(
         select(models.User)
         .options(
-            joinedload(models.User.reviewer_profile).selectinload(models.Reviewer.payment_configs)
+            joinedload(models.User.reviewer_profile).options(
+                selectinload(models.Reviewer.payment_configs),
+                selectinload(models.Reviewer.economy_configs)
+            )
         )
         .filter(models.User.email == email)
     )
@@ -166,7 +172,10 @@ async def get_all_reviewers(db: AsyncSession) -> list[models.User]:
         select(models.User)
         .join(models.Reviewer)
         .options(
-            joinedload(models.User.reviewer_profile).selectinload(models.Reviewer.payment_configs)
+            joinedload(models.User.reviewer_profile).options(
+                selectinload(models.Reviewer.payment_configs),
+                selectinload(models.Reviewer.economy_configs)
+            )
         )
     )
     return result.scalars().all()
