@@ -54,7 +54,7 @@ async def get_pending_queue(db: AsyncSession, reviewer_id: int) -> list[models.S
         .options(joinedload(models.Submission.user))
         .filter(
             models.Submission.reviewer_id == reviewer_id,
-            models.Submission.status == 'pending'
+            models.Submission.status.in_(['pending', 'playing'])
         )
         .order_by(models.Submission.priority_value.desc(), models.Submission.submitted_at.asc())
     )
@@ -83,13 +83,20 @@ async def advance_queue(db: AsyncSession, reviewer_id: int) -> Optional[models.S
     )
     submission = result.scalars().first()
 
-    # We do NOT change status to 'playing' anymore. 
-    # The track remains 'pending' (and in the queue) until reviewed.
-    
     if submission:
+        # Update status to playing so we can track the active submission in DB
+        submission.status = 'playing'
+        await db.commit()
+
         # Emit current track update so frontend knows what to play
         submission_schema = schemas.Submission.model_validate(submission)
         await broadcast_service.emit_current_track_update(reviewer_id, submission_schema.model_dump())
+
+        # Emit queue update as well since status changed (though it stays in queue due to filter change)
+        # We might want to emit to update the list UI if it shows status icons
+        new_queue = await get_pending_queue(db, reviewer_id)
+        queue_schemas = [schemas.Submission.model_validate(s) for s in new_queue]
+        await broadcast_service.emit_queue_update(reviewer_id, [s.model_dump() for s in queue_schemas])
 
     return submission
 

@@ -313,7 +313,7 @@ async def return_active(reviewer_id: int, db: AsyncSession = Depends(get_db)):
 async def get_played_queue(reviewer_id: int, db: AsyncSession = Depends(get_db)):
     return await queue_service.get_played_queue(db, reviewer_id=reviewer_id)
 
-@router.get("/{reviewer_id}/queue/current", response_model=Optional[schemas.Submission])
+@router.get("/{reviewer_id}/queue/current", response_model=Optional[schemas.SubmissionPublic])
 async def get_current_track_public(reviewer_id: int, response: Response, db: AsyncSession = Depends(get_db)):
     """
     Public endpoint to get the currently playing track for a reviewer.

@@ -43,8 +43,8 @@ export default function Overlay() {
     // Initial fetch
     fetchCurrentTrack();
 
-    // Poll every 5 seconds
-    const interval = setInterval(fetchCurrentTrack, 5000);
+    // Poll every 1 second for fast updates
+    const interval = setInterval(fetchCurrentTrack, 1000);
 
     return () => clearInterval(interval);
   }, [reviewerId]);
