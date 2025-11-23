@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, ArrowUp } from 'lucide-react';
+import { Trash2, ArrowUp, Search } from 'lucide-react';
 import { useQueueStore, Submission } from '../../stores/queueStore';
 import { useAuthStore } from '../../stores/authStore';
 import api from '../../services/api';
 import { PriorityTier, ReviewerProfile } from '../../types';
+import { useSubmissionSearch } from '../../hooks/useSubmissionSearch';
 
 interface QueuePanelProps {
   reviewerId?: string | number;
@@ -13,6 +14,7 @@ const QueuePanel: React.FC<QueuePanelProps> = ({ reviewerId: propReviewerId }) =
   const { queue, setCurrentTrack, socketStatus, currentTrack } = useQueueStore();
   const { user } = useAuthStore();
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [tiers, setTiers] = useState<PriorityTier[]>([
     { value: 0, label: 'Free', color: 'gray' },
     { value: 5, label: '$5 Tier', color: 'green' },
@@ -22,6 +24,8 @@ const QueuePanel: React.FC<QueuePanelProps> = ({ reviewerId: propReviewerId }) =
     { value: 25, label: '$25+ Tier', color: 'red' },
     { value: 50, label: '50+ Tier', color: 'pink' },
   ]);
+
+  const filteredQueue = useSubmissionSearch(queue, searchQuery);
 
   useEffect(() => {
     const loadReviewerSettings = async () => {
@@ -175,21 +179,38 @@ const QueuePanel: React.FC<QueuePanelProps> = ({ reviewerId: propReviewerId }) =
 
   return (
     <div className="bg-gray-800 rounded-lg shadow-lg p-4 h-full flex flex-col" onClick={() => setOpenMenuId(null)}>
-      <h2 className="text-xl font-bold mb-4 border-b border-gray-700 pb-2">
-        Submission Queue
-        <span
-          className={`ml-2 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full ${socketStatus === 'connected' ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'
-            }`}
-        >
-          {socketStatus}
-        </span>
+      <h2 className="text-xl font-bold mb-4 border-b border-gray-700 pb-2 flex justify-between items-center">
+        <div className="flex items-center">
+          Submission Queue
+          <span
+            className={`ml-2 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full ${socketStatus === 'connected' ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'
+              }`}
+          >
+            {socketStatus}
+          </span>
+        </div>
       </h2>
+
+      {/* Search Bar */}
+      <div className="mb-4 relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+        <input
+          type="text"
+          placeholder="Search queue..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full bg-black/20 border border-white/10 rounded-lg pl-9 pr-4 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-purple-500/50 transition-colors"
+        />
+      </div>
+
       <div className="overflow-y-auto flex-grow">
         {queue.length === 0 ? (
           <p className="text-gray-400">The queue is currently empty.</p>
+        ) : filteredQueue.length === 0 ? (
+          <p className="text-gray-400 text-center py-4">No matches found.</p>
         ) : (
           <ul className="space-y-2">
-            {queue.map((submission) => {
+            {filteredQueue.map((submission) => {
               const isActive = currentTrack?.id === submission.id;
               const priorityValue = submission.priority_value || 0;
 
