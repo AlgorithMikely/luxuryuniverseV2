@@ -22,14 +22,11 @@ const HistoryPanel = () => {
   }, [history, bookmarks, spotlight]);
 
   const handlePlay = async (submission: Submission) => {
-    // If we are switching tracks, ensure any currently playing track returns to queue
-    // We do this optimistically or in parallel
     try {
-      // Assuming we have reviewerId available in context or store, but here we might need to get it from the submission or store
-      // submission.reviewer_id is available
-      await api.post(`/reviewer/${submission.reviewer_id}/queue/return-active`);
+      // Tell backend to set this track as active (this handles resetting others and updating overlay pointer)
+      await api.post(`/reviewer/${submission.reviewer_id}/queue/${submission.id}/play`);
     } catch (error) {
-      console.error("Failed to return active track to queue:", error);
+      console.error("Failed to play track:", error);
     }
 
     setCurrentTrack(submission);
