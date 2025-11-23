@@ -26,6 +26,7 @@ export interface SmartSubmissionItem {
     hook_end_time?: number;
     priority_value: number;
     sequence_order: number;
+    preview_url?: string;
 }
 
 const SmartZone: React.FC<SmartZoneProps> = ({ reviewer }) => {
@@ -69,19 +70,81 @@ const SmartZone: React.FC<SmartZoneProps> = ({ reviewer }) => {
         else setSlot3(item);
     };
 
-    const handleLinkPaste = (e: React.ClipboardEvent, slotNum: 1 | 2 | 3) => {
+    const handleLinkPaste = async (e: React.ClipboardEvent, slotNum: 1 | 2 | 3) => {
         const text = e.clipboardData.getData('text');
         if (text && (text.includes('spotify') || text.includes('soundcloud') || text.includes('http'))) {
             e.preventDefault();
+
+            // Check for Spotify and fetch metadata
+            let title = "Loading...";
+            let artist = "";
+            let coverArt = "";
+            let previewUrl = "";
+
+            // Initial placeholder item
             const item: SmartSubmissionItem = {
                 track_url: text,
-                track_title: "Loading...", // We might want to fetch metadata
+                track_title: title,
                 priority_value: 0,
                 sequence_order: slotNum
             };
+
             if (slotNum === 1) setSlot1(item);
             else if (slotNum === 2) setSlot2(item);
             else setSlot3(item);
+
+            if (text.includes('spotify.com/track')) {
+                 try {
+                     const { data } = await api.post('/spotify/proxy/track', { url: text });
+
+                     // Spotify Metadata Format
+                     title = data.name;
+                     artist = data.artists.map((a: any) => a.name).join(', ');
+                     if (data.album?.images?.length > 0) {
+                         coverArt = data.album.images[0].url;
+                     }
+                     previewUrl = data.preview_url; // Might be null
+
+                     // Update item with fetched metadata
+                     const updatedItem = {
+                         ...item,
+                         track_title: title,
+                         artist: artist,
+                         // If we have a preview URL, we might want to use it for the waveform,
+                         // but we need to keep the original URL for submission.
+                         // SmartZone's WaveformPlayer uses 'url' prop.
+                         // If we pass the full Spotify link to WaveformPlayer, does it work?
+                         // Currently WaveformPlayer uses wavesurfer.js which needs an audio file.
+                         // So we should pass 'preview_url' to WaveformPlayer if available.
+                         // But SmartSubmissionItem structure has 'track_url'.
+                         // We can add a 'preview_url' field to SmartSubmissionItem or just use track_url
+                         // if we want to preview THAT.
+                         // However, for submission we need the original link.
+                         // Let's rely on WaveformPlayer handling Spotify or just not showing waveform if no audio.
+                         // BUT, if we have a preview_url, we can pass that as a separate prop or temporary field.
+                         preview_url: previewUrl
+                     };
+
+                     if (slotNum === 1) setSlot1(updatedItem);
+                     else if (slotNum === 2) setSlot2(updatedItem);
+                     else setSlot3(updatedItem);
+
+                 } catch (err) {
+                     console.error("Failed to fetch Spotify metadata", err);
+                     // Fallback to basic title
+                     const fallbackItem = { ...item, track_title: "Spotify Track (Metadata Failed)" };
+                     if (slotNum === 1) setSlot1(fallbackItem);
+                     else if (slotNum === 2) setSlot2(fallbackItem);
+                     else setSlot3(fallbackItem);
+                 }
+            } else {
+                 // For non-Spotify links, maybe try generic metadata fetch later?
+                 // For now just update title to "Link Loaded" or similar
+                 const loadedItem = { ...item, track_title: "Link Loaded" };
+                  if (slotNum === 1) setSlot1(loadedItem);
+                 else if (slotNum === 2) setSlot2(loadedItem);
+                 else setSlot3(loadedItem);
+            }
         }
     };
 
@@ -556,11 +619,17 @@ const SubmissionSlot: React.FC<{
 
                     {/* Waveform / Hook Editor */}
                     <div className="flex-1 bg-gray-800/50 rounded-lg p-2">
-                        <WaveformPlayer
-                            url={item.track_url}
-                            hookStartTime={item.hook_start_time}
-                            onHookChange={(start, end) => onUpdate({ hook_start_time: start, hook_end_time: end })}
-                        />
+                        {item.track_url.includes('spotify.com') && !item.preview_url ? (
+                            <div className="flex items-center justify-center h-full text-gray-500 text-sm italic">
+                                Preview not available for this track
+                            </div>
+                        ) : (
+                            <WaveformPlayer
+                                url={item.preview_url || item.track_url}
+                                hookStartTime={item.hook_start_time}
+                                onHookChange={(start, end) => onUpdate({ hook_start_time: start, hook_end_time: end })}
+                            />
+                        )}
                     </div>
                 </div>
             )}

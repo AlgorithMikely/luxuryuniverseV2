@@ -232,3 +232,55 @@ async def get_spotify_track(
             raise HTTPException(status_code=response.status_code, detail="Failed to fetch track info")
 
         return response.json()
+
+class ProxyTrackRequest(BaseModel):
+    url: str
+
+@router.post("/proxy/track")
+async def proxy_spotify_track(
+    request: ProxyTrackRequest
+):
+    """
+    Fetches track metadata using the server's Client Credentials.
+    Does not require a user context.
+    """
+    # Use Client Credentials Flow to get a token
+    async with httpx.AsyncClient() as client:
+        auth_response = await client.post(
+            "https://accounts.spotify.com/api/token",
+            data={
+                "grant_type": "client_credentials",
+                "client_id": settings.SPOTIFY_CLIENT_ID,
+                "client_secret": settings.SPOTIFY_CLIENT_SECRET,
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+
+        if auth_response.status_code != 200:
+            logging.error(f"Error getting client credentials token: {auth_response.text}")
+            raise HTTPException(status_code=500, detail="Failed to authenticate with Spotify")
+
+        token = auth_response.json()["access_token"]
+
+        # Parse track ID from URL
+        # URL format: https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT...
+        import re
+        match = re.search(r"track/([a-zA-Z0-9]+)", request.url)
+        if not match:
+             raise HTTPException(status_code=400, detail="Invalid Spotify track URL")
+
+        track_id = match.group(1)
+
+        # Fetch track info
+        response = await client.get(
+            f"https://api.spotify.com/v1/tracks/{track_id}",
+            headers={
+                "Authorization": f"Bearer {token}",
+            },
+        )
+
+        if response.status_code != 200:
+            logging.error(f"Error fetching track info (proxy): {response.text}")
+            raise HTTPException(status_code=response.status_code, detail="Failed to fetch track info")
+
+        return response.json()

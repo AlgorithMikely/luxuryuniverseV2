@@ -446,3 +446,66 @@ async def set_queue_status(reviewer_id: int, status_update: schemas.QueueStatusU
     await queue_service.set_queue_status(db, reviewer_id, status_update.status)
     # Return updated stats
     return await queue_service.get_reviewer_stats(db, reviewer_id)
+
+@router.post("/{reviewer_id}/sync-avatar", response_model=schemas.ReviewerProfile, dependencies=[Depends(check_is_reviewer)])
+async def sync_reviewer_avatar(reviewer_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Syncs the reviewer's avatar from their linked Discord server.
+    """
+    reviewer = await queue_service.get_reviewer_by_id(db, reviewer_id)
+    if not reviewer:
+        raise HTTPException(status_code=404, detail="Reviewer not found")
+
+    if not reviewer.discord_channel_id:
+        raise HTTPException(status_code=400, detail="No Discord channel linked to this reviewer.")
+
+    # We need to fetch the avatar URL via the Bot
+    # Since the bot runs in a separate thread/process, we need a way to communicate.
+    # We can use the 'bot_instance' if available in the same process, or an IPC mechanism.
+    # In this codebase, 'bot_instance.bot' is available.
+
+    from bot_instance import bot
+    import asyncio
+
+    if not bot.is_ready():
+         raise HTTPException(status_code=503, detail="Discord bot is not ready")
+
+    try:
+        # Run in executor to avoid blocking async loop if bot calls are blocking (they shouldn't be, but just in case)
+        # However, bot.get_channel is synchronous/cache-based.
+        channel = bot.get_channel(int(reviewer.discord_channel_id))
+        if not channel:
+             # Try fetching if not in cache
+             try:
+                channel = await bot.fetch_channel(int(reviewer.discord_channel_id))
+             except:
+                raise HTTPException(status_code=404, detail="Discord channel not found")
+
+        guild = channel.guild
+        if not guild:
+             raise HTTPException(status_code=400, detail="Channel is not in a guild")
+
+        # Get the member (the reviewer user)
+        # We need the user's discord_id
+        user = reviewer.user
+        if not user or not user.discord_id:
+             raise HTTPException(status_code=400, detail="Reviewer has no Discord ID linked")
+
+        member = guild.get_member(int(user.discord_id))
+        if not member:
+            try:
+                member = await guild.fetch_member(int(user.discord_id))
+            except:
+                 raise HTTPException(status_code=404, detail="Reviewer not found in the Discord guild")
+
+        # Get avatar
+        avatar_url = str(member.display_avatar.url)
+
+        # Update reviewer
+        update_data = schemas.ReviewerSettingsUpdate(avatar_url=avatar_url)
+        return await queue_service.update_reviewer_settings(db, reviewer_id, update_data)
+
+    except Exception as e:
+        import logging
+        logging.error(f"Error syncing avatar: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to sync avatar: {str(e)}")
