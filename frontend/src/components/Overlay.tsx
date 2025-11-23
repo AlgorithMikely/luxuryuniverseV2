@@ -7,6 +7,17 @@ export default function Overlay() {
   const [currentTrack, setCurrentTrack] = useState<Submission | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Force body transparency for OBS
+  useEffect(() => {
+    document.body.style.backgroundColor = 'transparent';
+    document.documentElement.style.backgroundColor = 'transparent';
+
+    return () => {
+      document.body.style.backgroundColor = '';
+      document.documentElement.style.backgroundColor = '';
+    };
+  }, []);
+
   useEffect(() => {
     if (!reviewerId) return;
 
