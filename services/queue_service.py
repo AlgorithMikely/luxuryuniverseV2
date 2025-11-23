@@ -310,6 +310,10 @@ async def update_reviewer_settings(db: AsyncSession, reviewer_id: int, settings_
         reviewer.tiktok_handle = update_data["tiktok_handle"]
     if "discord_channel_id" in update_data:
         reviewer.discord_channel_id = update_data["discord_channel_id"]
+    if "avatar_url" in update_data:
+        reviewer.avatar_url = update_data["avatar_url"]
+    if "bio" in update_data:
+        reviewer.bio = update_data["bio"]
     if "configuration" in update_data and update_data["configuration"] is not None:
         # If updating configuration, we should merge or replace.
         # Since the input is a full configuration object, we can replace the specific keys.

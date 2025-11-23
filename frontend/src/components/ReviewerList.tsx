@@ -42,7 +42,7 @@ const ReviewerList = () => {
                     {/* Avatar */}
                     <div className="relative">
                         <img
-                            src={reviewer.user?.avatar || "https://cdn.discordapp.com/embed/avatars/0.png"}
+                            src={reviewer.avatar_url || reviewer.user?.avatar || "https://cdn.discordapp.com/embed/avatars/0.png"}
                             alt={reviewer.user?.username}
                             className="w-20 h-20 rounded-full object-cover border-2 border-gray-600"
                         />

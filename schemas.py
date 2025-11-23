@@ -47,9 +47,10 @@ class ReviewerCreate(BaseModel):
 class ReviewerSettingsUpdate(BaseModel):
     tiktok_handle: Optional[str] = None
     discord_channel_id: Optional[str] = None
-    discord_channel_id: Optional[str] = None
     configuration: Optional[ReviewerConfiguration] = None
     economy_configs: Optional[List[EconomyConfigUpdate]] = None
+    avatar_url: Optional[str] = None
+    bio: Optional[str] = None
 
 
 
@@ -100,6 +101,8 @@ class ReviewerProfile(BaseModel):
     payment_configs: List[PaymentConfig] = []
     economy_configs: List[EconomyConfig] = []
     user: Optional[User] = None
+    avatar_url: Optional[str] = None
+    bio: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

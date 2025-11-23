@@ -66,10 +66,28 @@ const SubmissionPage = () => {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-8 text-center"
+          className="mb-8 text-center max-w-2xl mx-auto"
         >
-          <h1 className="text-4xl font-bold mb-2">Submit to {reviewer.tiktok_handle || reviewer.user?.username}</h1>
-          <p className="text-gray-400">Drag & drop your track or load from library.</p>
+          {/* Reviewer Info */}
+          <div className="flex flex-col items-center justify-center mb-6">
+             <div className="relative mb-4">
+                 <img
+                    src={reviewer.avatar_url || reviewer.user?.avatar || "https://cdn.discordapp.com/embed/avatars/0.png"}
+                    alt={reviewer.user?.username}
+                    className="w-24 h-24 rounded-full object-cover border-4 border-purple-500 shadow-lg"
+                 />
+                 <div className={`absolute bottom-1 right-1 w-6 h-6 rounded-full border-2 border-gray-900 ${reviewer.queue_status === "open" ? "bg-green-500" : "bg-red-500"}`} />
+             </div>
+             <h1 className="text-4xl font-bold mb-2">Submit to {reviewer.tiktok_handle || reviewer.user?.username}</h1>
+          </div>
+
+          {reviewer.bio && (
+             <div className="bg-gray-800/60 backdrop-blur-md rounded-xl p-6 border border-gray-700/50 mb-8 text-left shadow-lg">
+                <p className="text-gray-300 whitespace-pre-wrap leading-relaxed">{reviewer.bio}</p>
+             </div>
+          )}
+
+          <p className="text-gray-400 mb-2">Drag & drop your track or load from library.</p>
         </motion.div>
 
         {/* The Glass Canvas */}

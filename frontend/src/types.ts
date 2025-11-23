@@ -53,6 +53,8 @@ export interface ReviewerProfile {
   payment_configs?: PaymentConfig[];
   economy_configs?: EconomyConfig[];
   user?: User;
+  avatar_url?: string;
+  bio?: string;
 }
 
 // --- Submissions & Queue ---

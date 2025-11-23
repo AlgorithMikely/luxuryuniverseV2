@@ -67,6 +67,8 @@ class Reviewer(Base):
     discord_channel_id = Column(String, unique=True, nullable=True)
     queue_status = Column(String, default="closed", nullable=False)
     configuration = Column(JSON, nullable=True)
+    avatar_url = Column(String, nullable=True)
+    bio = Column(String, nullable=True)
 
     user = relationship("User", back_populates="reviewer_profile")
     submissions = relationship("Submission", back_populates="reviewer")
