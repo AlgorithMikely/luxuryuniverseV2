@@ -317,8 +317,22 @@ async def get_current_track_public(reviewer_id: int, db: AsyncSession = Depends(
     """
     Public endpoint to get the currently playing track for a reviewer.
     Designed for OBS overlays and public widgets.
+
+    Logic mirrors the frontend dashboard:
+    1. Checks for a track explicitly marked as 'playing'.
+    2. If none, falls back to the first track in the 'pending' queue.
     """
-    return await queue_service.get_current_track(db, reviewer_id=reviewer_id)
+    # 1. Try getting explicitly playing track
+    current = await queue_service.get_current_track(db, reviewer_id=reviewer_id)
+    if current:
+        return current
+
+    # 2. Fallback to first pending track (Top of Queue)
+    pending_queue = await queue_service.get_pending_queue(db, reviewer_id=reviewer_id)
+    if pending_queue:
+        return pending_queue[0]
+
+    return None
 
 @router.post("/{reviewer_id}/queue/review/{submission_id}", response_model=schemas.Submission, dependencies=[Depends(check_is_reviewer)])
 async def review_submission(submission_id: int, review: schemas.ReviewCreate, db: AsyncSession = Depends(get_db)):
