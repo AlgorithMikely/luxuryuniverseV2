@@ -309,6 +309,16 @@ async def return_active(reviewer_id: int, db: AsyncSession = Depends(get_db)):
     await queue_service.return_active_to_queue(db, reviewer_id=reviewer_id)
     return {"status": "success"}
 
+@router.post("/{reviewer_id}/queue/{submission_id}/play", response_model=schemas.Submission, dependencies=[Depends(check_is_reviewer)])
+async def play_track(reviewer_id: int, submission_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Sets a specific track as playing, resetting any other active track to pending.
+    """
+    submission = await queue_service.set_track_playing(db, reviewer_id=reviewer_id, submission_id=submission_id)
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    return submission
+
 @router.get("/{reviewer_id}/queue/played", response_model=List[schemas.Submission], dependencies=[Depends(check_is_reviewer)])
 async def get_played_queue(reviewer_id: int, db: AsyncSession = Depends(get_db)):
     return await queue_service.get_played_queue(db, reviewer_id=reviewer_id)

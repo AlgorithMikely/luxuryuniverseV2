@@ -69,6 +69,28 @@ async def set_queue_status(db: AsyncSession, reviewer_id: int, status: str):
         await db.refresh(reviewer)
     return reviewer
 
+async def _update_reviewer_active_track(db: AsyncSession, reviewer_id: int, submission_id: Optional[int]):
+    """Helper to update the reviewer's active track configuration."""
+    result = await db.execute(select(models.Reviewer).filter(models.Reviewer.id == reviewer_id))
+    reviewer = result.scalars().first()
+    if reviewer:
+        # Ensure configuration dict exists
+        if not reviewer.configuration:
+            reviewer.configuration = {}
+        elif isinstance(reviewer.configuration, str):
+            import json
+            try:
+                reviewer.configuration = json.loads(reviewer.configuration)
+            except:
+                reviewer.configuration = {}
+
+        # Create a copy to trigger SQLAlchemy change detection
+        new_config = dict(reviewer.configuration)
+        new_config['active_track_id'] = submission_id
+        reviewer.configuration = new_config
+
+        # We don't commit here, let the caller do it
+
 async def advance_queue(db: AsyncSession, reviewer_id: int) -> Optional[models.Submission]:
     # First, find any currently playing tracks and reset them to pending
     # This ensures we don't have multiple playing tracks
@@ -82,9 +104,6 @@ async def advance_queue(db: AsyncSession, reviewer_id: int) -> Optional[models.S
     active_tracks = active_result.scalars().all()
     for track in active_tracks:
         track.status = 'pending'
-
-    # No commit yet, do it in one transaction if possible, or just commit now
-    await db.commit()
 
     # Get the next submission (now that playing ones are pending, the "next" one is the top of pending)
     result = await db.execute(
@@ -102,6 +121,10 @@ async def advance_queue(db: AsyncSession, reviewer_id: int) -> Optional[models.S
     if submission:
         # Update status to playing so we can track the active submission in DB
         submission.status = 'playing'
+
+        # Update reviewer config pointer
+        await _update_reviewer_active_track(db, reviewer_id, submission.id)
+
         await db.commit()
 
         # Emit current track update so frontend knows what to play
@@ -112,6 +135,60 @@ async def advance_queue(db: AsyncSession, reviewer_id: int) -> Optional[models.S
         new_queue = await get_pending_queue(db, reviewer_id)
         queue_schemas = [schemas.Submission.model_validate(s) for s in new_queue]
         await broadcast_service.emit_queue_update(reviewer_id, [s.model_dump() for s in queue_schemas])
+    else:
+        # Clear active track if queue is empty
+        await _update_reviewer_active_track(db, reviewer_id, None)
+        await db.commit()
+        await broadcast_service.emit_current_track_update(reviewer_id, None)
+
+    return submission
+
+async def set_track_playing(db: AsyncSession, reviewer_id: int, submission_id: int) -> Optional[models.Submission]:
+    # 1. Find and reset existing playing track (only if it was playing)
+    active_result = await db.execute(
+        select(models.Submission)
+        .filter(
+            models.Submission.reviewer_id == reviewer_id,
+            models.Submission.status == 'playing'
+        )
+    )
+    active_tracks = active_result.scalars().all()
+    for track in active_tracks:
+        if track.id != submission_id:
+            track.status = 'pending'
+
+    # 2. Set new track to playing
+    stmt = (
+        select(models.Submission)
+        .options(joinedload(models.Submission.user))
+        .filter(models.Submission.id == submission_id, models.Submission.reviewer_id == reviewer_id)
+    )
+    result = await db.execute(stmt)
+    submission = result.scalars().first()
+
+    if not submission:
+        return None
+
+    # Only change status to playing if it's currently pending
+    # Do NOT change status if it is 'reviewed', 'played', etc.
+    if submission.status == 'pending':
+        submission.status = 'playing'
+    elif submission.status == 'playing':
+        pass # Already playing
+
+    # Update reviewer config pointer
+    await _update_reviewer_active_track(db, reviewer_id, submission.id)
+
+    await db.commit()
+    await db.refresh(submission)
+
+    # 3. Broadcast updates
+    submission_schema = schemas.Submission.model_validate(submission)
+    await broadcast_service.emit_current_track_update(reviewer_id, submission_schema.model_dump())
+
+    new_queue = await get_pending_queue(db, reviewer_id)
+    queue_schemas = [schemas.Submission.model_validate(s) for s in new_queue]
+    await broadcast_service.emit_queue_update(reviewer_id, [s.model_dump() for s in queue_schemas])
 
     return submission
 
@@ -392,6 +469,33 @@ async def get_spotlighted_submissions(db: AsyncSession, reviewer_id: int) -> lis
         return []
 
 async def get_current_track(db: AsyncSession, reviewer_id: int) -> Optional[models.Submission]:
+    # 1. Check Reviewer Configuration for active_track_id
+    reviewer = await get_reviewer_by_id(db, reviewer_id)
+
+    active_id = None
+    if reviewer and reviewer.configuration:
+        # Configuration might be a dict or string depending on driver/model
+        config = reviewer.configuration
+        if isinstance(config, str):
+            import json
+            try:
+                config = json.loads(config)
+            except:
+                config = {}
+
+        active_id = config.get('active_track_id')
+
+    if active_id:
+        result = await db.execute(
+            select(models.Submission)
+            .options(joinedload(models.Submission.user))
+            .filter(models.Submission.id == active_id)
+        )
+        submission = result.scalars().first()
+        if submission:
+            return submission
+
+    # 2. Fallback to 'playing' status
     result = await db.execute(
         select(models.Submission)
         .options(joinedload(models.Submission.user))
