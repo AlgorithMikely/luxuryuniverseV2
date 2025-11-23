@@ -70,7 +70,23 @@ async def set_queue_status(db: AsyncSession, reviewer_id: int, status: str):
     return reviewer
 
 async def advance_queue(db: AsyncSession, reviewer_id: int) -> Optional[models.Submission]:
-    # Get the next submission
+    # First, find any currently playing tracks and reset them to pending
+    # This ensures we don't have multiple playing tracks
+    active_result = await db.execute(
+        select(models.Submission)
+        .filter(
+            models.Submission.reviewer_id == reviewer_id,
+            models.Submission.status == 'playing'
+        )
+    )
+    active_tracks = active_result.scalars().all()
+    for track in active_tracks:
+        track.status = 'pending'
+
+    # No commit yet, do it in one transaction if possible, or just commit now
+    await db.commit()
+
+    # Get the next submission (now that playing ones are pending, the "next" one is the top of pending)
     result = await db.execute(
         select(models.Submission)
         .options(joinedload(models.Submission.user))
@@ -92,8 +108,7 @@ async def advance_queue(db: AsyncSession, reviewer_id: int) -> Optional[models.S
         submission_schema = schemas.Submission.model_validate(submission)
         await broadcast_service.emit_current_track_update(reviewer_id, submission_schema.model_dump())
 
-        # Emit queue update as well since status changed (though it stays in queue due to filter change)
-        # We might want to emit to update the list UI if it shows status icons
+        # Emit queue update as well since status changed
         new_queue = await get_pending_queue(db, reviewer_id)
         queue_schemas = [schemas.Submission.model_validate(s) for s in new_queue]
         await broadcast_service.emit_queue_update(reviewer_id, [s.model_dump() for s in queue_schemas])
