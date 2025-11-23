@@ -1,7 +1,8 @@
 import discord
+from discord import app_commands
 from discord.ext import commands, tasks
 import logging
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 import models
 from config import settings
@@ -16,35 +17,24 @@ class GamificationCog(commands.Cog):
     def cog_unload(self):
         self.sync_roles_task.cancel()
 
-    async def is_admin(self, ctx_or_interaction):
-        """Checks if the user is an admin."""
-        user_id = None
-        if isinstance(ctx_or_interaction, discord.Interaction):
-            user_id = ctx_or_interaction.user.id
-        else:
-            user_id = ctx_or_interaction.author.id
+    # Custom check for app commands
+    def is_admin_check(self, interaction: discord.Interaction) -> bool:
+        return str(interaction.user.id) in settings.ADMIN_DISCORD_IDS
 
-        if str(user_id) in settings.ADMIN_DISCORD_IDS:
-            return True
-        return False
+    # Group for slash commands
+    gamification_group = app_commands.Group(name="gamification", description="Gamification management commands")
 
-    @commands.group(name="gamification", invoke_without_command=True)
-    async def gamification_group(self, ctx):
-        if not await self.is_admin(ctx):
-            await ctx.send("You are not authorized to use this command.")
-            return
-        await ctx.send("Available commands: `setup_roles`, `nuke_roles`")
-
-    @gamification_group.command(name="setup_roles")
-    async def setup_roles(self, ctx):
+    @gamification_group.command(name="setup_roles", description="Creates or updates Discord roles for all achievements (Admin only)")
+    async def setup_roles(self, interaction: discord.Interaction):
         """
-        Creates Discord roles for all achievements that don't have one yet.
+        Creates or updates Discord roles for all achievements.
+        Applies colors and icons from the database.
         """
-        if not await self.is_admin(ctx):
-            await ctx.send("You are not authorized to use this command.")
+        if not self.is_admin_check(interaction):
+            await interaction.response.send_message("You are not authorized to use this command.", ephemeral=True)
             return
 
-        await ctx.send("Setting up achievement roles... This might take a moment.")
+        await interaction.response.send_message("Setting up achievement roles... This might take a moment.", ephemeral=True)
 
         async with self.bot.SessionLocal() as db:
             # Fetch all definitions
@@ -52,47 +42,90 @@ class GamificationCog(commands.Cog):
             result = await db.execute(stmt)
             definitions = result.scalars().all()
 
+            updated_count = 0
             created_count = 0
-            guild = ctx.guild
+            guild = interaction.guild
+
+            if not guild:
+                await interaction.followup.send("This command must be run in a server.")
+                return
 
             for ach in definitions:
-                if not ach.discord_role_id:
-                    # Check if role exists by name first to avoid duplicates if DB was wiped but Guild wasn't
-                    existing_role = discord.utils.get(guild.roles, name=ach.display_name)
+                color = discord.Colour.default()
+                if ach.role_color:
+                    try:
+                        color = discord.Colour.from_str(ach.role_color)
+                    except:
+                        logger.warning(f"Invalid color for {ach.display_name}: {ach.role_color}")
 
-                    role = None
-                    if existing_role:
-                        role = existing_role
-                        logger.info(f"Found existing role for {ach.display_name}: {role.id}")
-                    else:
-                        try:
-                            role = await guild.create_role(name=ach.display_name, reason="Gamification Setup")
-                            logger.info(f"Created role for {ach.display_name}: {role.id}")
-                        except discord.Forbidden:
-                            await ctx.send("Error: I don't have permission to manage roles.")
-                            return
-                        except Exception as e:
-                            logger.error(f"Failed to create role {ach.display_name}: {e}")
-                            continue
+                # Role Icon
+                display_icon = ach.role_icon
 
-                    # Update DB
-                    if role:
+                role = None
+                if ach.discord_role_id:
+                    # Try to find by ID first
+                    role = guild.get_role(int(ach.discord_role_id))
+
+                if not role:
+                    # Try to find by name to avoid duplicates
+                    role = discord.utils.get(guild.roles, name=ach.display_name)
+
+                if role:
+                    # Update existing role
+                    try:
+                        changes = {}
+                        if role.color != color:
+                            changes["colour"] = color
+
+                        # Note: display_icon update depends on server boost level, but we attempt it.
+                        # discord.py handles this gracefully usually.
+                        if display_icon:
+                             changes["display_icon"] = display_icon
+
+                        if changes:
+                            await role.edit(**changes, reason="Gamification Update")
+                            updated_count += 1
+                    except discord.Forbidden:
+                        logger.error(f"Permission denied editing role {role.name}")
+                    except Exception as e:
+                        logger.error(f"Error editing role {role.name}: {e}")
+
+                    # Ensure DB has ID
+                    if not ach.discord_role_id:
+                        ach.discord_role_id = str(role.id)
+
+                else:
+                    # Create new role
+                    try:
+                        role = await guild.create_role(
+                            name=ach.display_name,
+                            colour=color,
+                            display_icon=display_icon,
+                            reason="Gamification Setup"
+                        )
+                        logger.info(f"Created role for {ach.display_name}: {role.id}")
                         ach.discord_role_id = str(role.id)
                         created_count += 1
+                    except discord.Forbidden:
+                        await interaction.followup.send(f"Error: I don't have permission to manage roles. Failed at {ach.display_name}")
+                        return
+                    except Exception as e:
+                        logger.error(f"Failed to create role {ach.display_name}: {e}")
+                        continue
 
             await db.commit()
-            await ctx.send(f"Setup complete. Linked {created_count} roles.")
+            await interaction.followup.send(f"Setup complete. Created {created_count}, Updated {updated_count} roles.")
 
-    @gamification_group.command(name="nuke_roles")
-    async def nuke_roles(self, ctx):
+    @gamification_group.command(name="nuke_roles", description="Deletes all Discord roles created by the gamification system (Admin only)")
+    async def nuke_roles(self, interaction: discord.Interaction):
         """
         Deletes all Discord roles created by the gamification system.
         """
-        if not await self.is_admin(ctx):
-            await ctx.send("You are not authorized to use this command.")
+        if not self.is_admin_check(interaction):
+            await interaction.response.send_message("You are not authorized to use this command.", ephemeral=True)
             return
 
-        await ctx.send("⚠️ nuking gamification roles... This cannot be undone.")
+        await interaction.response.send_message("⚠️ Nuking gamification roles... This cannot be undone.", ephemeral=True)
 
         async with self.bot.SessionLocal() as db:
             stmt = select(models.AchievementDefinition).filter(models.AchievementDefinition.discord_role_id.isnot(None))
@@ -100,7 +133,11 @@ class GamificationCog(commands.Cog):
             definitions = result.scalars().all()
 
             deleted_count = 0
-            guild = ctx.guild
+            guild = interaction.guild
+
+            if not guild:
+                await interaction.followup.send("This command must be run in a server.")
+                return
 
             for ach in definitions:
                 role_id = int(ach.discord_role_id)
@@ -112,6 +149,7 @@ class GamificationCog(commands.Cog):
                         logger.info(f"Deleted role {role.name} ({role.id})")
                     except discord.Forbidden:
                         logger.error(f"Permission denied deleting role {role_id}")
+                        # Don't stop nuking, try others
                     except Exception as e:
                         logger.error(f"Error deleting role {role_id}: {e}")
                 else:
@@ -122,7 +160,7 @@ class GamificationCog(commands.Cog):
                 deleted_count += 1
 
             await db.commit()
-            await ctx.send(f"Nuke complete. Removed {deleted_count} roles from the system.")
+            await interaction.followup.send(f"Nuke complete. Removed {deleted_count} roles from the system.")
 
     @tasks.loop(seconds=60)
     async def sync_roles_task(self):
@@ -150,11 +188,10 @@ class GamificationCog(commands.Cog):
                         continue
 
                     guild_id = None
-                    # We assume the bot operates in one main guild or we need to know which guild
-                    # For V1, let's iterate through bot.guilds and try to find the member
                     member = None
                     role = None
 
+                    # Try to find member in connected guilds
                     for guild in self.bot.guilds:
                         member = guild.get_member(int(user.discord_id))
                         if member:
@@ -178,13 +215,11 @@ class GamificationCog(commands.Cog):
                     else:
                         # Member left server or role deleted?
                         if not member:
-                            logger.warning(f"User {user.username} not found in any guild.")
+                            # logger.warning(f"User {user.username} not found in any guild.")
+                            pass # Silent fail for now until they rejoin
                         if not role:
                             logger.warning(f"Role {achievement.discord_role_id} not found.")
-                        # Keep pending to retry? Or fail?
-                        # Let's keep PENDING if member missing (might join later), but fail if role missing
-                        if not role:
-                             ua.discord_sync_status = "FAILED_ROLE_MISSING"
+                            ua.discord_sync_status = "FAILED_ROLE_MISSING"
 
                 await db.commit()
 

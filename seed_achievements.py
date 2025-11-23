@@ -19,7 +19,9 @@ async def seed_achievements():
                 "description": "Reach 1,000 Total Likes on your stream.",
                 "category": "LIFETIME_LIKES",
                 "threshold_value": 1000,
-                "discord_role_id": None
+                "discord_role_id": None,
+                "role_color": "#57F287", # Green
+                "role_icon": "🌱"
             },
             {
                 "slug": "headliner",
@@ -27,7 +29,9 @@ async def seed_achievements():
                 "description": "Reach 100,000 Total Likes on your stream.",
                 "category": "LIFETIME_LIKES",
                 "threshold_value": 100000,
-                "discord_role_id": None
+                "discord_role_id": None,
+                "role_color": "#F1C40F", # Gold
+                "role_icon": "🌟"
             },
             {
                 "slug": "sold_out",
@@ -35,7 +39,9 @@ async def seed_achievements():
                 "description": "Reach 100 Concurrent Viewers.",
                 "category": "CONCURRENT_VIEWERS",
                 "threshold_value": 100,
-                "discord_role_id": None
+                "discord_role_id": None,
+                "role_color": "#9B59B6", # Purple
+                "role_icon": "🎫"
             },
             {
                 "slug": "label_exec",
@@ -43,7 +49,9 @@ async def seed_achievements():
                 "description": "Earn 5,000 Diamonds (Gift Value).",
                 "category": "LIFETIME_DIAMONDS",
                 "threshold_value": 5000,
-                "discord_role_id": None
+                "discord_role_id": None,
+                "role_color": "#1ABC9C", # Cyan
+                "role_icon": "💎"
             },
 
             # Track B: The Artist (Submission Quality)
@@ -53,7 +61,9 @@ async def seed_achievements():
                 "description": "Submit your first track.",
                 "category": "SUBMISSION_COUNT",
                 "threshold_value": 1,
-                "discord_role_id": None
+                "discord_role_id": None,
+                "role_color": "#B9BBBE", # Grey
+                "role_icon": "📼"
             },
             {
                 "slug": "discography",
@@ -61,7 +71,9 @@ async def seed_achievements():
                 "description": "Submit 50 tracks.",
                 "category": "SUBMISSION_COUNT",
                 "threshold_value": 50,
-                "discord_role_id": None
+                "discord_role_id": None,
+                "role_color": "#3498DB", # Blue
+                "role_icon": "💿"
             },
             {
                 "slug": "crowd_fav",
@@ -69,7 +81,9 @@ async def seed_achievements():
                 "description": "Achieve > 90% 'W' votes on a poll.",
                 "category": "POLL_WIN_PERCENT",
                 "threshold_value": 90,
-                "discord_role_id": None
+                "discord_role_id": None,
+                "role_color": "#E91E63", # Pink
+                "role_icon": "🔥"
             },
             {
                 "slug": "critics_choice",
@@ -77,7 +91,9 @@ async def seed_achievements():
                 "description": "Receive a perfect 10/10 score.",
                 "category": "REVIEW_SCORE",
                 "threshold_value": 10,
-                "discord_role_id": None
+                "discord_role_id": None,
+                "role_color": "#E74C3C", # Red
+                "role_icon": "🏆"
             },
 
             # Track C: The Community (Discord Activity)
@@ -87,7 +103,9 @@ async def seed_achievements():
                 "description": "Send 1,000 messages in Discord.",
                 "category": "DISCORD_MSG_COUNT",
                 "threshold_value": 1000,
-                "discord_role_id": None
+                "discord_role_id": None,
+                "role_color": "#2ECC71", # Green
+                "role_icon": "💬"
             },
             {
                 "slug": "studio_rat",
@@ -95,7 +113,9 @@ async def seed_achievements():
                 "description": "Spend 100 Hours in Voice Channels.",
                 "category": "DISCORD_VOICE_MINS",
                 "threshold_value": 6000, # 100 hours * 60 mins
-                "discord_role_id": None
+                "discord_role_id": None,
+                "role_color": "#E67E22", # Orange
+                "role_icon": "🎙️"
             },
             {
                 "slug": "a_and_r",
@@ -103,7 +123,9 @@ async def seed_achievements():
                 "description": "Invite 50 people to the server.",
                 "category": "DISCORD_INVITES",
                 "threshold_value": 50,
-                "discord_role_id": None
+                "discord_role_id": None,
+                "role_color": "#F1C40F", # Yellow
+                "role_icon": "🤝"
             }
         ]
 
@@ -123,15 +145,15 @@ async def seed_achievements():
                         description=data["description"],
                         category=data["category"],
                         threshold_value=data["threshold_value"],
-                        discord_role_id=data["discord_role_id"]
+                        discord_role_id=data["discord_role_id"],
+                        role_color=data["role_color"],
+                        role_icon=data["role_icon"]
                     )
                     db.add(achievement)
                 else:
-                    logger.info(f"Achievement already exists: {data['display_name']}")
-                    exists.display_name = data["display_name"]
-                    exists.description = data["description"]
-                    exists.category = data["category"]
-                    exists.threshold_value = data["threshold_value"]
+                    logger.info(f"Achievement exists: {data['display_name']}. Updating color/icon.")
+                    exists.role_color = data["role_color"]
+                    exists.role_icon = data["role_icon"]
 
             await db.commit()
             logger.info("Seeding complete.")

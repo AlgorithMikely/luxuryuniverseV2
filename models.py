@@ -268,6 +268,8 @@ class AchievementDefinition(Base):
     threshold_value = Column(BigInteger, nullable=False)
     discord_role_id = Column(String, nullable=True)
     icon_url = Column(String, nullable=True)
+    role_color = Column(String, nullable=True)
+    role_icon = Column(String, nullable=True)
 
     user_achievements = relationship("UserAchievement", back_populates="achievement")
 
