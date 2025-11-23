@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, File, UploadFile, Form, HTTPException, status
+from fastapi import APIRouter, Depends, Query, File, UploadFile, Form, HTTPException, status, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
 from sqlalchemy.orm import joinedload, selectinload
@@ -314,7 +314,7 @@ async def get_played_queue(reviewer_id: int, db: AsyncSession = Depends(get_db))
     return await queue_service.get_played_queue(db, reviewer_id=reviewer_id)
 
 @router.get("/{reviewer_id}/queue/current", response_model=Optional[schemas.Submission])
-async def get_current_track_public(reviewer_id: int, db: AsyncSession = Depends(get_db)):
+async def get_current_track_public(reviewer_id: int, response: Response, db: AsyncSession = Depends(get_db)):
     """
     Public endpoint to get the currently playing track for a reviewer.
     Designed for OBS overlays and public widgets.
@@ -323,6 +323,11 @@ async def get_current_track_public(reviewer_id: int, db: AsyncSession = Depends(
     1. Checks for a track explicitly marked as 'playing'.
     2. If none, falls back to the first track in the 'pending' queue.
     """
+    # Set Cache-Control headers to prevent caching
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+
     # 1. Try getting explicitly playing track
     current = await queue_service.get_current_track(db, reviewer_id=reviewer_id)
     if current:

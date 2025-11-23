@@ -25,7 +25,8 @@ export default function Overlay() {
       try {
         // We use fetch directly to avoid the interceptors in api.ts that might handle auth errors unexpectedly for a public endpoint,
         // although usually 401s are handled. But for an overlay, simplicity is key.
-        const response = await fetch(`/api/reviewer/${reviewerId}/queue/current`);
+        // Add timestamp to prevent caching
+        const response = await fetch(`/api/reviewer/${reviewerId}/queue/current?t=${Date.now()}`);
         if (response.ok) {
           const data = await response.json();
           setCurrentTrack(data); // data can be null if no track is playing
