@@ -54,7 +54,8 @@ async def get_all_reviewers(db: AsyncSession = Depends(get_db)):
         select(models.Reviewer)
         .options(
             joinedload(models.Reviewer.user),
-            selectinload(models.Reviewer.payment_configs)
+            selectinload(models.Reviewer.payment_configs),
+            selectinload(models.Reviewer.economy_configs)
         )
     )
     return result.scalars().all()
@@ -385,7 +386,8 @@ async def get_reviewer_settings(reviewer_id: int, db: AsyncSession = Depends(get
         select(models.Reviewer)
         .options(
             joinedload(models.Reviewer.user),
-            selectinload(models.Reviewer.payment_configs)
+            selectinload(models.Reviewer.payment_configs),
+            selectinload(models.Reviewer.economy_configs)
         )
         .filter(models.Reviewer.id == reviewer_id)
     )
