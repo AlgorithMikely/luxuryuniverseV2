@@ -60,7 +60,11 @@ export const useQueueStore = create<QueueState>()(
       },
 
       connect: (token, reviewerId) => {
-        if (import.meta.env.VITE_DISABLE_SOCKETIO === 'true') {
+        // Check environment variable or window flag (for testing)
+        const disableSocket = import.meta.env.VITE_DISABLE_SOCKETIO === 'true' ||
+                              (window as any).DISABLE_SOCKET_IO === true;
+
+        if (disableSocket) {
           console.log("Socket.IO disabled. Fetching initial state via HTTP.");
           set({ socketStatus: 'disabled' });
           get().fetchInitialStateHttp(reviewerId);
