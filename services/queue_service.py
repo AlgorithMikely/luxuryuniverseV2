@@ -69,6 +69,8 @@ async def set_queue_status(db: AsyncSession, reviewer_id: int, status: str):
         await db.refresh(reviewer)
     return reviewer
 
+from sqlalchemy.orm.attributes import flag_modified
+
 async def _update_reviewer_active_track(db: AsyncSession, reviewer_id: int, submission_id: Optional[int]):
     """Helper to update the reviewer's active track configuration."""
     result = await db.execute(select(models.Reviewer).filter(models.Reviewer.id == reviewer_id))
@@ -84,10 +86,13 @@ async def _update_reviewer_active_track(db: AsyncSession, reviewer_id: int, subm
             except:
                 reviewer.configuration = {}
 
-        # Create a copy to trigger SQLAlchemy change detection
+        # Create a copy to trigger SQLAlchemy change detection (though flag_modified is safer)
         new_config = dict(reviewer.configuration)
         new_config['active_track_id'] = submission_id
         reviewer.configuration = new_config
+
+        # Explicitly flag as modified to ensure persistence of JSON changes
+        flag_modified(reviewer, "configuration")
 
         # We don't commit here, let the caller do it
 

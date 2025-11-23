@@ -338,16 +338,20 @@ async def get_current_track_public(reviewer_id: int, response: Response, db: Asy
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
 
+    import logging
     # 1. Try getting explicitly playing track
     current = await queue_service.get_current_track(db, reviewer_id=reviewer_id)
     if current:
+        logging.info(f"get_current_track_public: Found active track {current.id} (Title: {current.track_title})")
         return current
 
     # 2. Fallback to first pending track (Top of Queue)
     pending_queue = await queue_service.get_pending_queue(db, reviewer_id=reviewer_id)
     if pending_queue:
+        logging.info(f"get_current_track_public: No active track, falling back to pending queue top: {pending_queue[0].id}")
         return pending_queue[0]
 
+    logging.info("get_current_track_public: No active or pending tracks.")
     return None
 
 @router.post("/{reviewer_id}/queue/review/{submission_id}", response_model=schemas.Submission, dependencies=[Depends(check_is_reviewer)])
