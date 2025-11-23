@@ -7,6 +7,8 @@ from sqlalchemy import (
     Index,
     Boolean,
     Float,
+    BigInteger,
+    Numeric
 )
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
@@ -41,7 +43,7 @@ class JsonEncodedList(TypeDecorator):
 class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
-    discord_id = Column(String, unique=True, index=True, nullable=True) # Changed to nullable for guests
+    discord_id = Column(String, unique=True, index=True, nullable=True)
     email = Column(String, unique=True, index=True, nullable=True)
     is_guest = Column(Boolean, default=False, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
@@ -49,14 +51,24 @@ class User(Base):
     tiktok_username = Column(String, unique=True, nullable=True)
     spotify_access_token = Column(String, nullable=True)
     spotify_refresh_token = Column(String, nullable=True)
-    # Fixed: Added timezone=True
     spotify_token_expires_at = Column(DateTime(timezone=True), nullable=True)
     avatar = Column(String, nullable=True)
     xp = Column(Integer, default=0, nullable=False)
 
+    # Gamification Stats
+    discord_user_id = Column(String, nullable=True)
+    lifetime_live_likes = Column(BigInteger, default=0)
+    lifetime_diamonds = Column(BigInteger, default=0)
+    total_submissions_graded = Column(Integer, default=0)
+    average_review_score = Column(Numeric(4, 2), default=0.00)
+    discord_msg_count = Column(BigInteger, default=0)
+    discord_voice_mins = Column(BigInteger, default=0)
+
     reviewer_profile = relationship("Reviewer", back_populates="user", uselist=False)
     submissions = relationship("Submission", back_populates="user")
     transactions = relationship("Transaction", back_populates="user")
+    achievements = relationship("UserAchievement", back_populates="user")
+    live_sessions = relationship("LiveSession", back_populates="user")
 
 
 class Reviewer(Base):
@@ -103,7 +115,6 @@ class Submission(Base):
     artist = Column(String, nullable=True)
     archived_url = Column(String, nullable=True)
     status = Column(String, default="pending", nullable=False)
-    # Fixed: Added timezone=True
     submitted_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.UTC))
     score = Column(Float, nullable=True)
     notes = Column(String, nullable=True)
@@ -112,11 +123,16 @@ class Submission(Base):
     bookmarked = Column(Boolean, default=False, nullable=False)
     spotlighted = Column(Boolean, default=False, nullable=False)
 
+    # Gamification Fields
+    review_score = Column(Numeric(4, 2), nullable=True) # Re-mapping float score to precision decimal
+    poll_result_w_percent = Column(Integer, nullable=True)
+    average_concurrent_viewers = Column(Integer, nullable=True)
+
     # New fields for submission details
     start_time = Column(String, nullable=True) # e.g. "0:45"
     end_time = Column(String, nullable=True)   # e.g. "2:30"
     genre = Column(String, nullable=True)
-    tags = Column(JsonEncodedList, nullable=True) # Uses the custom type for compatibility
+    tags = Column(JsonEncodedList, nullable=True)
 
     # New fields for Smart-Zone and Double Feature
     batch_id = Column(String, nullable=True, index=True) # UUID string to link submissions
@@ -149,8 +165,7 @@ class Transaction(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     amount = Column(Integer, nullable=False)
     reason = Column(String, nullable=False)
-    meta_data = Column(JSON, nullable=True) # Renamed from metadata to avoid conflict
-    # Fixed: Added timezone=True
+    meta_data = Column(JSON, nullable=True)
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
 
     reviewer = relationship("Reviewer", back_populates="transactions")
@@ -181,7 +196,6 @@ class ReviewSession(Base):
     reviewer_id = Column(Integer, ForeignKey("reviewers.id"), nullable=False)
     name = Column(String, nullable=False)
     is_active = Column(Boolean, default=False, nullable=False)
-    # Fixed: Added timezone=True
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.UTC))
     open_queue_tiers = Column(JSON, default=[0, 5, 10, 15, 20, 25, 50], nullable=False)
 
@@ -225,3 +239,46 @@ class TikTokRankUpdate(Base):
     score = Column(Integer, nullable=False)
     delta = Column(Integer, nullable=False)
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
+
+
+# New Gamification Tables
+
+class LiveSession(Base):
+    __tablename__ = "live_sessions"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    tiktok_room_id = Column(String, nullable=True)
+    max_concurrent_viewers = Column(Integer, default=0)
+    total_likes = Column(BigInteger, default=0)
+    total_diamonds = Column(BigInteger, default=0)
+    status = Column(String, default="LIVE")
+    start_time = Column(DateTime(timezone=True), server_default=func.now())
+    end_time = Column(DateTime(timezone=True), nullable=True)
+
+    user = relationship("User", back_populates="live_sessions")
+
+
+class AchievementDefinition(Base):
+    __tablename__ = "achievement_definitions"
+    id = Column(String, primary_key=True) # UUID
+    slug = Column(String, unique=True, nullable=False)
+    display_name = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    category = Column(String, nullable=False) # 'LIFETIME_LIKES', 'SUBMISSION_COUNT', etc.
+    threshold_value = Column(BigInteger, nullable=False)
+    discord_role_id = Column(String, nullable=True)
+    icon_url = Column(String, nullable=True)
+
+    user_achievements = relationship("UserAchievement", back_populates="achievement")
+
+
+class UserAchievement(Base):
+    __tablename__ = "user_achievements"
+    id = Column(String, primary_key=True) # UUID
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    achievement_id = Column(String, ForeignKey("achievement_definitions.id"), nullable=True)
+    unlocked_at = Column(DateTime(timezone=True), server_default=func.now())
+    discord_sync_status = Column(String, default="PENDING")
+
+    user = relationship("User", back_populates="achievements")
+    achievement = relationship("AchievementDefinition", back_populates="user_achievements")

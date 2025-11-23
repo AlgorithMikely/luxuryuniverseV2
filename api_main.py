@@ -8,7 +8,7 @@ def create_app():
     app = FastAPI(title="Universe Bot Main App")
 
     # Import and include routers here to avoid circular imports
-    from api import auth, reviewer_api, user_api, admin_api, proxy_api, session_api, spotify_api, stripe_api, upload_api
+    from api import auth, reviewer_api, user_api, admin_api, proxy_api, session_api, spotify_api, stripe_api, upload_api, achievements_api
     app.include_router(auth.router, prefix="/api")
     app.include_router(spotify_api.router, prefix="/api")
     app.include_router(reviewer_api.router, prefix="/api")
@@ -18,6 +18,7 @@ def create_app():
     app.include_router(session_api.router, prefix="/api/sessions", tags=["sessions"])
     app.include_router(stripe_api.router, prefix="/api")
     app.include_router(upload_api.router, prefix="/api")
+    app.include_router(achievements_api.router, prefix="/api")
 
     # Serve uploads (local file storage for Smart-Zone)
     from fastapi.staticfiles import StaticFiles
