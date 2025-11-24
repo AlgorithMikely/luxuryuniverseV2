@@ -6,6 +6,7 @@ import schemas
 from typing import Optional, List
 from services import broadcast as broadcast_service
 from services import user_service
+from services import achievement_service
 import datetime
 import uuid
 
@@ -375,7 +376,8 @@ async def get_submissions_by_user(db: AsyncSession, user_id: int) -> list[models
             joinedload(models.Submission.user),
             joinedload(models.Submission.reviewer).options(
                 joinedload(models.Reviewer.user),
-                selectinload(models.Reviewer.payment_configs)
+                selectinload(models.Reviewer.payment_configs),
+                selectinload(models.Reviewer.economy_configs)
             )
         )
         .filter(models.Submission.user_id == user_id)
@@ -476,6 +478,10 @@ async def get_spotlighted_submissions(db: AsyncSession, reviewer_id: int) -> lis
     except Exception as e:
         logger.error(f"Error fetching spotlighted submissions: {e}")
         return []
+
+async def get_active_submission(db: AsyncSession, reviewer_id: int) -> Optional[models.Submission]:
+    """Helper to retrieve the currently active submission for a reviewer."""
+    return await get_current_track(db, reviewer_id)
 
 async def get_current_track(db: AsyncSession, reviewer_id: int) -> Optional[models.Submission]:
     # 1. Check Reviewer Configuration for active_track_id
@@ -619,7 +625,31 @@ async def review_submission(db: AsyncSession, submission_id: int, review: schema
     submission.score = review.score
     submission.notes = review.notes
     submission.status = 'reviewed'
+
+    # Update Reviewer (Host) stats - Gamification
+    # Wait, the user (artist) gets stats when graded. The Reviewer gets stats from streaming.
+    # But we might want to track "Graded Submissions" for the Reviewer?
+    # PRD: "Artist Stats -> total_submissions_graded". This refers to the Artist's tracks that have been graded.
+    # So we update the SUBMISSION USER (Artist).
+    artist_user = submission.user
+    artist_user.total_submissions_graded = (artist_user.total_submissions_graded or 0) + 1
+
+    # Update Average Score
+    # We need to query all graded submissions for this user to calculate accurate average
+    from sqlalchemy import func
+    avg_stmt = select(func.avg(models.Submission.score))\
+        .filter(models.Submission.user_id == artist_user.id, models.Submission.score.isnot(None))
+    avg_res = await db.execute(avg_stmt)
+    new_avg = avg_res.scalar()
+    if new_avg is not None:
+        artist_user.average_review_score = float(new_avg)
+
+    db.add(artist_user)
     await db.commit()
+
+    # Check Achievements for Artist
+    await achievement_service.check_achievements(db, artist_user.id, "artist")
+
     # Don't refresh, we have the object and updated it. Refreshing might strip relations if not careful.
 
     # Emit a history update

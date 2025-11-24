@@ -38,6 +38,8 @@ class UniverseBot(commands.Bot):
         await self.load_extension("cogs.user_cache_cog")
         await self.load_extension("cogs.channel_creator_cog")
         await self.load_extension("cogs.tiktok_cog")
+        await self.load_extension("cogs.gamification_cog")
+        await self.load_extension("cogs.activity_cog")
         print("Cogs loaded.")
 
         # Start the FastAPI server as a background task
