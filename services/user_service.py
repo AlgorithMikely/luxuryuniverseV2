@@ -13,13 +13,20 @@ async def get_user_by_discord_id(db: AsyncSession, discord_id: str) -> models.Us
             joinedload(models.User.reviewer_profile).options(
                 selectinload(models.Reviewer.payment_configs),
                 selectinload(models.Reviewer.economy_configs)
-            )
+            ),
+            selectinload(models.User.achievements).joinedload(models.UserAchievement.achievement)
         )
         .filter(models.User.discord_id == discord_id)
     )
     user = result.scalars().first()
     if user:
         user.level = calculate_level(user.xp)
+        # Transform UserAchievements to flat list for schema if needed,
+        # but Schema expects List[Achievement], so we might need to do mapping here or in API.
+        # The schema definition `achievements: List[Achievement]` matches `Achievement` model which maps fields.
+        # However, `user.achievements` is a list of `UserAchievement` objects, which have `.achievement` nested.
+        # We should map this in the API layer or add a property to User model.
+        # For now, let's keep the query efficient.
     return user
 
 async def get_user_by_email(db: AsyncSession, email: str) -> models.User | None:

@@ -35,6 +35,41 @@ async def create_submission(db: AsyncSession, reviewer_id: int, user_id: int, tr
     # Award XP for submission
     await user_service.add_xp(db, user_id, 10) # Award 10 XP per submission
 
+    # --- CATEGORY A ACHIEVEMENTS CHECK (Creation Time) ---
+    # 1. Demo Tape (1st Submission)
+    stmt_count = select(models.Submission).filter(models.Submission.user_id == user_id)
+    count_res = await db.execute(stmt_count)
+    sub_count = len(count_res.scalars().all()) + 1 # +1 for this one (not yet committed but added)
+
+    await achievement_service.trigger_achievement(db, user_id, "SUBMISSION_COUNT", sub_count)
+    if sub_count == 1:
+         await achievement_service.trigger_achievement(db, user_id, "SUBMISSION_COUNT", specific_slug="demo_tape")
+
+    # 2. Producer Tag
+    if track_title and "(prod." in track_title.lower():
+         await achievement_service.trigger_achievement(db, user_id, "METADATA_TAG", specific_slug="producer_tag")
+
+    # 3. Collaborator
+    if track_title and "feat." in track_title.lower():
+         await achievement_service.trigger_achievement(db, user_id, "METADATA_TAG", specific_slug="collaborator")
+
+    # 4. Link Types
+    if "soundcloud.com" in track_url.lower():
+        await achievement_service.trigger_achievement(db, user_id, "LINK_TYPE", specific_slug="soundcloud_rapper")
+    elif "spotify.com" in track_url.lower() or "apple.com" in track_url.lower():
+        await achievement_service.trigger_achievement(db, user_id, "LINK_TYPE", specific_slug="dsp_pro")
+
+    # 5. Genre Bender (Unique Tags)
+    # This requires checking history. We'll do a query.
+    if genre:
+        # Get all distinct genres for this user
+        genre_stmt = select(models.Submission.genre).filter(models.Submission.user_id == user_id).distinct()
+        genres = (await db.execute(genre_stmt)).scalars().all()
+        # Add current if not present (since not committed yet)
+        unique_genres = set([g for g in genres if g])
+        unique_genres.add(genre)
+        await achievement_service.trigger_achievement(db, user_id, "GENRE_COUNT", len(unique_genres))
+
     await db.commit()
 
     # FIXED: Re-fetch the submission to eager-load the 'user' relationship for the API response
@@ -659,10 +694,53 @@ async def review_submission(db: AsyncSession, submission_id: int, review: schema
         artist_user.average_review_score = float(new_avg)
 
     db.add(artist_user)
-    await db.commit()
 
-    # Check Achievements for Artist
-    await achievement_service.check_achievements(db, artist_user.id, "artist")
+    # --- CATEGORY A ACHIEVEMENTS CHECK (Review Time) ---
+    # 1. Critics Choice
+    if review.score >= 10:
+         await achievement_service.trigger_achievement(db, artist_user.id, "REVIEW_SCORE", 10) # Checks threshold
+
+    # 2. Win Streak (Certified Gold/Platinum)
+    # Fetch last N submissions for this user, ordered by date desc
+    history_stmt = select(models.Submission).filter(
+        models.Submission.user_id == artist_user.id,
+        models.Submission.score.isnot(None)
+    ).order_by(models.Submission.submitted_at.desc()).limit(10)
+    history = (await db.execute(history_stmt)).scalars().all()
+
+    # Calculate streak (including current one which is now in history effectively or about to be)
+    # The current submission has score but might not be in the query result if not committed yet?
+    # Actually we just set `submission.score` but didn't commit yet. So query might miss it if using DB snapshot.
+    # We should rely on `submission` object + history.
+
+    streak = 0
+    # Add current one
+    if submission.score >= 7: # Assuming 7+ is a "W"?
+        # Requirement says "Get a 'W' (Win)".
+        # Typically "W" is determined by Polls, but here we are in "Review".
+        # However, "Category A" table says "Get a 'W' (Win) on 3 consecutive submissions".
+        # Is 'W' from Poll or Review Score?
+        # "Crowd Fav" says ">90% W votes". That implies Poll.
+        # But "Certified Gold" is "3 Win Streak".
+        # If it's poll based, we can't trigger it here in `review_submission` (host score).
+        # We must trigger it when Poll results are finalized?
+        # But wait, usually Poll runs while track plays.
+        # Let's assume 'Win' here means Poll Win OR High Score?
+        # User clarification: "Community's votes via Polls".
+        # So "Certified Gold" likely refers to Poll Wins.
+        # I will implement it here IF we have poll result, but usually poll result comes from TikTok Listener/Bot.
+        # For now, I will check "The Comeback" which is Score based.
+        pass
+
+    # 3. The Comeback (Score <4 then >8)
+    if len(history) >= 1:
+        last_sub = history[0] # This is the previous one in DB (since current is not committed yet or just updated)
+        # Wait, if we haven't committed, `history` won't have the current one.
+        if last_sub.id != submission.id: # Ensure we are looking at previous
+            if last_sub.score and last_sub.score < 4 and submission.score > 8:
+                 await achievement_service.trigger_achievement(db, artist_user.id, "SCORE_SWING", 1)
+
+    await db.commit()
 
     # Don't refresh, we have the object and updated it. Refreshing might strip relations if not careful.
 

@@ -22,6 +22,48 @@ async def get_me(
         users_with_profiles = await user_service.get_all_reviewers(db)
         moderated_reviewers = [u.reviewer_profile for u in users_with_profiles if u.reviewer_profile]
 
+    # Process Achievements
+    # db_user.achievements is a list of UserAchievement objects.
+    # We need to map them to Schema Achievement objects.
+    # We also need to hide 'is_hidden' details if not unlocked?
+    # But wait, UserAchievement means it IS unlocked.
+    # So we just map the achievement definition to the schema.
+    achievements_list = []
+    if db_user.achievements:
+        for ua in db_user.achievements:
+            ach_def = ua.achievement
+            if ach_def:
+                # Map to schema
+                ach_schema = schemas.Achievement(
+                    id=ach_def.id,
+                    slug=ach_def.slug,
+                    display_name=ach_def.display_name,
+                    description=ach_def.description,
+                    category=ach_def.category,
+                    threshold_value=ach_def.threshold_value,
+                    tier=ach_def.tier,
+                    is_hidden=ach_def.is_hidden, # It's unlocked, so we return the real data even if it was hidden
+                    icon_url=ach_def.icon_url,
+                    role_color=ach_def.role_color,
+                    role_icon=ach_def.role_icon,
+                    unlocked_at=ua.unlocked_at
+                )
+                achievements_list.append(ach_schema)
+
+    # TODO: We might want to return *all* achievements (locked ones too) so the UI can show progress?
+    # The requirement says "Hidden Achievements... visible in list... obscured".
+    # This implies we should return ALL achievements, but obscure the hidden ones if not unlocked.
+    # To do this efficiently, we should probably have a separate endpoint /user/achievements/all
+    # OR include all in `me` but that's heavy.
+    # Let's check `schemas.UserProfile`. It has `achievements: List[Achievement]`.
+    # Usually `UserProfile` is "My Profile".
+    # I'll stick to returning ONLY UNLOCKED achievements in `UserProfile` for now to keep payload small.
+    # If the UI needs the full list (locked/unlocked), it should fetch from a dedicated endpoint `GET /achievements`.
+    # But the current task is to "Update and improve Achievements".
+    # I will add a new endpoint `GET /user/me/achievements` that returns the full list with locked/unlocked state.
+    # And leave `UserProfile` with just unlocked ones or empty if it's too big.
+    # Let's put unlocked ones in UserProfile as requested.
+
     user_profile = schemas.UserProfile(
         id=db_user.id,
         discord_id=db_user.discord_id,
@@ -31,8 +73,61 @@ async def get_me(
         roles=token.roles,
         moderated_reviewers=moderated_reviewers,
         spotify_connected=bool(db_user.spotify_access_token),
+        achievements=achievements_list
     )
     return user_profile
+
+@router.get("/me/achievements", response_model=list[schemas.Achievement])
+async def get_my_achievements_full(
+    current_user: models.User = Depends(security.get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Returns ALL achievements.
+    - Unlocked: Full details + unlocked_at.
+    - Locked & Visible: Full details, no unlocked_at.
+    - Locked & Hidden: Obscured details (???)
+    """
+    # 1. Fetch all definitions
+    all_defs_result = await db.execute(select(models.AchievementDefinition))
+    all_defs = all_defs_result.scalars().all()
+
+    # 2. Fetch user unlocks
+    unlocked_ids = {ua.achievement_id: ua.unlocked_at for ua in current_user.achievements}
+
+    response_list = []
+    for ach in all_defs:
+        is_unlocked = ach.id in unlocked_ids
+
+        # Obscure if Hidden AND Locked
+        if ach.is_hidden and not is_unlocked:
+            display_name = "???"
+            description = "???"
+            icon_url = None # Or a lock icon placeholder
+        else:
+            display_name = ach.display_name
+            description = ach.description
+            icon_url = ach.icon_url
+
+        response_list.append(schemas.Achievement(
+            id=ach.id,
+            slug=ach.slug,
+            display_name=display_name,
+            description=description,
+            category=ach.category,
+            threshold_value=ach.threshold_value,
+            tier=ach.tier,
+            is_hidden=ach.is_hidden,
+            icon_url=icon_url,
+            role_color=ach.role_color,
+            role_icon=ach.role_icon,
+            unlocked_at=unlocked_ids.get(ach.id) # None if locked
+        ))
+
+    # Sort by Tier then Display Name
+    response_list.sort(key=lambda x: (x.tier, x.display_name))
+
+    return response_list
 
 @router.get("/me/balance")
 async def get_my_balance(
