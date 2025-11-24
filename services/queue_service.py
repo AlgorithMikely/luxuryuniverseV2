@@ -376,7 +376,8 @@ async def get_submissions_by_user(db: AsyncSession, user_id: int) -> list[models
             joinedload(models.Submission.user),
             joinedload(models.Submission.reviewer).options(
                 joinedload(models.Reviewer.user),
-                selectinload(models.Reviewer.payment_configs)
+                selectinload(models.Reviewer.payment_configs),
+                selectinload(models.Reviewer.economy_configs)
             )
         )
         .filter(models.Submission.user_id == user_id)
