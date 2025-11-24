@@ -8,8 +8,8 @@ from services import economy_service, user_service, queue_service
 import models
 from sqlalchemy import select, update
 from sqlalchemy.orm import joinedload
-# Try to import AchievementService (will be created next, but referenced here for the plan)
-# from services.achievement_service import check_achievements
+# Import achievement service
+from services import achievement_service
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,6 +27,10 @@ class StreamBuffer:
         # Poll Fallback
         self.emoji_smile_count = 0
         self.emoji_cry_count = 0
+
+        # Chat Activity for Achievements
+        # Structure: {tiktok_user_id: { 'rainbow': set(), 'all_caps': bool, 'emoji_only': bool }}
+        self.user_chat_activity = {}
 
     def add_likes(self, count: int):
         self.current_session_likes += count
@@ -61,6 +65,7 @@ class StreamBuffer:
         self.current_session_diamonds = 0
         self.emoji_smile_count = 0
         self.emoji_cry_count = 0
+        self.user_chat_activity = {}
         # Don't reset viewer samples entirely if we want to calc avg over the submission duration?
         # For simplicity, we flush the window and reset.
         pass
@@ -141,18 +146,48 @@ class ReviewerListener:
         @self.client.on("comment")
         async def on_comment(event: CommentEvent):
             # Parse for W/L or Smile/Cry
-            # Common patterns: "W", "L", "🔥", "😭", "😂"
-            # PRD says "Smile" vs "Cry". Let's stick to standard smileys or requested ones.
-            # User chat instruction: "Spam Tracker for emojis 'smile' and 'cry'".
-            # We can detect unicode.
-            # Smile: 😊, 😄, 🙂, W, w
-            # Cry: 😭, 😢, L, l
             content = event.comment.lower()
 
             if "😊" in content or "w" in content or "🔥" in content:
                 self.buffer.add_emoji_vote(is_positive=True)
             elif "😭" in content or "l" in content or "👎" in content:
                 self.buffer.add_emoji_vote(is_positive=False)
+
+            # --- TRACKING FOR ACHIEVEMENTS (Rainbow, Town Crier, Emoji Chef) ---
+            user_id = event.user.unique_id
+            if user_id not in self.buffer.user_chat_activity:
+                self.buffer.user_chat_activity[user_id] = {
+                    'rainbow': set(),
+                    'all_caps': False,
+                    'emoji_only': False,
+                    'msg_count': 0
+                }
+
+            activity = self.buffer.user_chat_activity[user_id]
+            activity['msg_count'] += 1
+
+            # 1. Rainbow (Hearts)
+            # Check for specific heart emojis
+            # Red: ❤️, Blue: 💙, Green: 💚, Purple: 💜
+            for heart in ["❤️", "💙", "💚", "💜"]:
+                if heart in event.comment:
+                    activity['rainbow'].add(heart)
+
+            # 2. Town Crier (All Caps)
+            # Min 10 chars, all caps
+            if len(event.comment) >= 10 and event.comment.isupper():
+                activity['all_caps'] = True
+
+            # 3. Emoji Chef (Emoji Only)
+            # Min 5 chars? The requirement says "min 5 emojis".
+            # Simple check: remove spaces/punctuation and see if only emojis remain.
+            # This is complex in Python without regex/emoji lib.
+            # Approximation: check if count of emojis >= 5 and length matches roughly.
+            # Or just check if specific common emojis are present >= 5 times.
+            # Better approximation: Check if no [a-zA-Z0-9] characters are present.
+            import re
+            if len(event.comment) >= 5 and not re.search('[a-zA-Z0-9]', event.comment):
+                activity['emoji_only'] = True
 
     async def flush_loop(self):
         while self.running:
@@ -235,11 +270,37 @@ class ReviewerListener:
 
                 await db.commit()
 
-                # 4. Check Achievements (Synchronous call after flush)
-                # Importing here to avoid circular imports if any
-                from services.achievement_service import check_achievements
-                # We check for the REVIEWER (Track A)
-                await check_achievements(db, user.id, "reviewer")
+                # 4. Check Achievements for Reviewer (Track A - The Opener, etc.)
+                # We check LIFETIME_LIKES, LIFETIME_DIAMONDS
+                await achievement_service.trigger_achievement(db, user.id, "LIFETIME_LIKES", user.lifetime_live_likes)
+                await achievement_service.trigger_achievement(db, user.id, "LIFETIME_DIAMONDS", user.lifetime_diamonds)
+                await achievement_service.trigger_achievement(db, user.id, "CONCURRENT_VIEWERS", live_session.max_concurrent_viewers if live_session else 0)
+
+                # 5. Check Achievements for Viewers (Track B - Front Row)
+                # We iterate over the buffered user activity
+                for tiktok_username, activity in self.buffer.user_chat_activity.items():
+                    # We need to map TikTok username to our DB User
+                    # This is heavy if many users. Ideally we cache this mapping or query in batch.
+                    # For now, one by one.
+                    viewer_user = await user_service.get_user_by_tiktok_username(db, tiktok_username)
+                    if not viewer_user:
+                        continue
+
+                    # Rainbow
+                    if len(activity['rainbow']) >= 4:
+                        await achievement_service.trigger_achievement(db, viewer_user.id, "CHAT_RAINBOW", specific_slug="rainbow")
+
+                    # Town Crier
+                    if activity['all_caps']:
+                        await achievement_service.trigger_achievement(db, viewer_user.id, "CHAT_ALL_CAPS", specific_slug="town_crier")
+
+                    # Emoji Chef
+                    if activity['emoji_only']:
+                        await achievement_service.trigger_achievement(db, viewer_user.id, "CHAT_EMOJI_ONLY", specific_slug="emoji_chef")
+
+                    # "Active Listener" logic could go here (msg count)
+                    # But schema says "100 comments". We should increment a DB counter for that.
+                    # Skipping persistent generic stats for now unless asked, prioritizing the explicit achievements.
 
                 # Reset Buffer
                 self.buffer.reset()

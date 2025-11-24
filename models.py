@@ -15,7 +15,8 @@ from sqlalchemy.sql import func
 import datetime
 import json
 from sqlalchemy.types import TypeDecorator, TEXT
-from sqlalchemy.dialects.postgresql import JSON
+# from sqlalchemy.dialects.postgresql import JSON # Removed to use custom type for SQLite compat
+from custom_types import JSON # Import our custom type
 
 Base = declarative_base()
 
@@ -26,6 +27,7 @@ class JsonEncodedList(TypeDecorator):
     Used for backward compatibility with older migrations.
     """
     impl = TEXT
+    cache_ok = True
 
     def process_bind_param(self, value, dialect):
         if value is not None:
@@ -63,6 +65,10 @@ class User(Base):
     average_review_score = Column(Numeric(4, 2), default=0.00)
     discord_msg_count = Column(BigInteger, default=0)
     discord_voice_mins = Column(BigInteger, default=0)
+
+    # Generic Gamification Stats (JSON)
+    # Stores: poll_votes, consec_wins, unique_tags, etc.
+    gamification_stats = Column(JSON, default={}, nullable=True)
 
     reviewer_profile = relationship("Reviewer", back_populates="user", uselist=False)
     submissions = relationship("Submission", back_populates="user")
@@ -266,6 +272,8 @@ class AchievementDefinition(Base):
     description = Column(String, nullable=True)
     category = Column(String, nullable=False) # 'LIFETIME_LIKES', 'SUBMISSION_COUNT', etc.
     threshold_value = Column(BigInteger, nullable=False)
+    tier = Column(Integer, default=1, nullable=False)
+    is_hidden = Column(Boolean, default=False, nullable=False)
     discord_role_id = Column(String, nullable=True)
     icon_url = Column(String, nullable=True)
     role_color = Column(String, nullable=True)

@@ -53,6 +53,21 @@ class ReviewerSettingsUpdate(BaseModel):
     bio: Optional[str] = None
 
 
+class Achievement(BaseModel):
+    id: str
+    slug: str
+    display_name: str
+    description: Optional[str] = None
+    category: str
+    threshold_value: int
+    tier: int = 1
+    is_hidden: bool = False
+    icon_url: Optional[str] = None
+    role_color: Optional[str] = None
+    role_icon: Optional[str] = None
+    unlocked_at: Optional[datetime.datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserBase(BaseModel):
@@ -112,6 +127,7 @@ class UserProfile(UserBase):
     roles: List[str] = []
     moderated_reviewers: List[ReviewerProfile] = []
     spotify_connected: bool = False
+    achievements: List[Achievement] = [] # List of unlocked achievements
     model_config = ConfigDict(from_attributes=True)
 
 class ReviewCreate(BaseModel):
