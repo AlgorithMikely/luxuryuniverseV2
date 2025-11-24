@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 from sqlalchemy.orm import joinedload, selectinload
 import models
 import schemas
@@ -264,6 +264,19 @@ async def get_reviewer_by_id(db: AsyncSession, reviewer_id: int) -> Optional[mod
     )
     return _merge_reviewer_config(result.scalars().first())
 
+async def get_reviewer_by_tiktok_handle(db: AsyncSession, tiktok_handle: str) -> Optional[models.Reviewer]:
+    # Case-insensitive search
+    result = await db.execute(
+        select(models.Reviewer)
+        .options(
+            joinedload(models.Reviewer.user),
+            selectinload(models.Reviewer.payment_configs),
+            selectinload(models.Reviewer.economy_configs)
+        )
+        .filter(func.lower(models.Reviewer.tiktok_handle) == tiktok_handle.lower())
+    )
+    return _merge_reviewer_config(result.scalars().first())
+
 def _merge_reviewer_config(reviewer: Optional[models.Reviewer]) -> Optional[models.Reviewer]:
     """
     Merges the reviewer's configuration with default values.
@@ -284,10 +297,7 @@ def _merge_reviewer_config(reviewer: Optional[models.Reviewer]) -> Optional[mode
 
     if not reviewer.configuration:
         reviewer.configuration = {"priority_tiers": default_tiers}
-    elif "priority_tiers" not in reviewer.configuration:
-         # If config exists but no tiers, merge defaults
-        reviewer.configuration["priority_tiers"] = default_tiers
-
+    
     # Ensure the configuration is a valid dict (though SQLAlchemy handles JSON decoding)
     if isinstance(reviewer.configuration, str):
         import json
@@ -295,6 +305,10 @@ def _merge_reviewer_config(reviewer: Optional[models.Reviewer]) -> Optional[mode
             reviewer.configuration = json.loads(reviewer.configuration)
         except json.JSONDecodeError:
              reviewer.configuration = {"priority_tiers": default_tiers}
+
+    if "priority_tiers" not in reviewer.configuration:
+         # If config exists but no tiers, merge defaults
+        reviewer.configuration["priority_tiers"] = default_tiers
 
     return reviewer
 
@@ -334,9 +348,9 @@ async def update_reviewer_settings(db: AsyncSession, reviewer_id: int, settings_
              # Create a copy to ensure SQLAlchemy detects the change
              current_config = dict(raw_config) if raw_config else {}
 
-        # Update priority tiers if present
-        if "priority_tiers" in new_config:
-             current_config["priority_tiers"] = new_config["priority_tiers"]
+        # Update all fields present in new_config
+        for key, value in new_config.items():
+             current_config[key] = value
 
         reviewer.configuration = current_config
 

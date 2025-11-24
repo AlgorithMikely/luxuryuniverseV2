@@ -12,7 +12,7 @@ const AuthCallbackPage = () => {
       const token = searchParams.get("token");
       if (token) {
         await setToken(token);
-        navigate("/dashboard");
+        navigate("/hub");
       } else {
         navigate("/login");
       }

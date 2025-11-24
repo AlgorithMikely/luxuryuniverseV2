@@ -4,6 +4,7 @@ import { useAuthStore } from '../stores/authStore';
 import api from '../services/api';
 import { ReviewerProfile, PriorityTier, EconomyConfig } from '../types';
 import { Upload, RotateCcw, Plus, Trash2 } from 'lucide-react';
+import ImageCropper from '../components/ImageCropper';
 
 const ReviewerSettingsPage: React.FC = () => {
     const { user, checkAuth } = useAuthStore();
@@ -36,6 +37,10 @@ const ReviewerSettingsPage: React.FC = () => {
 
     const [isColorDropdownOpen, setIsColorDropdownOpen] = useState(false);
     const [activeColorDropdown, setActiveColorDropdown] = useState<number | null>(null);
+
+    // Cropping State
+    const [croppingImage, setCroppingImage] = useState<string | null>(null);
+    const [croppingType, setCroppingType] = useState<'banner' | 'avatar' | null>(null);
 
     const handleTierChange = (index: number, field: keyof PriorityTier, value: any) => {
         const newTiers = [...tiers];
@@ -240,27 +245,44 @@ const ReviewerSettingsPage: React.FC = () => {
         }
     }, [tiers, newTierColor]);
 
-    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'banner' | 'avatar') => {
+    const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>, type: 'banner' | 'avatar') => {
         const file = e.target.files?.[0];
         if (!file) return;
 
+        const reader = new FileReader();
+        reader.onload = () => {
+            setCroppingImage(reader.result as string);
+            setCroppingType(type);
+        };
+        reader.readAsDataURL(file);
+
+        // Reset input so same file can be selected again
+        e.target.value = '';
+    };
+
+    const handleCropComplete = async (croppedBlob: Blob) => {
+        if (!croppingType) return;
+
         const formData = new FormData();
-        formData.append('file', file);
+        formData.append('file', croppedBlob, 'cropped_image.jpg');
 
         try {
             const { data } = await api.post('/uploads/stage', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
 
-            if (type === 'banner') {
+            if (croppingType === 'banner') {
                 setBannerUrl(data.url);
             } else {
                 setAvatarUrl(data.url);
             }
-            setMessage({ text: `${type === 'banner' ? 'Banner' : 'Avatar'} uploaded successfully!`, type: 'success' });
+            setMessage({ text: `${croppingType === 'banner' ? 'Banner' : 'Avatar'} uploaded successfully!`, type: 'success' });
         } catch (err) {
-            console.error(`Failed to upload ${type}`, err);
-            setMessage({ text: `Failed to upload ${type}.`, type: 'error' });
+            console.error(`Failed to upload ${croppingType}`, err);
+            setMessage({ text: `Failed to upload ${croppingType}.`, type: 'error' });
+        } finally {
+            setCroppingImage(null);
+            setCroppingType(null);
         }
     };
 
@@ -279,6 +301,27 @@ const ReviewerSettingsPage: React.FC = () => {
                 )}
 
                 <div className="space-y-8">
+                    {/* Share Link */}
+                    <section className="bg-gradient-to-r from-purple-900/50 to-blue-900/50 rounded-xl p-6 shadow-lg border border-purple-500/30">
+                        <h2 className="text-xl font-semibold mb-2 text-white">Your Submission Link</h2>
+                        <p className="text-gray-300 text-sm mb-4">Share this link with your viewers to accept submissions.</p>
+                        <div className="flex items-center gap-2 bg-gray-900/80 p-3 rounded border border-gray-700">
+                            <code className="flex-1 text-purple-300 font-mono text-sm truncate">
+                                {`${window.location.origin}/submit/${tiktokHandle || reviewerProfile?.id}`}
+                            </code>
+                            <button
+                                onClick={() => {
+                                    navigator.clipboard.writeText(`${window.location.origin}/submit/${tiktokHandle || reviewerProfile?.id}`);
+                                    setMessage({ text: "Link copied to clipboard!", type: 'success' });
+                                }}
+                                className="text-gray-400 hover:text-white p-2 hover:bg-gray-800 rounded transition-colors"
+                                title="Copy Link"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                            </button>
+                        </div>
+                    </section>
+
                     {/* General Information */}
                     <section className="bg-gray-800 rounded-xl p-6 shadow-lg">
                         <h2 className="text-xl font-semibold mb-4 text-purple-400">General Information</h2>
@@ -347,7 +390,7 @@ const ReviewerSettingsPage: React.FC = () => {
                                             ref={avatarInputRef}
                                             className="hidden"
                                             accept="image/*"
-                                            onChange={(e) => handleImageUpload(e, 'avatar')}
+                                            onChange={(e) => handleImageSelect(e, 'avatar')}
                                         />
                                     </div>
                                     <div>
@@ -394,28 +437,54 @@ const ReviewerSettingsPage: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-400 mb-2">Banner Image</label>
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="text"
-                                            value={bannerUrl}
-                                            onChange={(e) => setBannerUrl(e.target.value)}
-                                            className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-purple-500"
-                                            placeholder="https://example.com/banner.jpg"
-                                        />
-                                        <input
-                                            type="file"
-                                            ref={bannerInputRef}
-                                            className="hidden"
-                                            accept="image/*"
-                                            onChange={(e) => handleImageUpload(e, 'banner')}
-                                        />
-                                        <button
-                                            onClick={() => bannerInputRef.current?.click()}
-                                            className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded border border-gray-600"
-                                            title="Upload Banner"
-                                        >
-                                            <Upload size={18} />
-                                        </button>
+                                    <div className="flex flex-col gap-3">
+                                        {/* Banner Preview */}
+                                        {bannerUrl && (
+                                            <div className="relative w-full h-32 rounded-lg overflow-hidden border border-gray-600 group">
+                                                <img
+                                                    src={bannerUrl}
+                                                    alt="Banner Preview"
+                                                    className="w-full h-full object-cover"
+                                                    onError={(e) => {
+                                                        (e.target as HTMLImageElement).src = "https://via.placeholder.com/1920x300?text=Invalid+Banner+URL";
+                                                    }}
+                                                />
+                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                    <button
+                                                        onClick={() => setBannerUrl('')}
+                                                        className="text-white bg-red-600/80 p-2 rounded-full hover:bg-red-600 transition-colors"
+                                                        title="Remove Banner"
+                                                    >
+                                                        <Trash2 size={20} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                value={bannerUrl}
+                                                onChange={(e) => setBannerUrl(e.target.value)}
+                                                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-purple-500"
+                                                placeholder="https://example.com/banner.jpg"
+                                            />
+                                            <input
+                                                type="file"
+                                                ref={bannerInputRef}
+                                                className="hidden"
+                                                accept="image/*"
+                                                onChange={(e) => handleImageSelect(e, 'banner')}
+                                            />
+                                            <button
+                                                onClick={() => bannerInputRef.current?.click()}
+                                                className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded border border-gray-600 flex items-center gap-2 whitespace-nowrap"
+                                                title="Upload Banner"
+                                            >
+                                                <Upload size={18} />
+                                                <span>Upload</span>
+                                            </button>
+                                        </div>
                                     </div>
                                     <p className="text-xs text-gray-500 mt-1">Recommended size: 1920x300px</p>
                                 </div>
@@ -799,6 +868,18 @@ const ReviewerSettingsPage: React.FC = () => {
                     </button>
                 </div>
             </div>
+
+            {croppingImage && (
+                <ImageCropper
+                    imageSrc={croppingImage}
+                    aspectRatio={croppingType === 'avatar' ? 1 : 16 / 9}
+                    onCropComplete={handleCropComplete}
+                    onCancel={() => {
+                        setCroppingImage(null);
+                        setCroppingType(null);
+                    }}
+                />
+            )}
         </div>
     );
 };

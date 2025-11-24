@@ -283,4 +283,29 @@ async def proxy_spotify_track(
             logging.error(f"Error fetching track info (proxy): {response.text}")
             raise HTTPException(status_code=response.status_code, detail="Failed to fetch track info")
 
-        return response.json()
+        track_data = response.json()
+        
+        # Fetch artist details to get genres
+        artist_ids = [artist['id'] for artist in track_data.get('artists', []) if artist.get('id')]
+        
+        if artist_ids:
+            ids_string = ",".join(artist_ids)
+            artists_response = await client.get(
+                f"https://api.spotify.com/v1/artists?ids={ids_string}",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                },
+            )
+            
+            if artists_response.status_code == 200:
+                artists_data = artists_response.json()
+                genres = set()
+                for artist in artists_data.get('artists', []):
+                    for genre in artist.get('genres', []):
+                        genres.add(genre)
+                
+                track_data['genres'] = list(genres)
+                # Also add a primary genre field for convenience
+                track_data['primary_genre'] = list(genres)[0] if genres else "Unknown"
+
+        return track_data

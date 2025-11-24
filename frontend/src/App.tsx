@@ -46,7 +46,7 @@ function App() {
 
             {/* Public Routes */}
             <Route element={<MainLayout />}>
-              <Route path="/submit/:reviewerId" element={<SubmissionPage />} />
+              <Route path="/submit/:identifier" element={<SubmissionPage />} />
             </Route>
 
             {/* Routes with Navbar (Protected) */}

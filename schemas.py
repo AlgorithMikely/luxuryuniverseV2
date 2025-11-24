@@ -12,6 +12,8 @@ class ReviewerConfiguration(BaseModel):
     active_playlist_id: Optional[str] = None
     free_line_limit: Optional[int] = None
     priority_tiers: Optional[List[PriorityTier]] = None
+    banner_url: Optional[str] = None
+    theme_color: Optional[str] = None
     model_config = ConfigDict(extra='allow')
 
 class PaymentConfig(BaseModel):

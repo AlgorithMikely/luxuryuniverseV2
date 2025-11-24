@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDropzone } from "react-dropzone";
-import { FolderOpen, Upload, Music, X, Link as LinkIcon } from "lucide-react";
+import { FolderOpen, Upload, Music, X, Link as LinkIcon, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ReviewerProfile, Submission } from "../types";
 import RecentTracksDrawer from "./RecentTracksDrawer";
@@ -105,23 +105,14 @@ const SmartZone: React.FC<SmartZoneProps> = ({ reviewer }) => {
                     }
                     previewUrl = data.preview_url; // Might be null
 
+                    const genre = data.primary_genre || (data.genres && data.genres.length > 0 ? data.genres[0] : "");
+
                     // Update item with fetched metadata
                     const updatedItem = {
                         ...item,
                         track_title: title,
                         artist: artist,
-                        // If we have a preview URL, we might want to use it for the waveform,
-                        // but we need to keep the original URL for submission.
-                        // SmartZone's WaveformPlayer uses 'url' prop.
-                        // If we pass the full Spotify link to WaveformPlayer, does it work?
-                        // Currently WaveformPlayer uses wavesurfer.js which needs an audio file.
-                        // So we should pass 'preview_url' to WaveformPlayer if available.
-                        // But SmartSubmissionItem structure has 'track_url'.
-                        // We can add a 'preview_url' field to SmartSubmissionItem or just use track_url
-                        // if we want to preview THAT.
-                        // However, for submission we need the original link.
-                        // Let's rely on WaveformPlayer handling Spotify or just not showing waveform if no audio.
-                        // BUT, if we have a preview_url, we can pass that as a separate prop or temporary field.
+                        genre: genre,
                         preview_url: previewUrl
                     };
 
@@ -133,6 +124,28 @@ const SmartZone: React.FC<SmartZoneProps> = ({ reviewer }) => {
                     console.error("Failed to fetch Spotify metadata", err);
                     // Fallback to basic title
                     const fallbackItem = { ...item, track_title: "Spotify Track (Metadata Failed)" };
+                    if (slotNum === 1) setSlot1(fallbackItem);
+                    else if (slotNum === 2) setSlot2(fallbackItem);
+                    else setSlot3(fallbackItem);
+                }
+            } else if (text.includes('youtube.com') || text.includes('youtu.be')) {
+                try {
+                    const { data } = await api.post('/proxy/metadata', { url: text });
+
+                    const updatedItem = {
+                        ...item,
+                        track_title: data.title || "YouTube Video",
+                        artist: data.artist || "",
+                        genre: data.genre || (data.tags && data.tags.length > 0 ? data.tags[0] : ""),
+                    };
+
+                    if (slotNum === 1) setSlot1(updatedItem);
+                    else if (slotNum === 2) setSlot2(updatedItem);
+                    else setSlot3(updatedItem);
+
+                } catch (err) {
+                    console.error("Failed to fetch YouTube metadata", err);
+                    const fallbackItem = { ...item, track_title: "YouTube Video (Metadata Failed)" };
                     if (slotNum === 1) setSlot1(fallbackItem);
                     else if (slotNum === 2) setSlot2(fallbackItem);
                     else setSlot3(fallbackItem);
@@ -414,6 +427,27 @@ const SmartZone: React.FC<SmartZoneProps> = ({ reviewer }) => {
                 </div>
 
             </div>
+
+            {/* Floating Toggle Button */}
+            <button
+                onClick={() => {
+                    if (!isDrawerOpen) {
+                        // Find first empty slot or default to 1
+                        if (!slot1) setActiveSlot(1);
+                        else if (!slot2 && allowedSubmissions >= 2) setActiveSlot(2);
+                        else if (!slot3 && allowedSubmissions >= 3) setActiveSlot(3);
+                        else setActiveSlot(1);
+                    }
+                    setIsDrawerOpen(!isDrawerOpen);
+                }}
+                className={`fixed right-0 top-1/2 transform -translate-y-1/2 bg-gray-900 border-l border-t border-b border-white/10 p-3 rounded-l-xl shadow-xl z-30 hover:bg-gray-800 transition-all group ${isDrawerOpen ? 'translate-x-full' : 'translate-x-0'}`}
+                title="Recent Tracks"
+            >
+                <div className="relative">
+                    <Clock className="text-blue-400 group-hover:text-blue-300" size={24} />
+                    {/* Optional: Add a badge if there are recent tracks? We don't have the count here easily without fetching. */}
+                </div>
+            </button>
 
             <RecentTracksDrawer
                 isOpen={isDrawerOpen}

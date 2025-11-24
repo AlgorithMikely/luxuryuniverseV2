@@ -8,7 +8,7 @@ import SmartZone from "../components/SmartZone";
 import { motion } from "framer-motion";
 
 const SubmissionPage = () => {
-  const { reviewerId } = useParams<{ reviewerId: string }>();
+  const { identifier } = useParams<{ identifier: string }>();
   const navigate = useNavigate();
   const { user, checkAuth, isLoading: isAuthLoading } = useAuthStore();
 
@@ -21,9 +21,9 @@ const SubmissionPage = () => {
 
   useEffect(() => {
     const fetchReviewer = async () => {
-      if (!reviewerId) return;
+      if (!identifier) return;
       try {
-        const { data } = await api.get<ReviewerProfile>(`/reviewer/${reviewerId}/settings`);
+        const { data } = await api.get<ReviewerProfile>(`/reviewer/public/${identifier}`);
         setReviewer(data);
       } catch (error) {
         console.error("Failed to load reviewer", error);
@@ -34,7 +34,7 @@ const SubmissionPage = () => {
       }
     };
     fetchReviewer();
-  }, [reviewerId, navigate]);
+  }, [identifier, navigate]);
 
   if (isAuthLoading || isLoading) {
     return (
@@ -70,6 +70,21 @@ const SubmissionPage = () => {
           animate={{ opacity: 1, y: 0 }}
           className="mb-8 text-center max-w-2xl mx-auto"
         >
+          {/* Banner Image */}
+          {reviewer.configuration?.banner_url && (
+            <div className="w-full h-32 md:h-48 rounded-xl overflow-hidden mb-6 shadow-2xl border border-gray-700/50 relative">
+              <img
+                src={reviewer.configuration.banner_url}
+                alt="Profile Banner"
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-gray-900/60 to-transparent" />
+            </div>
+          )}
+
           {/* Reviewer Info */}
           <div className="flex flex-col items-center justify-center mb-6">
             <div className="relative mb-4">

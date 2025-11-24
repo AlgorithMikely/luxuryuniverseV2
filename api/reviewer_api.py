@@ -425,6 +425,36 @@ async def get_reviewer_settings(reviewer_id: int, db: AsyncSession = Depends(get
         reviewer.open_queue_tiers = [] # All closed if no session
 
     # TODO: Mask payment credentials if not authorized?
+    
+    return reviewer
+
+@router.get("/public/{identifier}", response_model=schemas.ReviewerProfile)
+async def get_public_reviewer_profile(identifier: str, db: AsyncSession = Depends(get_db)):
+    """
+    Public endpoint to fetch reviewer profile by ID or TikTok handle.
+    """
+    reviewer = None
+    
+    # Try as ID first
+    if identifier.isdigit():
+        reviewer = await queue_service.get_reviewer_by_id(db, int(identifier))
+    
+    # If not found or not ID, try as TikTok handle
+    if not reviewer:
+        reviewer = await queue_service.get_reviewer_by_tiktok_handle(db, identifier)
+        
+    if not reviewer:
+        raise HTTPException(status_code=404, detail="Reviewer not found")
+        
+    # Merge config defaults
+    reviewer = queue_service._merge_reviewer_config(reviewer)
+
+    # Populate open_queue_tiers from active session
+    active_session = await queue_service.get_active_session_by_reviewer(db, reviewer.id)
+    if active_session:
+        reviewer.open_queue_tiers = active_session.open_queue_tiers
+    else:
+        reviewer.open_queue_tiers = []
 
     return reviewer
 

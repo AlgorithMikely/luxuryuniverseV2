@@ -5,6 +5,7 @@ import httpx
 import yt_dlp
 import asyncio
 from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel
 from fastapi.responses import StreamingResponse
 import bot_instance
 
@@ -103,6 +104,8 @@ async def audio_proxy(request: Request):
         else:
              raise HTTPException(status_code=404, detail=f"Local file not found: {local_path}")
 
+    headers_to_forward = {"User-Agent": "Mozilla/5.0"}
+
     # For non-Discord URLs, use yt-dlp to get a direct streamable URL
     if "discord.com" not in url:
         # Check for R2 URL
@@ -117,16 +120,30 @@ async def audio_proxy(request: Request):
         
         # Only use yt-dlp if it's NOT an R2 url (which we just converted to http) and NOT a direct http link we trust?
         # Actually, if we converted R2 to presigned http url, we can skip yt-dlp.
-        elif not url.startswith("http"):
-             # If it's not http (and not r2:// handled above), try yt-dlp
-             try:
-                with yt_dlp.YoutubeDL({'format': 'bestaudio', 'quiet': True}) as ydl:
+        # Use yt-dlp for SoundCloud, YouTube, or non-http URLs
+        elif "soundcloud.com" in url or "youtube.com" in url or "youtu.be" in url or not url.startswith("http"):
+            # If it's not http (and not r2:// handled above), try yt-dlp
+            try:
+                ydl_opts = {
+                    'format': 'bestaudio/best',
+                    'quiet': True,
+                    'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'web']}},
+                    'nocheckcertificate': True,
+                }
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(url, download=False)
                     url = info['url']
-             except Exception as e:
+                    # Extract headers if available
+                    if 'http_headers' in info:
+                        headers_to_forward.update(info['http_headers'])
+                    
+                    logging.info(f"Extracted URL: {url}")
+                    logging.info(f"Headers to forward: {headers_to_forward}")
+
+            except Exception as e:
+                logging.error(f"yt_dlp extraction failed: {e}")
                 raise HTTPException(status_code=500, detail=f"Failed to extract audio from URL: {e}")
 
-    headers_to_forward = {"User-Agent": "Mozilla/5.0"}
     async with httpx.AsyncClient() as client:
         try:
             r = await client.get(url, headers=headers_to_forward, follow_redirects=True)
@@ -174,3 +191,58 @@ async def audio_proxy(request: Request):
             raise HTTPException(status_code=e.response.status_code, detail=f"Failed to fetch audio: {e}")
         except httpx.RequestError as e:
             raise HTTPException(status_code=502, detail=f"Bad Gateway: {e}")
+
+class MetadataRequest(BaseModel):
+    url: str
+
+@router.post("/metadata")
+async def get_metadata(request: MetadataRequest):
+    """
+    Extracts metadata (title, artist, genre, etc.) from a URL using yt-dlp.
+    """
+    url = request.url
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
+
+    try:
+        ydl_opts = {
+            'quiet': True,
+            'skip_download': True,
+            'extract_flat': True, # Don't download, just get metadata
+            'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'web']}},
+            'nocheckcertificate': True,
+        }
+        
+        # If it's a YouTube URL, we might want more detailed info than 'flat' provides for some fields,
+        # but 'extract_flat' is faster. Let's try without flat first for better metadata if speed is okay,
+        # or use flat and fetch more if needed. For now, standard extraction.
+        # actually 'extract_flat' might miss some details like specific tags/categories depending on the extractor.
+        # Let's use standard extraction but with skip_download=True.
+        
+        ydl_opts['extract_flat'] = False 
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            
+            # Extract relevant fields
+            metadata = {
+                "title": info.get("title"),
+                "artist": info.get("artist") or info.get("uploader"),
+                "genre": info.get("genre") or (info.get("categories")[0] if info.get("categories") else None),
+                "duration": info.get("duration"),
+                "thumbnail": info.get("thumbnail"),
+                "description": info.get("description"),
+                "original_url": url
+            }
+            
+            # Try to find a better genre if possible (e.g. from tags)
+            if not metadata["genre"] and info.get("tags"):
+                # Simple heuristic: take the first tag that looks like a genre? 
+                # Or just return tags. Let's just return tags as well.
+                metadata["tags"] = info.get("tags")
+
+            return metadata
+
+    except Exception as e:
+        logging.error(f"Metadata extraction failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to extract metadata: {str(e)}")
