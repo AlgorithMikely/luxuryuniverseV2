@@ -42,9 +42,17 @@ const ReviewerList = () => {
                     {/* Avatar */}
                     <div className="relative">
                         <img
-                            src={reviewer.avatar_url || reviewer.user?.avatar || "https://cdn.discordapp.com/embed/avatars/0.png"}
+                            src={
+                                reviewer.avatar_url ||
+                                (reviewer.user?.avatar && reviewer.user?.discord_id
+                                    ? `https://cdn.discordapp.com/avatars/${reviewer.user.discord_id}/${reviewer.user.avatar}.png`
+                                    : "https://cdn.discordapp.com/embed/avatars/0.png")
+                            }
                             alt={reviewer.user?.username}
                             className="w-20 h-20 rounded-full object-cover border-2 border-gray-600"
+                            onError={(e) => {
+                                (e.target as HTMLImageElement).src = "https://cdn.discordapp.com/embed/avatars/0.png";
+                            }}
                         />
                         {/* Status Indicator */}
                         <div
@@ -66,8 +74,8 @@ const ReviewerList = () => {
                     <Link
                         to={`/submit/${reviewer.id}`}
                         className={`w-full py-2 px-4 rounded-lg font-bold text-center transition-colors ${reviewer.queue_status === "open"
-                                ? "bg-purple-600 hover:bg-purple-500 text-white"
-                                : "bg-gray-700 text-gray-400 cursor-not-allowed"
+                            ? "bg-purple-600 hover:bg-purple-500 text-white"
+                            : "bg-gray-700 text-gray-400 cursor-not-allowed"
                             }`}
                         onClick={(e) => {
                             if (reviewer.queue_status !== "open") {

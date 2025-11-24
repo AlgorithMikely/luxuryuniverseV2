@@ -1,21 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import api from '../services/api';
-import { PriorityTier, ReviewerProfile, EconomyConfig } from '../types';
-import { Save, Trash2, Plus, RotateCcw } from 'lucide-react';
+import { ReviewerProfile, PriorityTier, EconomyConfig } from '../types';
+import { Upload, RotateCcw, Plus, Trash2 } from 'lucide-react';
 
 const ReviewerSettingsPage: React.FC = () => {
-    const navigate = useNavigate();
     const { user, checkAuth } = useAuthStore();
+    const navigate = useNavigate();
     const [reviewerProfile, setReviewerProfile] = useState<ReviewerProfile | null>(null);
 
-    // Form States
     const [tiktokHandle, setTiktokHandle] = useState('');
     const [discordChannelId, setDiscordChannelId] = useState('');
     const [freeLineLimit, setFreeLineLimit] = useState<number | ''>('');
+    const [bio, setBio] = useState('');
+    const [bannerUrl, setBannerUrl] = useState('');
+    const [avatarUrl, setAvatarUrl] = useState('');
+    const [themeColor, setThemeColor] = useState('purple');
     const [tiers, setTiers] = useState<PriorityTier[]>([]);
     const [economyConfigs, setEconomyConfigs] = useState<EconomyConfig[]>([]);
+
+    const bannerInputRef = useRef<HTMLInputElement>(null);
+    const avatarInputRef = useRef<HTMLInputElement>(null);
 
     // Loading/Error States
     const [isLoading, setIsLoading] = useState(true);
@@ -106,6 +112,10 @@ const ReviewerSettingsPage: React.FC = () => {
                 setTiktokHandle(profile.tiktok_handle || '');
                 setDiscordChannelId(profile.discord_channel_id || '');
                 setFreeLineLimit(profile.configuration?.free_line_limit ?? '');
+                setBio(profile.bio || '');
+                setBannerUrl(profile.configuration?.banner_url || '');
+                setAvatarUrl(profile.avatar_url || '');
+                setThemeColor(profile.configuration?.theme_color || 'purple');
 
                 if (profile.configuration?.priority_tiers) {
                     setTiers(profile.configuration.priority_tiers);
@@ -151,9 +161,13 @@ const ReviewerSettingsPage: React.FC = () => {
             const updateData = {
                 tiktok_handle: tiktokHandle,
                 discord_channel_id: discordChannelId,
+                bio: bio,
+                avatar_url: avatarUrl,
                 configuration: {
                     priority_tiers: tiers,
-                    free_line_limit: freeLineLimit === '' ? null : Number(freeLineLimit)
+                    free_line_limit: freeLineLimit === '' ? null : Number(freeLineLimit),
+                    banner_url: bannerUrl,
+                    theme_color: themeColor
                 },
                 economy_configs: economyConfigs.map(c => ({ event_name: c.event_name, coin_amount: c.coin_amount }))
             };
@@ -226,6 +240,30 @@ const ReviewerSettingsPage: React.FC = () => {
         }
     }, [tiers, newTierColor]);
 
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'banner' | 'avatar') => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const { data } = await api.post('/uploads/stage', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+
+            if (type === 'banner') {
+                setBannerUrl(data.url);
+            } else {
+                setAvatarUrl(data.url);
+            }
+            setMessage({ text: `${type === 'banner' ? 'Banner' : 'Avatar'} uploaded successfully!`, type: 'success' });
+        } catch (err) {
+            console.error(`Failed to upload ${type}`, err);
+            setMessage({ text: `Failed to upload ${type}.`, type: 'error' });
+        }
+    };
+
     if (isLoading) return <div className="p-10 text-center text-white">Loading settings...</div>;
     if (!user?.reviewer_profile) return <div className="p-10 text-center text-white">You must be a reviewer to access this page.</div>;
 
@@ -276,6 +314,130 @@ const ReviewerSettingsPage: React.FC = () => {
                                     placeholder="No limit"
                                 />
                                 <p className="text-xs text-gray-500 mt-1">Limit the number of active submissions in the free queue. Leave empty for no limit.</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Profile Customization */}
+                    <section className="bg-gray-800 rounded-xl p-6 shadow-lg">
+                        <h2 className="text-xl font-semibold mb-4 text-purple-400">Profile Customization</h2>
+                        <div className="space-y-6">
+                            {/* Avatar Sync & Upload */}
+                            <div className="flex items-center justify-between bg-gray-700/30 p-4 rounded-lg border border-gray-700">
+                                <div className="flex items-center gap-4">
+                                    <div className="relative group cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
+                                        <img
+                                            src={
+                                                avatarUrl ||
+                                                (reviewerProfile?.user?.avatar && reviewerProfile?.user?.discord_id
+                                                    ? `https://cdn.discordapp.com/avatars/${reviewerProfile.user.discord_id}/${reviewerProfile.user.avatar}.png`
+                                                    : "https://cdn.discordapp.com/embed/avatars/0.png")
+                                            }
+                                            alt="Avatar"
+                                            className="w-16 h-16 rounded-full object-cover border-2 border-gray-600 group-hover:opacity-75 transition-opacity"
+                                            onError={(e) => {
+                                                (e.target as HTMLImageElement).src = "https://cdn.discordapp.com/embed/avatars/0.png";
+                                            }}
+                                        />
+                                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <Upload className="w-6 h-6 text-white" />
+                                        </div>
+                                        <input
+                                            type="file"
+                                            ref={avatarInputRef}
+                                            className="hidden"
+                                            accept="image/*"
+                                            onChange={(e) => handleImageUpload(e, 'avatar')}
+                                        />
+                                    </div>
+                                    <div>
+                                        <h3 className="font-medium text-white">Profile Avatar</h3>
+                                        <p className="text-xs text-gray-400">Click avatar to upload or sync from Discord.</p>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => avatarInputRef.current?.click()}
+                                        className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded text-sm font-medium transition-colors border border-gray-600"
+                                    >
+                                        Upload
+                                    </button>
+                                    <button
+                                        onClick={async () => {
+                                            try {
+                                                const { data } = await api.post(`/reviewer/${reviewerProfile?.id}/sync-avatar`);
+                                                setReviewerProfile(data);
+                                                setAvatarUrl(''); // Clear custom avatar to use synced one
+                                                setMessage({ text: "Avatar synced successfully!", type: 'success' });
+                                                await checkAuth();
+                                            } catch (err) {
+                                                setMessage({ text: "Failed to sync avatar.", type: 'error' });
+                                            }
+                                        }}
+                                        className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded text-sm font-medium transition-colors"
+                                    >
+                                        Sync Discord
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm font-medium text-gray-400 mb-2">Bio</label>
+                                    <textarea
+                                        value={bio}
+                                        onChange={(e) => setBio(e.target.value)}
+                                        rows={3}
+                                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-purple-500"
+                                        placeholder="Tell us about yourself..."
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-400 mb-2">Banner Image</label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={bannerUrl}
+                                            onChange={(e) => setBannerUrl(e.target.value)}
+                                            className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-purple-500"
+                                            placeholder="https://example.com/banner.jpg"
+                                        />
+                                        <input
+                                            type="file"
+                                            ref={bannerInputRef}
+                                            className="hidden"
+                                            accept="image/*"
+                                            onChange={(e) => handleImageUpload(e, 'banner')}
+                                        />
+                                        <button
+                                            onClick={() => bannerInputRef.current?.click()}
+                                            className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded border border-gray-600"
+                                            title="Upload Banner"
+                                        >
+                                            <Upload size={18} />
+                                        </button>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-1">Recommended size: 1920x300px</p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-400 mb-2">Theme Color</label>
+                                    <div className="grid grid-cols-8 gap-2">
+                                        {['purple', 'blue', 'green', 'red', 'orange', 'yellow', 'pink', 'gray'].map((color) => (
+                                            <button
+                                                key={color}
+                                                onClick={() => setThemeColor(color)}
+                                                className={`w-8 h-8 rounded-full border-2 ${themeColor === color ? 'border-white scale-110' : 'border-transparent opacity-70 hover:opacity-100'
+                                                    } transition-all`}
+                                                style={{ backgroundColor: `var(--color-${color}-500, ${color})` }}
+                                                title={color}
+                                            >
+                                                {/* Fallback for inline style if CSS vars aren't set globally yet */}
+                                                <span className={`block w-full h-full rounded-full bg-${color}-500`}></span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-2">Selected: <span className="capitalize text-white">{themeColor}</span></p>
+                                </div>
                             </div>
                         </div>
                     </section>
@@ -637,7 +799,7 @@ const ReviewerSettingsPage: React.FC = () => {
                     </button>
                 </div>
             </div>
-        </div >
+        </div>
     );
 };
 

@@ -83,7 +83,14 @@ const SubmissionItem: React.FC<SubmissionItemProps> = ({ submissions, onEdit, on
           <div className="flex items-center text-xs text-gray-400 space-x-3">
             <span className="flex items-center">
               <Clock className="w-3 h-3 mr-1" />
-              {new Date(mainSubmission.submitted_at).toLocaleDateString()}
+              {(() => {
+                try {
+                  const date = new Date(mainSubmission.submitted_at);
+                  return isNaN(date.getTime()) ? "Date unknown" : date.toLocaleDateString();
+                } catch (e) {
+                  return "Date unknown";
+                }
+              })()}
             </span>
             <span className={`px-1.5 py-0.5 rounded ${getStatusColor(mainSubmission.status)} capitalize`}>
               {mainSubmission.status}

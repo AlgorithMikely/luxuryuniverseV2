@@ -20,9 +20,9 @@ async def stage_upload(file: UploadFile = File(...)):
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        # Return public URL
-        # Assuming we serve uploads via static mount
-        url = f"{settings.API_URL}/api/uploads/staging/{filename}"
+        # Return relative URL (proxied by frontend/nginx)
+        url = f"/api/uploads/staging/{filename}"
         return {"url": url, "filename": filename}
     except Exception as e:
+        print(f"Upload error: {e}") # Log to console
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")

@@ -94,56 +94,82 @@ const SmartZone: React.FC<SmartZoneProps> = ({ reviewer }) => {
             else setSlot3(item);
 
             if (text.includes('spotify.com/track')) {
-                 try {
-                     const { data } = await api.post('/spotify/proxy/track', { url: text });
+                try {
+                    const { data } = await api.post('/spotify/proxy/track', { url: text });
 
-                     // Spotify Metadata Format
-                     title = data.name;
-                     artist = data.artists.map((a: any) => a.name).join(', ');
-                     if (data.album?.images?.length > 0) {
-                         coverArt = data.album.images[0].url;
-                     }
-                     previewUrl = data.preview_url; // Might be null
+                    // Spotify Metadata Format
+                    title = data.name;
+                    artist = data.artists.map((a: any) => a.name).join(', ');
+                    if (data.album?.images?.length > 0) {
+                        coverArt = data.album.images[0].url;
+                    }
+                    previewUrl = data.preview_url; // Might be null
 
-                     // Update item with fetched metadata
-                     const updatedItem = {
-                         ...item,
-                         track_title: title,
-                         artist: artist,
-                         // If we have a preview URL, we might want to use it for the waveform,
-                         // but we need to keep the original URL for submission.
-                         // SmartZone's WaveformPlayer uses 'url' prop.
-                         // If we pass the full Spotify link to WaveformPlayer, does it work?
-                         // Currently WaveformPlayer uses wavesurfer.js which needs an audio file.
-                         // So we should pass 'preview_url' to WaveformPlayer if available.
-                         // But SmartSubmissionItem structure has 'track_url'.
-                         // We can add a 'preview_url' field to SmartSubmissionItem or just use track_url
-                         // if we want to preview THAT.
-                         // However, for submission we need the original link.
-                         // Let's rely on WaveformPlayer handling Spotify or just not showing waveform if no audio.
-                         // BUT, if we have a preview_url, we can pass that as a separate prop or temporary field.
-                         preview_url: previewUrl
-                     };
+                    // Update item with fetched metadata
+                    const updatedItem = {
+                        ...item,
+                        track_title: title,
+                        artist: artist,
+                        // If we have a preview URL, we might want to use it for the waveform,
+                        // but we need to keep the original URL for submission.
+                        // SmartZone's WaveformPlayer uses 'url' prop.
+                        // If we pass the full Spotify link to WaveformPlayer, does it work?
+                        // Currently WaveformPlayer uses wavesurfer.js which needs an audio file.
+                        // So we should pass 'preview_url' to WaveformPlayer if available.
+                        // But SmartSubmissionItem structure has 'track_url'.
+                        // We can add a 'preview_url' field to SmartSubmissionItem or just use track_url
+                        // if we want to preview THAT.
+                        // However, for submission we need the original link.
+                        // Let's rely on WaveformPlayer handling Spotify or just not showing waveform if no audio.
+                        // BUT, if we have a preview_url, we can pass that as a separate prop or temporary field.
+                        preview_url: previewUrl
+                    };
 
-                     if (slotNum === 1) setSlot1(updatedItem);
-                     else if (slotNum === 2) setSlot2(updatedItem);
-                     else setSlot3(updatedItem);
+                    if (slotNum === 1) setSlot1(updatedItem);
+                    else if (slotNum === 2) setSlot2(updatedItem);
+                    else setSlot3(updatedItem);
 
-                 } catch (err) {
-                     console.error("Failed to fetch Spotify metadata", err);
-                     // Fallback to basic title
-                     const fallbackItem = { ...item, track_title: "Spotify Track (Metadata Failed)" };
-                     if (slotNum === 1) setSlot1(fallbackItem);
-                     else if (slotNum === 2) setSlot2(fallbackItem);
-                     else setSlot3(fallbackItem);
-                 }
+                } catch (err) {
+                    console.error("Failed to fetch Spotify metadata", err);
+                    // Fallback to basic title
+                    const fallbackItem = { ...item, track_title: "Spotify Track (Metadata Failed)" };
+                    if (slotNum === 1) setSlot1(fallbackItem);
+                    else if (slotNum === 2) setSlot2(fallbackItem);
+                    else setSlot3(fallbackItem);
+                }
+            } else if (text.includes('soundcloud.com')) {
+                try {
+                    const { data } = await api.post('/soundcloud/metadata', { url: text });
+
+                    const updatedItem = {
+                        ...item,
+                        track_title: data.title || "SoundCloud Track",
+                        artist: data.artist || "",
+                        genre: data.genre || "",
+                        // We use the original URL for submission, but we can use the waveform_url for preview if we want
+                        // For now, WaveformPlayer might not support the JSON waveform data from SoundCloud directly if it expects an audio file.
+                        // But if we have a thumbnail, we can show it?
+                        // The SmartSubmissionItem doesn't have a thumbnail field yet.
+                        // Let's just set the basic info.
+                    };
+
+                    if (slotNum === 1) setSlot1(updatedItem);
+                    else if (slotNum === 2) setSlot2(updatedItem);
+                    else setSlot3(updatedItem);
+
+                } catch (err) {
+                    console.error("Failed to fetch SoundCloud metadata", err);
+                    const fallbackItem = { ...item, track_title: "SoundCloud Track (Metadata Failed)" };
+                    if (slotNum === 1) setSlot1(fallbackItem);
+                    else if (slotNum === 2) setSlot2(fallbackItem);
+                    else setSlot3(fallbackItem);
+                }
             } else {
-                 // For non-Spotify links, maybe try generic metadata fetch later?
-                 // For now just update title to "Link Loaded" or similar
-                 const loadedItem = { ...item, track_title: "Link Loaded" };
-                  if (slotNum === 1) setSlot1(loadedItem);
-                 else if (slotNum === 2) setSlot2(loadedItem);
-                 else setSlot3(loadedItem);
+                // For non-Spotify/SoundCloud links
+                const loadedItem = { ...item, track_title: "Link Loaded" };
+                if (slotNum === 1) setSlot1(loadedItem);
+                else if (slotNum === 2) setSlot2(loadedItem);
+                else setSlot3(loadedItem);
             }
         }
     };
@@ -617,9 +643,18 @@ const SubmissionSlot: React.FC<{
                         </div>
                     </div>
 
-                    {/* Waveform / Hook Editor */}
-                    <div className="flex-1 bg-gray-800/50 rounded-lg p-2">
-                        {item.track_url.includes('spotify.com') && !item.preview_url ? (
+                    {/* Waveform / Hook Editor / SoundCloud Embed */}
+                    <div className="flex-1 bg-gray-800/50 rounded-lg p-2 overflow-hidden">
+                        {item.track_url.includes('soundcloud.com') ? (
+                            <iframe
+                                width="100%"
+                                height="120"
+                                scrolling="no"
+                                frameBorder="no"
+                                allow="autoplay"
+                                src={`https://w.soundcloud.com/player/?url=${encodeURIComponent(item.track_url)}&color=%23ff5500&auto_play=false&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true`}
+                            ></iframe>
+                        ) : item.track_url.includes('spotify.com') && !item.preview_url ? (
                             <div className="flex items-center justify-center h-full text-gray-500 text-sm italic">
                                 Preview not available for this track
                             </div>

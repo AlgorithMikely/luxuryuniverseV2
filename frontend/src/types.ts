@@ -26,6 +26,8 @@ export interface PriorityTier {
 export interface ReviewerConfiguration {
   priority_tiers: PriorityTier[];
   free_line_limit?: number;
+  banner_url?: string;
+  theme_color?: string;
 }
 
 export interface PaymentConfig {
