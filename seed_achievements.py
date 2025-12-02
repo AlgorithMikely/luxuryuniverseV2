@@ -13,6 +13,15 @@ async def seed_achievements():
     async with AsyncSessionLocal() as db:
         definitions = []
 
+        # --- CLEANUP OBSOLETE ACHIEVEMENTS ---
+        obsolete_slugs = ["server_pillar", "founder"]
+        for slug in obsolete_slugs:
+            result = await db.execute(select(AchievementDefinition).filter_by(slug=slug))
+            achievement = result.scalar_one_or_none()
+            if achievement:
+                logger.info(f"Removing obsolete achievement: {slug}")
+                await db.delete(achievement)
+
         # --- EXISTING REVIEWER TRACK (Preserved) ---
         definitions.extend([
             {
@@ -298,6 +307,78 @@ async def seed_achievements():
                 "discord_role_id": None,
                 "role_color": None,
                 "role_icon": "😤"
+            },
+            {
+                "slug": "hype_man",
+                "display_name": "Hype Man",
+                "description": "Comment 'W' 10 times in 60 seconds.",
+                "category": "CHAT_KEYWORD_SPAM",
+                "threshold_value": 10,
+                "tier": 3,
+                "is_hidden": False,
+                "discord_role_id": None,
+                "role_color": None,
+                "role_icon": "😤"
+            },
+            {
+                "slug": "super_fan",
+                "display_name": "Super Fan",
+                "description": "Send 1,000 Likes to the stream.",
+                "category": "LIFETIME_LIKES_SENT",
+                "threshold_value": 1000,
+                "tier": 1,
+                "is_hidden": False,
+                "discord_role_id": None,
+                "role_color": None,
+                "role_icon": "❤️"
+            },
+            {
+                "slug": "big_spender",
+                "display_name": "Big Spender",
+                "description": "Send 1,000 Diamonds in gifts.",
+                "category": "LIFETIME_GIFTS_SENT",
+                "threshold_value": 1000,
+                "tier": 3,
+                "is_hidden": False,
+                "discord_role_id": None,
+                "role_color": "#9B59B6",
+                "role_icon": "💎"
+            },
+            {
+                "slug": "mogul",
+                "display_name": "Mogul",
+                "description": "Send 10,000 Diamonds in gifts.",
+                "category": "LIFETIME_GIFTS_SENT",
+                "threshold_value": 10000,
+                "tier": 4,
+                "is_hidden": False,
+                "discord_role_id": None,
+                "role_color": "#F1C40F",
+                "role_icon": "🕴️"
+            },
+            {
+                "slug": "chatterbox",
+                "display_name": "Chatterbox",
+                "description": "Send 100 comments in TikTok Live.",
+                "category": "LIFETIME_TIKTOK_COMMENTS",
+                "threshold_value": 100,
+                "tier": 1,
+                "is_hidden": False,
+                "discord_role_id": None,
+                "role_color": None,
+                "role_icon": "🗣️"
+            },
+            {
+                "slug": "the_sharer",
+                "display_name": "The Sharer",
+                "description": "Share the stream 10 times.",
+                "category": "LIFETIME_TIKTOK_SHARES",
+                "threshold_value": 10,
+                "tier": 1,
+                "is_hidden": False,
+                "discord_role_id": None,
+                "role_color": None,
+                "role_icon": "📲"
             }
         ])
 
@@ -351,9 +432,9 @@ async def seed_achievements():
                 "role_color": "#E67E22",
                 "role_icon": "🎙️"
             },
-             {
-                "slug": "server_pillar",
-                "display_name": "Server Pillar",
+            {
+                "slug": "community_legend",
+                "display_name": "Community Legend",
                 "description": "Send 10,000 messages.",
                 "category": "DISCORD_MSG_COUNT",
                 "threshold_value": 10000,
@@ -362,6 +443,18 @@ async def seed_achievements():
                 "discord_role_id": None,
                 "role_color": None,
                 "role_icon": "🏛️"
+            },
+            {
+                "slug": "screen_time",
+                "display_name": "Screen Time",
+                "description": "Share your screen in Discord for 1 hour.",
+                "category": "DISCORD_SCREEN_SHARE_MINS",
+                "threshold_value": 60,
+                "tier": 2,
+                "is_hidden": False,
+                "discord_role_id": None,
+                "role_color": None,
+                "role_icon": "🖥️"
             },
         ])
 
@@ -395,18 +488,7 @@ async def seed_achievements():
 
         # --- CATEGORY F: BADGES ---
         definitions.extend([
-            {
-                "slug": "founder",
-                "display_name": "Founder",
-                "description": "Joined the server within the first month.",
-                "category": "BADGE",
-                "threshold_value": 1,
-                "tier": 1,
-                "is_hidden": False,
-                "discord_role_id": None,
-                "role_color": None,
-                "role_icon": "🏰"
-            },
+
             {
                 "slug": "collector",
                 "display_name": "Collector",

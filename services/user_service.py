@@ -255,9 +255,49 @@ def is_spotify_token_expired(user: models.User) -> bool:
     """Checks if the user's Spotify access token is expired or close to expiring."""
     if not user.spotify_token_expires_at:
         return True
-    expiry = user.spotify_token_expires_at
-    if expiry.tzinfo is None:
-        expiry = expiry.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) >= user.spotify_token_expires_at
 
-    # Check if the token expires in the next 60 seconds
-    return expiry <= datetime.now(timezone.utc) + timedelta(seconds=60)
+
+async def check_guild_membership(user_discord_id: str, guild_id: str) -> bool:
+    """
+    Checks if a user is a member of the specified Discord guild.
+    Uses the bot instance if available.
+    """
+    if not user_discord_id or not guild_id:
+        return False
+
+    try:
+        import bot_instance
+        if bot_instance.bot and bot_instance.bot.is_ready():
+            guild = bot_instance.bot.get_guild(int(guild_id))
+            if guild:
+                member = guild.get_member(int(user_discord_id))
+                if member:
+                    return True
+                # If not found in cache, try fetching (async)
+                try:
+                    member = await guild.fetch_member(int(user_discord_id))
+                    return True
+                except:
+                    return False
+    except Exception as e:
+        # logging.error(f"Error checking guild membership: {e}")
+        pass
+    
+    return False
+
+async def is_user_authorized_for_line(db: AsyncSession, user_discord_id: str) -> bool:
+    """
+    Checks if the user is authorized to see the line (member of the configured guild).
+    """
+    stmt = select(models.GlobalConfig).filter(models.GlobalConfig.key == "authorized_guild_id")
+    result = await db.execute(stmt)
+    config = result.scalars().first()
+    
+    authorized_guild_id = config.value if config else None
+    
+    if not authorized_guild_id:
+        return False # Or True if no guild configured? Prompt implies restriction. "if they are not a current member... which the admin controls". Implies if admin hasn't set it, maybe no one sees it? Or everyone? Let's assume False (secure by default).
+        
+    return await check_guild_membership(user_discord_id, str(authorized_guild_id))
+

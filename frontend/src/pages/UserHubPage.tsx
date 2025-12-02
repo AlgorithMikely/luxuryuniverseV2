@@ -49,8 +49,11 @@ const UserHubPage = () => {
         // Default to 1 if no submissions
         fetchBalance(1);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch submissions:", error);
+      if (error.response) {
+        console.error("Error response:", error.response.status, error.response.data);
+      }
       toast.error("Could not load your submissions.");
     } finally {
       setIsLoading(false);
@@ -88,9 +91,8 @@ const UserHubPage = () => {
         <div className="flex space-x-4 border-b border-gray-800 pb-1">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`flex items-center gap-2 pb-2 px-4 text-sm font-medium transition-colors relative ${
-              activeTab === 'overview' ? "text-purple-400" : "text-gray-400 hover:text-white"
-            }`}
+            className={`flex items-center gap-2 pb-2 px-4 text-sm font-medium transition-colors relative ${activeTab === 'overview' ? "text-purple-400" : "text-gray-400 hover:text-white"
+              }`}
           >
             <Coins size={16} />
             Overview
@@ -100,9 +102,8 @@ const UserHubPage = () => {
           </button>
           <button
             onClick={() => setActiveTab('achievements')}
-            className={`flex items-center gap-2 pb-2 px-4 text-sm font-medium transition-colors relative ${
-              activeTab === 'achievements' ? "text-purple-400" : "text-gray-400 hover:text-white"
-            }`}
+            className={`flex items-center gap-2 pb-2 px-4 text-sm font-medium transition-colors relative ${activeTab === 'achievements' ? "text-purple-400" : "text-gray-400 hover:text-white"
+              }`}
           >
             <Trophy size={16} />
             Achievements

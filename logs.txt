@@ -1,0 +1,25 @@
+db:5432 - accepting connections
+Database is up - running migrations
+Migrations complete - starting server
+Initializing database...
+Database initialized.
+Loading cogs...
+Cogs loaded.
+FastAPI server started.
+INFO:     172.20.0.4:53232 - "GET /api/reviewer/public/luxuryforbes HTTP/1.0" 200 OK
+INFO:     172.20.0.4:53240 - "GET /api/sessions?reviewer_id=2 HTTP/1.0" 200 OK
+INFO:     172.20.0.4:53256 - "GET /api/sessions/active?reviewer_id=2 HTTP/1.0" 200 OK
+INFO:     172.20.0.4:53270 - "GET /api/reviewer/2/settings HTTP/1.0" 200 OK
+INFO:     172.20.0.4:53282 - "GET /api/reviewer/2/settings HTTP/1.0" 200 OK
+INFO:     172.20.0.4:53280 - "GET /api/reviewer/2/queue/initial-state HTTP/1.0" 200 OK
+INFO:     172.20.0.4:53298 - "GET /api/reviewer/2/settings HTTP/1.0" 200 OK
+INFO:     172.20.0.4:53306 - "GET /api/spotify/token HTTP/1.0" 200 OK
+Logged in as LuxuryUniverseBot#3941 (ID: 1430921346514161817)
+Syncing slash commands...
+Synced 8 commands.
+Connected to guilds: ["AI/ML Music's server"]
+ - Guild: AI/ML Music's server (ID: 1288939910530727968)
+Setting bot_ready event.
+bot_ready event set.
+INFO:     172.20.0.4:53314 - "GET /api/spotify/token HTTP/1.0" 200 OK
+INFO:     172.20.0.4:53316 - "GET /api/reviewer/2/settings HTTP/1.0" 200 OK

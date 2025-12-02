@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import api from '../services/api';
-import { ReviewerProfile, PriorityTier, EconomyConfig } from '../types';
+import { ReviewerProfile, PriorityTier, EconomyConfig, DiscordChannel } from '../types';
 import { Upload, RotateCcw, Plus, Trash2 } from 'lucide-react';
 import ImageCropper from '../components/ImageCropper';
 
@@ -13,13 +13,30 @@ const ReviewerSettingsPage: React.FC = () => {
 
     const [tiktokHandle, setTiktokHandle] = useState('');
     const [discordChannelId, setDiscordChannelId] = useState('');
+    const [seeTheLineChannelId, setSeeTheLineChannelId] = useState('');
+    const [discordChannels, setDiscordChannels] = useState<DiscordChannel[]>([]);
     const [freeLineLimit, setFreeLineLimit] = useState<number | ''>('');
+    const [maxFreeSubmissionsSession, setMaxFreeSubmissionsSession] = useState<number | ''>('');
     const [bio, setBio] = useState('');
     const [bannerUrl, setBannerUrl] = useState('');
     const [avatarUrl, setAvatarUrl] = useState('');
     const [themeColor, setThemeColor] = useState('purple');
     const [tiers, setTiers] = useState<PriorityTier[]>([]);
     const [economyConfigs, setEconomyConfigs] = useState<EconomyConfig[]>([]);
+    const [lineShowSkips, setLineShowSkips] = useState(true);
+    const [socialLinkUrl, setSocialLinkUrl] = useState('');
+    const [socialLinkText, setSocialLinkText] = useState('');
+    const [socialPlatform, setSocialPlatform] = useState('instagram');
+    const [socialHandle, setSocialHandle] = useState('');
+
+    const platforms = [
+        { id: 'instagram', name: 'Instagram', urlPrefix: 'https://instagram.com/', labelPrefix: '@' },
+        { id: 'twitter', name: 'Twitter / X', urlPrefix: 'https://x.com/', labelPrefix: '@' },
+        { id: 'twitch', name: 'Twitch', urlPrefix: 'https://twitch.tv/', labelPrefix: '' },
+        { id: 'youtube', name: 'YouTube', urlPrefix: 'https://youtube.com/@', labelPrefix: '' },
+        { id: 'tiktok', name: 'TikTok', urlPrefix: 'https://tiktok.com/@', labelPrefix: '@' },
+        { id: 'custom', name: 'Custom Link', urlPrefix: '', labelPrefix: '' },
+    ];
 
     const bannerInputRef = useRef<HTMLInputElement>(null);
     const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -116,11 +133,26 @@ const ReviewerSettingsPage: React.FC = () => {
                 setReviewerProfile(profile);
                 setTiktokHandle(profile.tiktok_handle || '');
                 setDiscordChannelId(profile.discord_channel_id || '');
+                setSeeTheLineChannelId(profile.see_the_line_channel_id || '');
                 setFreeLineLimit(profile.configuration?.free_line_limit ?? '');
+                setMaxFreeSubmissionsSession(profile.configuration?.max_free_submissions_session ?? '');
+
+                // Fetch available Discord channels
+                try {
+                    const channelsRes = await api.get<DiscordChannel[]>(`/reviewer/${user.reviewer_profile.id}/discord/channels`);
+                    setDiscordChannels(channelsRes.data);
+                } catch (err) {
+                    console.error("Failed to fetch Discord channels", err);
+                }
                 setBio(profile.bio || '');
                 setBannerUrl(profile.configuration?.banner_url || '');
                 setAvatarUrl(profile.avatar_url || '');
                 setThemeColor(profile.configuration?.theme_color || 'purple');
+                setLineShowSkips(profile.configuration?.line_show_skips !== false);
+                setSocialLinkUrl(profile.configuration?.social_link_url || '');
+                setSocialLinkText(profile.configuration?.social_link_text || '');
+                setSocialPlatform(profile.configuration?.social_platform || 'instagram');
+                setSocialHandle(profile.configuration?.social_handle || '');
 
                 if (profile.configuration?.priority_tiers) {
                     setTiers(profile.configuration.priority_tiers);
@@ -157,6 +189,17 @@ const ReviewerSettingsPage: React.FC = () => {
         }
     }, [user]);
 
+    // Auto-generate link and text based on platform and handle
+    useEffect(() => {
+        if (socialPlatform === 'custom') return;
+
+        const platform = platforms.find(p => p.id === socialPlatform);
+        if (platform && socialHandle) {
+            setSocialLinkUrl(`${platform.urlPrefix}${socialHandle}`);
+            setSocialLinkText(`${platform.labelPrefix}${socialHandle}`);
+        }
+    }, [socialPlatform, socialHandle]);
+
     const handleSave = async () => {
         if (!reviewerProfile) return;
         setIsSaving(true);
@@ -166,15 +209,23 @@ const ReviewerSettingsPage: React.FC = () => {
             const updateData = {
                 tiktok_handle: tiktokHandle,
                 discord_channel_id: discordChannelId,
-                bio: bio,
-                avatar_url: avatarUrl,
+                see_the_line_channel_id: seeTheLineChannelId,
+                social_platform: socialPlatform,
+                social_handle: socialHandle,
+                economy_configs: economyConfigs.map(c => ({ event_name: c.event_name, coin_amount: c.coin_amount })),
                 configuration: {
-                    priority_tiers: tiers,
+                    ...reviewerProfile.configuration,
                     free_line_limit: freeLineLimit === '' ? null : Number(freeLineLimit),
+                    max_free_submissions_session: maxFreeSubmissionsSession === '' ? null : Number(maxFreeSubmissionsSession),
+                    line_show_skips: lineShowSkips,
                     banner_url: bannerUrl,
-                    theme_color: themeColor
-                },
-                economy_configs: economyConfigs.map(c => ({ event_name: c.event_name, coin_amount: c.coin_amount }))
+                    theme_color: themeColor,
+                    social_link_url: socialLinkUrl,
+                    social_link_text: socialLinkText,
+                    social_platform: socialPlatform,
+                    social_handle: socialHandle,
+                    priority_tiers: tiers
+                }
             };
 
             await api.patch(`/reviewer/${reviewerProfile.id}/settings`, updateData);
@@ -337,26 +388,139 @@ const ReviewerSettingsPage: React.FC = () => {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Discord Channel ID</label>
-                                <input
-                                    type="text"
+                                <label className="block text-sm font-medium text-gray-400 mb-2">Review Channel</label>
+                                <select
                                     value={discordChannelId}
                                     onChange={(e) => setDiscordChannelId(e.target.value)}
-                                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-purple-500"
-                                    placeholder="e.g. 123456789012345678"
-                                />
-                                <p className="text-xs text-gray-500 mt-1">The ID of the channel the bot listens to.</p>
+                                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-purple-500 text-white"
+                                >
+                                    <option value="">Select a channel...</option>
+                                    {discordChannels.map(channel => (
+                                        <option key={channel.id} value={channel.id}>
+                                            {channel.category ? `${channel.category} / ` : ''}{channel.name} ({channel.type})
+                                        </option>
+                                    ))}
+                                </select>
+                                <p className="text-xs text-gray-500 mt-1">Channel where the bot listens for commands/reviews.</p>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Free Line Submission Limit</label>
+                                <label className="block text-sm font-medium text-gray-400 mb-2">See The Line Channel</label>
+                                <select
+                                    value={seeTheLineChannelId}
+                                    onChange={(e) => setSeeTheLineChannelId(e.target.value)}
+                                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-purple-500 text-white"
+                                >
+                                    <option value="">Select a channel...</option>
+                                    {discordChannels.map(channel => (
+                                        <option key={channel.id} value={channel.id}>
+                                            {channel.category ? `${channel.category} / ` : ''}{channel.name} ({channel.type})
+                                        </option>
+                                    ))}
+                                </select>
+                                <p className="text-xs text-gray-500 mt-1">Channel where "See The Line" updates are posted.</p>
+                            </div>
+                            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-400 mb-2">Social Platform</label>
+                                    <select
+                                        value={socialPlatform}
+                                        onChange={(e) => setSocialPlatform(e.target.value)}
+                                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-purple-500 text-white"
+                                    >
+                                        {platforms.map(p => (
+                                            <option key={p.id} value={p.id}>{p.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-400 mb-2">
+                                        {socialPlatform === 'custom' ? 'Full URL' : 'Handle / Username'}
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={socialPlatform === 'custom' ? socialLinkUrl : socialHandle}
+                                        onChange={(e) => {
+                                            if (socialPlatform === 'custom') {
+                                                setSocialLinkUrl(e.target.value);
+                                            } else {
+                                                setSocialHandle(e.target.value);
+                                            }
+                                        }}
+                                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-purple-500"
+                                        placeholder={socialPlatform === 'custom' ? 'https://example.com' : 'username'}
+                                    />
+                                </div>
+                            </div>
+
+                            {socialPlatform === 'custom' && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-400 mb-2">Link Text</label>
+                                    <input
+                                        type="text"
+                                        value={socialLinkText}
+                                        onChange={(e) => setSocialLinkText(e.target.value)}
+                                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-purple-500"
+                                        placeholder="e.g. My Website"
+                                    />
+                                </div>
+                            )}
+
+                            {/* Preview */}
+                            <div className="md:col-span-2 bg-gray-700/30 p-4 rounded-lg border border-gray-700">
+                                <p className="text-xs text-gray-400 mb-2 uppercase font-bold tracking-wider">Preview</p>
+                                <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl text-center">
+                                    <p className="text-sm text-blue-300">
+                                        Free submissions are welcome! Please follow me on Instagram to support the stream: <a href={socialLinkUrl || '#'} target="_blank" rel="noopener noreferrer" className="underline font-bold hover:text-white">{socialLinkText || 'Link Text'}</a>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* See the Line Page Settings */}
+                    <section className="bg-gray-800 rounded-xl p-6 shadow-lg">
+                        <div className="flex items-start gap-3 mb-6">
+                            <input
+                                type="checkbox"
+                                id="lineShowSkips"
+                                checked={lineShowSkips}
+                                onChange={(e) => setLineShowSkips(e.target.checked)}
+                                className="mt-1 w-4 h-4 bg-gray-700 border-gray-600 rounded focus:ring-purple-500 focus:ring-2"
+                            />
+                            <div className="flex-1">
+                                <label htmlFor="lineShowSkips" className="text-sm font-medium text-gray-300 cursor-pointer">
+                                    Show Skip Queue in Line View
+                                </label>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    When enabled, viewers will see submissions with priority values (skips) on the "See the Line" page. Disable this to only show free submissions.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-gray-700">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-400 mb-2">Max Active Free Submissions (Queue Cap)</label>
                                 <input
                                     type="number"
+                                    min="0"
                                     value={freeLineLimit}
                                     onChange={(e) => setFreeLineLimit(e.target.value === '' ? '' : parseInt(e.target.value))}
                                     className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-purple-500"
                                     placeholder="No limit"
                                 />
-                                <p className="text-xs text-gray-500 mt-1">Limit the number of active submissions in the free queue. Leave empty for no limit.</p>
+                                <p className="text-xs text-gray-500 mt-1">Limit how many free submissions can be in the queue at once.</p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-400 mb-2">Max Free Submissions Per Session</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    value={maxFreeSubmissionsSession}
+                                    onChange={(e) => setMaxFreeSubmissionsSession(e.target.value === '' ? '' : parseInt(e.target.value))}
+                                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-purple-500"
+                                    placeholder="No limit"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">Limit the total number of free submissions allowed per live session.</p>
                             </div>
                         </div>
                     </section>
@@ -849,10 +1013,10 @@ const ReviewerSettingsPage: React.FC = () => {
                             </div>
                         </div>
                     </section>
-                </div>
+                </div >
 
                 {/* Action Buttons */}
-                <div className="flex justify-end pt-4">
+                < div className="flex justify-end pt-4" >
                     <button
                         onClick={() => navigate(-1)}
                         className="mr-4 px-6 py-2 rounded text-gray-400 hover:text-white transition-colors"
@@ -866,8 +1030,8 @@ const ReviewerSettingsPage: React.FC = () => {
                     >
                         {isSaving ? 'Saving...' : 'Save Changes'}
                     </button>
-                </div>
-            </div>
+                </div >
+            </div >
 
             {croppingImage && (
                 <ImageCropper
@@ -880,7 +1044,7 @@ const ReviewerSettingsPage: React.FC = () => {
                     }}
                 />
             )}
-        </div>
+        </div >
     );
 };
 

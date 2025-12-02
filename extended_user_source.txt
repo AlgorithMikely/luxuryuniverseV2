@@ -1,0 +1,285 @@
+=== ExtendedUser Source ===
+@proto_extension
+class ExtendedUser(User):
+    """
+    Extended user object with backwards compatibility
+
+    """
+
+    @classmethod
+    def from_user(cls, user: User, **kwargs) -> ExtendedUser:
+        """
+        Convert a user to an ExtendedUser object
+
+        :param user: Original user object
+        :param kwargs: Any kwargs to pass
+        :return: ExtendedUser instance
+        """
+
+        if isinstance(user, ExtendedUser):
+            return user
+        try:
+            return ExtendedUser(**user.to_pydict(**kwargs))
+        except AttributeError:
+            user_dict = {}
+            for field in user.__class__.__dataclass_fields__:
+                try:
+                    user_dict[field] = getattr(user, field)
+                except AttributeError as e:
+                    if "is set to None" in str(e):
+                        underlying_attr = f"_{field}"
+                        if hasattr(user, underlying_attr):
+                            user_dict[field] = getattr(user, underlying_attr)
+                        else:
+                            user_dict[field] = None
+                    else:
+                        raise
+            return ExtendedUser(**user_dict)
+
+    @property
+    def display_id(self):
+        """Backwards compatibility for username"""
+
+        return getattr(self, "username", getattr(self, "nick_name", None))
+
+    @property
+    def unique_id(self) -> str:
+        """
+        Retrieve the user's @unique_id
+
+        :return: User's unique_id
+        """
+
+        return self.username
+
+    @property
+    def nickname(self) -> str:
+        """
+        Retrieve the user's @nickname
+
+        :return: User's nickname
+        """
+
+        return getattr(self, "nick_name", getattr(self, "username", None))
+
+    @property
+    def is_friend(self) -> bool:
+        """
+        Is the user friends with the streamer
+
+        :return: Whether the user is friends with the streamer
+
+        """
+
+        if self.follow_info.follow_status is None:
+            return False
+
+        return (self.follow_info.follow_status or 0) >= 2
+
+    def _get_all_badge_info(self) -> List[Tuple[str, str]]:
+        """
+        Retrieve unique badge types with their levels.
+
+        :return: List of (badge_type, level) tuples, with unique badge types
+        """
+
+        badge_dict = {}
+        for badge in getattr(self, "badge_list", []):
+            scene = getattr(badge, "badge_scene", None)
+            log_extra = getattr(badge, "log_extra", None)
+            badge_level = getattr(log_extra, "level", None) if log_extra else None
+            if scene and badge_level:
+                scene_name = str(scene).replace("BADGE_SCENE_TYPE_", "").upper()
+                if scene_name not in badge_dict:
+                    badge_dict[scene_name] = str(badge_level)
+        return list(badge_dict.items())
+
+    def _get_badge_level(self, badge_type: str, level: Optional[str | int] = None) -> Optional[int]:
+        """
+        Retrieve the level of a specific badge type with optional validation.
+
+        :param badge_type: Badge type to check (e.g., "FANS", "SUBSCRIBER").
+        :param level: Optional level to validate.
+        :return: Level as int if found and validated, None otherwise.
+        """
+
+        target_badge = badge_type.replace("BADGE_SCENE_TYPE_", "").upper()
+        for badge_name, badge_level in self._get_all_badge_info():
+            if badge_name == target_badge:
+                if level is None or str(level) == badge_level:
+                    return int(badge_level)
+        return None
+
+    def has_badge(self, badge_type: str, level: Optional[str | int] = None) -> bool:
+        """
+        Check if the user has a specific badge type with optional level validation.
+
+        :param badge_type: Badge type to check (e.g., "SUBSCRIBER").
+        :param level: Optional level to validate.
+        :return: True if the badge exists with matching criteria, False otherwise.
+        """
+
+        return self._get_badge_level(badge_type, level) is not None
+
+    @property
+    def get_all_badges(self) -> List[Tuple[str, str]]:
+        """
+        Retrieve all badges with their types and levels.
+
+        :return: List of (badge_type, level) tuples
+        """
+
+        return self._get_all_badge_info()
+
+    @property
+    def is_moderator(self) -> bool:
+        """
+        Is the user a moderator in the stream
+
+        :return: Whether the user has the moderator badge
+
+        """
+
+        return bool(self._get_badge_level("ADMIN") == 0)
+
+    @property
+    def is_top_gifter(self) -> bool:
+        """
+        Is the user a top gifter in the stream
+
+        :return: Whether the user has the top gifter badge
+
+        """
+
+        return bool(self._get_badge_level("RANK_LIST") == 0)
+
+    @property
+    def member_level(self) -> Optional[int]:
+        """
+        What is the user's "member level" in the stream? This is a number.
+
+        :return: The parsed member level badge
+        """
+
+        return self._get_badge_level("FANS")
+
+    @property
+    def member_rank(self) -> Optional[str]:
+        """
+        What is the user's "member rank" in the stream? These are roman numerals.
+
+        :return: The parsed member rank from the member level badge
+
+        """
+
+        return self.member_level
+
+    @property
+    def gifter_level(self) -> Optional[int]:
+        """
+        What is the user's "gifter level" overall? An actual number specific to their level.
+
+        :return: The parsed gifter level from the gifter level badge
+
+        """
+
+        return self._get_badge_level("USER_GRADE")
+
+
+=== User Source ===
+@dataclass(eq=False, repr=False)
+class User(betterproto.Message):
+    id: int = betterproto.int64_field(1)
+    nick_name: str = betterproto.string_field(3)
+    avatar_thumb: "ImageModel" = betterproto.message_field(9)
+    avatar_medium: "ImageModel" = betterproto.message_field(10)
+    avatar_large: "ImageModel" = betterproto.message_field(11)
+    is_verified: bool = betterproto.bool_field(12)
+    status: int = betterproto.int32_field(15)
+    create_time: int = betterproto.int64_field(16)
+    modify_time: int = betterproto.int64_field(17)
+    secret: int = betterproto.int32_field(18)
+    share_qrcode_uri: str = betterproto.string_field(19)
+    follow_info: "FollowInfo" = betterproto.message_field(22)
+    user_honor: "UserHonor" = betterproto.message_field(23)
+    fans_club: "FansClubMember" = betterproto.message_field(24)
+    border: "BorderInfo" = betterproto.message_field(25)
+    special_id: str = betterproto.string_field(26)
+    avatar_border: "ImageModel" = betterproto.message_field(27)
+    medal: "ImageModel" = betterproto.message_field(28)
+    user_badges: List["ImageModel"] = betterproto.message_field(29)
+    new_user_badges: List["ImageModel"] = betterproto.message_field(30)
+    top_vip_no: int = betterproto.int32_field(31)
+    user_attr: "UserAttr" = betterproto.message_field(32)
+    own_room: "UserOwnRoom" = betterproto.message_field(33)
+    pay_score: int = betterproto.int64_field(34)
+    fan_ticket_count: int = betterproto.int64_field(35)
+    anchor_info: "AnchorInfo" = betterproto.message_field(36)
+    link_mic_stats: Optional["UserLinkmicStatus"] = betterproto.enum_field(
+        37, optional=True
+    )
+    username: str = betterproto.string_field(38)
+    enable_show_commerce_sale: bool = betterproto.bool_field(39)
+    with_fusion_shop_entry: bool = betterproto.bool_field(40)
+    pay_scores: int = betterproto.int64_field(41)
+    anchor_level: "AnchorLevel" = betterproto.message_field(42)
+    verified_content: str = betterproto.string_field(43)
+    author_info: "Author" = betterproto.message_field(44)
+    top_fans: List["User"] = betterproto.message_field(45)
+    sec_uid: str = betterproto.string_field(46)
+    user_role: int = betterproto.int32_field(47)
+    reward_info: "ActivityRewardInfo" = betterproto.message_field(49)
+    personal_card: "ImageModel" = betterproto.message_field(52)
+    authentication_info: "AuthenticationInfo" = betterproto.message_field(53)
+    media_badge_image_list: List["ImageModel"] = betterproto.message_field(57)
+    commerce_webcast_config_ids: List[int] = betterproto.int64_field(60)
+    borders: List["BorderInfo"] = betterproto.message_field(61)
+    combo_badge_info: "UserComboBadgeInfo" = betterproto.message_field(62)
+    subscribe_info: "SubscribeInfo" = betterproto.message_field(63)
+    badge_list: List["BadgeStruct"] = betterproto.message_field(64)
+    mint_type_label: List[int] = betterproto.int64_field(65)
+    fans_club_info: "UserFansClubInfo" = betterproto.message_field(66)
+    allow_find_by_contacts: bool = betterproto.bool_field(1002)
+    allow_others_download_video: bool = betterproto.bool_field(1003)
+    allow_others_download_when_sharing_video: bool = betterproto.bool_field(1004)
+    allow_share_show_profile: bool = betterproto.bool_field(1005)
+    allow_show_in_gossip: bool = betterproto.bool_field(1006)
+    allow_show_my_action: bool = betterproto.bool_field(1007)
+    allow_strange_comment: bool = betterproto.bool_field(1008)
+    allow_unfollower_comment: bool = betterproto.bool_field(1009)
+    allow_use_linkmic: bool = betterproto.bool_field(1010)
+    avatar_jpg: "ImageModel" = betterproto.message_field(1012)
+    background_img_url: str = betterproto.string_field(1013)
+    block_status: int = betterproto.int32_field(1016)
+    comment_restrict: int = betterproto.int32_field(1017)
+    constellation: str = betterproto.string_field(1018)
+    disable_ichat: int = betterproto.int32_field(1019)
+    enable_ichat_img: int = betterproto.int64_field(1020)
+    exp: int = betterproto.int32_field(1021)
+    fold_stranger_chat: bool = betterproto.bool_field(1023)
+    follow_status: int = betterproto.int64_field(1024)
+    ichat_restrict_type: int = betterproto.int32_field(1027)
+    id_str: str = betterproto.string_field(1028)
+    is_follower: bool = betterproto.bool_field(1029)
+    is_following: bool = betterproto.bool_field(1030)
+    need_profile_guide: bool = betterproto.bool_field(1031)
+    push_comment_status: bool = betterproto.bool_field(1033)
+    push_digg: bool = betterproto.bool_field(1034)
+    push_follow: bool = betterproto.bool_field(1035)
+    push_friend_action: bool = betterproto.bool_field(1036)
+    push_ichat: bool = betterproto.bool_field(1037)
+    push_status: bool = betterproto.bool_field(1038)
+    push_video_post: bool = betterproto.bool_field(1039)
+    push_video_recommend: bool = betterproto.bool_field(1040)
+    verified_reason: str = betterproto.string_field(1043)
+    enable_car_management_permission: bool = betterproto.bool_field(1044)
+    upcoming_event_list: List["LiveEventInfo"] = betterproto.message_field(1045)
+    scm_label: str = betterproto.string_field(1046)
+    ecommerce_entrance: "EcommerceEntrance" = betterproto.message_field(1047)
+    is_block: bool = betterproto.bool_field(1048)
+    is_subscribe: bool = betterproto.bool_field(1090)
+    is_anchor_marked: bool = betterproto.bool_field(1091)
+
+
+=== ExtendedUser MRO ===
+[<class 'TikTokLive.proto.custom_proto.ExtendedUser'>, <class 'TikTokLive.proto.tiktok_proto.User'>, <class 'betterproto.Message'>, <class 'abc.ABC'>, <class 'object'>]

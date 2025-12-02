@@ -64,6 +64,8 @@ async def get_me(
     # And leave `UserProfile` with just unlocked ones or empty if it's too big.
     # Let's put unlocked ones in UserProfile as requested.
 
+    is_authorized = await user_service.is_user_authorized_for_line(db, db_user.discord_id)
+
     user_profile = schemas.UserProfile(
         id=db_user.id,
         discord_id=db_user.discord_id,
@@ -73,7 +75,8 @@ async def get_me(
         roles=token.roles,
         moderated_reviewers=moderated_reviewers,
         spotify_connected=bool(db_user.spotify_access_token),
-        achievements=achievements_list
+        achievements=achievements_list,
+        is_line_authorized=is_authorized
     )
     return user_profile
 
@@ -265,3 +268,68 @@ async def create_payment_intent(
     except Exception as e:
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/{user_id}/stats", response_model=schemas.SubmitterStats)
+async def get_submitter_stats(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    # 1. Fetch User
+    result = await db.execute(select(models.User).filter(models.User.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # 2. Fetch Submissions
+    # We need to calculate average poll result and get genres
+    # We'll fetch the last 50 submissions for the list, but maybe calculate stats on all?
+    # For performance, let's fetch all submissions for stats calculation in Python (or do complex SQL)
+    # Given scale, fetching all might be okay for now, or we limit to last 100.
+    
+    stmt = (
+        select(models.Submission)
+        .filter(models.Submission.user_id == user_id)
+        .filter(models.Submission.status != "pending") # Only graded/played submissions? Or all?
+        .order_by(models.Submission.submitted_at.desc())
+    )
+    
+    result = await db.execute(stmt)
+    submissions = result.scalars().all()
+
+    # Calculate Stats
+    total_poll_percent = 0
+    poll_count = 0
+    genres_set = set()
+    
+    for sub in submissions:
+        if sub.poll_result_w_percent is not None:
+            total_poll_percent += sub.poll_result_w_percent
+            poll_count += 1
+        
+        if sub.genre:
+            # Split by comma if multiple genres? Assuming simple string for now or single genre
+            # If comma separated:
+            # for g in sub.genre.split(','): genres_set.add(g.strip())
+            genres_set.add(sub.genre)
+            
+    avg_poll = (total_poll_percent / poll_count) if poll_count > 0 else 0.0
+    
+    # Prepare response
+    # We return the top 20 most recent submissions for the list
+    recent_submissions = submissions[:20]
+    
+    # Map to schema
+    # Note: SubmissionPublic requires 'user' field. The ORM objects should have it loaded or lazy load it.
+    # Since we fetched submissions, 'user' relationship might need to be eager loaded or we assign it.
+    # To be safe and efficient, let's ensure we don't trigger N+1.
+    # Actually, we already have the 'user' object. We can manually attach it if needed, 
+    # but Pydantic from_attributes might try to access sub.user.
+    
+    return schemas.SubmitterStats(
+        user=user,
+        average_review_score=float(user.average_review_score or 0.0),
+        average_poll_result=avg_poll,
+        genres=sorted(list(genres_set)),
+        submissions=recent_submissions
+    )

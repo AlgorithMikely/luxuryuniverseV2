@@ -72,17 +72,35 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, amount, 
     const [clientSecret, setClientSecret] = useState("");
     const [email, setEmail] = useState("");
     const [tiktokHandle, setTiktokHandle] = useState("");
-    const [step, setStep] = useState<'email' | 'payment'>('email');
+    const [trackUrl, setTrackUrl] = useState("");
+    const [trackTitle, setTrackTitle] = useState("");
+    const [step, setStep] = useState<'track_info' | 'email' | 'payment'>('email');
     const [isInitializing, setIsInitializing] = useState(false);
 
     useEffect(() => {
-        if (!isOpen) {
+        if (isOpen) {
+            // Determine starting step
+            if (!submissionId && !metadata?.track_url) {
+                setStep('track_info');
+            } else {
+                setStep('email');
+            }
+        } else {
             setClientSecret("");
             setStep('email');
             setEmail("");
             setTiktokHandle("");
+            setTrackUrl("");
+            setTrackTitle("");
         }
-    }, [isOpen]);
+    }, [isOpen, submissionId, metadata]);
+
+    const handleTrackSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (trackUrl) {
+            setStep('email');
+        }
+    };
 
     const handleEmailSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -90,18 +108,13 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, amount, 
 
         setIsInitializing(true);
         try {
-            let finalTrackUrl = metadata?.track_url;
+            let finalTrackUrl = metadata?.track_url || trackUrl;
+            const finalTrackTitle = metadata?.track_title || trackTitle;
 
             // Check if track_url is a blob URL (indicating a local file)
             if (finalTrackUrl && finalTrackUrl.startsWith('blob:')) {
-                // We need the actual file object. 
-                // Since metadata passed from SmartZone only has the URL, we need to pass the file object too.
-                // Let's assume metadata.file is passed.
-                if (metadata.file) {
-                    // For free submissions, we can pass the file directly to the submit endpoint
-                    // For paid, we might still need to stage it if the webhook needs a URL.
-                    // But wait, if we use the submit endpoint directly for free, we don't need to stage it separately.
-                    // However, to keep logic consistent, let's see.
+                if (metadata?.file) {
+                    // Handled below or in stage
                 }
             }
 
@@ -109,15 +122,13 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, amount, 
             if (amount === 0) {
                 const formData = new FormData();
 
-                // Construct payload matching SmartZone
                 const items = [{
-                    track_url: metadata.track_url, // This might be blob: still. If so, we need to attach file.
-                    track_title: metadata.track_title || "Untitled",
+                    track_url: finalTrackUrl,
+                    track_title: finalTrackTitle || "Untitled",
                     priority_value: 0,
                     sequence_order: 1,
-                    // We might need artist/genre if passed in metadata
-                    artist: metadata.artist,
-                    genre: metadata.genre
+                    artist: metadata?.artist,
+                    genre: metadata?.genre
                 }];
 
                 const payload = {
@@ -129,12 +140,8 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, amount, 
                 formData.append('email', email);
                 if (tiktokHandle) formData.append('tiktok_handle', tiktokHandle);
 
-                if (metadata.file) {
+                if (metadata?.file) {
                     formData.append('files', metadata.file);
-                    // If we pass file, the backend handles it.
-                    // But we need to make sure track_url in JSON matches what backend expects?
-                    // Backend expects 'blob:' prefix to trigger file reading from 'files' list.
-                    // SmartZone sends 'blob:...' as track_url.
                 }
 
                 await api.post(`/reviewer/${reviewerId}/submit`, formData, {
@@ -147,8 +154,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, amount, 
             }
 
             // ... Paid Flow ...
-            // Stage file if needed for Stripe metadata (since webhook needs a URL)
-            if (finalTrackUrl && finalTrackUrl.startsWith('blob:') && metadata.file) {
+            if (finalTrackUrl && finalTrackUrl.startsWith('blob:') && metadata?.file) {
                 const formData = new FormData();
                 formData.append('file', metadata.file);
 
@@ -160,7 +166,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, amount, 
 
             // Create PaymentIntent
             const paymentType = submissionId ? 'skip_line' : 'priority_request';
-            const finalAmount = amount ? amount * 100 : 500; // Default to $5 if not specified (e.g. skip)
+            const finalAmount = amount ? amount * 100 : 500;
 
             const { data } = await api.post('/stripe/create-payment-intent', {
                 amount: finalAmount,
@@ -168,7 +174,7 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, amount, 
                 email: email,
                 tier: metadata?.tier || 'standard',
                 track_url: finalTrackUrl,
-                track_title: metadata?.track_title,
+                track_title: finalTrackTitle,
                 artist: metadata?.artist,
                 genre: metadata?.genre,
                 tiktok_handle: tiktokHandle
@@ -199,9 +205,42 @@ const CheckoutModal: React.FC<CheckoutModalProps> = ({ isOpen, onClose, amount, 
                     <X size={20} />
                 </button>
 
-                <h2 className="text-2xl font-bold mb-6">Complete Submission</h2>
+                <h2 className="text-2xl font-bold mb-6">
+                    {step === 'track_info' ? 'Track Details' : step === 'email' ? 'Contact Info' : 'Complete Payment'}
+                </h2>
 
-                {step === 'email' ? (
+                {step === 'track_info' ? (
+                    <form onSubmit={handleTrackSubmit} className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-1">Track Link (SoundCloud/Spotify)</label>
+                            <input
+                                type="url"
+                                required
+                                value={trackUrl}
+                                onChange={(e) => setTrackUrl(e.target.value)}
+                                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500"
+                                placeholder="https://soundcloud.com/..."
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-1">Track Title</label>
+                            <input
+                                type="text"
+                                required
+                                value={trackTitle}
+                                onChange={(e) => setTrackTitle(e.target.value)}
+                                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500"
+                                placeholder="My Awesome Track"
+                            />
+                        </div>
+                        <button
+                            type="submit"
+                            className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all"
+                        >
+                            Next
+                        </button>
+                    </form>
+                ) : step === 'email' ? (
                     <form onSubmit={handleEmailSubmit} className="space-y-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-400 mb-1">Email Address</label>

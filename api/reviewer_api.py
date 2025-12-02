@@ -108,6 +108,9 @@ async def submit_smart(
     
     config = reviewer.configuration or {}
 
+    # Check if tiers are open in active session
+    active_session = await queue_service.get_active_session_by_reviewer(db, reviewer_id)
+
     # Check Free Line Limit
     free_line_limit = config.get("free_line_limit")
     if free_line_limit is not None:
@@ -119,8 +122,23 @@ async def submit_smart(
             if existing_free_count + new_free_count > free_line_limit:
                 raise HTTPException(status_code=400, detail=f"Free line limit reached. Max {free_line_limit} active free submissions allowed.")
 
-    # Check if tiers are open in active session
-    active_session = await queue_service.get_active_session_by_reviewer(db, reviewer_id)
+    # Check Max Free Submissions Per Session
+    max_free_session = config.get("max_free_submissions_session")
+    if max_free_session is not None:
+        new_free_count = sum(1 for item in payload.submissions if item.priority_value == 0)
+        if new_free_count > 0 and active_session:
+            # Count total free submissions for this session
+            stmt = select(func.count(models.Submission.id)).where(
+                models.Submission.reviewer_id == reviewer_id,
+                models.Submission.session_id == active_session.id,
+                models.Submission.priority_value == 0
+            )
+            result = await db.execute(stmt)
+            current_session_free_count = result.scalar() or 0
+            
+            if current_session_free_count + new_free_count > max_free_session:
+                raise HTTPException(status_code=400, detail=f"Session limit reached. Max {max_free_session} free submissions allowed per session.")
+
     if active_session:
         open_tiers = set(active_session.open_queue_tiers) if active_session.open_queue_tiers else set()
         # Ensure 0 is treated correctly if not explicitly in list but implied? 
@@ -231,43 +249,113 @@ async def submit_smart(
 
                 # Check for duplicates
                 if not force_upload:
-                    stmt = select(models.Submission).filter(models.Submission.file_hash == file_hash).order_by(desc(models.Submission.submitted_at))
+                    stmt = select(models.Submission).filter(
+                        models.Submission.file_hash == file_hash,
+                        models.Submission.user_id == current_user.id
+                    ).order_by(desc(models.Submission.submitted_at))
                     result = await db.execute(stmt)
                     existing = result.scalars().first()
                     
                     if existing:
-                        # Construct duplicate info
-                        duplicate_info = {
-                            "message": "Duplicate file detected",
-                            "hash": file_hash,
-                            "existing_submission": {
-                                "id": existing.id,
-                                "track_title": existing.track_title,
-                                "submitted_at": existing.submitted_at.isoformat() if existing.submitted_at else None
+                        # Check if currently active
+                        is_active = existing.status in ['pending', 'playing']
+                        
+                        if is_active:
+                            # Construct duplicate info
+                            duplicate_info = {
+                                "message": "Track already in queue",
+                                "type": "file",
+                                "hash": file_hash,
+                                "is_active": is_active,
+                                "existing_submission": {
+                                    "id": existing.id,
+                                    "track_title": existing.track_title,
+                                    "status": existing.status,
+                                    "submitted_at": existing.submitted_at.isoformat() if existing.submitted_at else None
+                                }
                             }
-                        }
-                        raise HTTPException(status_code=409, detail=json.dumps(duplicate_info))
+                            raise HTTPException(status_code=409, detail=json.dumps(duplicate_info))
+                        else:
+                            # Not active? Reuse hash silently!
+                            final_file_hash = file_hash
+                            # Skip R2 upload logic
+                            uploaded_file = None # Prevent upload block from running
+                            final_track_url = existing.track_url # Reuse URL too if possible, or we rely on hash? 
+                            # Actually we need the URL. If we reuse hash, we should reuse the URL associated with that hash if we want to avoid re-uploading.
+                            # But wait, the existing submission has the URL.
+                            final_track_url = existing.track_url
 
                 # Secure filename
                 unique_filename = f"{uuid.uuid4()}{file_ext}"
                 
                 # Upload to R2
-                from services.storage_service import storage_service
-                try:
-                    # Reset file pointer just in case
-                    await uploaded_file.seek(0)
-                    final_track_url = await storage_service.upload_file(
-                        uploaded_file.file, 
-                        unique_filename, 
-                        uploaded_file.content_type or "application/octet-stream"
-                    )
-                except Exception as e:
-                    import logging
-                    logging.error(f"R2 Upload failed: {e}")
-                    raise HTTPException(status_code=500, detail="File upload failed. Please contact support.")
+                if uploaded_file:
+                    from services.storage_service import storage_service
+                    try:
+                        # Reset file pointer just in case
+                        await uploaded_file.seek(0)
+                        final_track_url = await storage_service.upload_file(
+                            uploaded_file.file, 
+                            unique_filename, 
+                            uploaded_file.content_type or "application/octet-stream"
+                        )
+                    except Exception as e:
+                        import logging
+                        logging.error(f"R2 Upload failed: {e}")
+                        raise HTTPException(status_code=500, detail="File upload failed. Please contact support.")
             else:
                 # Blob URL but no file and no reuse?
                 raise HTTPException(status_code=400, detail="Missing file for submission")
+        
+        else:
+            # Link Submission (not blob)
+            if not force_upload:
+                # Check for duplicate URL for this user
+                stmt = select(models.Submission).filter(
+                    models.Submission.user_id == current_user.id,
+                    models.Submission.track_url == item.track_url
+                ).order_by(desc(models.Submission.submitted_at))
+                result = await db.execute(stmt)
+                existing = result.scalars().first()
+
+                if existing:
+                    is_active = existing.status in ['pending', 'playing']
+                    duplicate_info = {
+                        "message": "Track already in queue" if is_active else "Duplicate link detected",
+                        "type": "link",
+                        "track_url": item.track_url,
+                        "is_active": is_active,
+                        "existing_submission": {
+                            "id": existing.id,
+                            "track_title": existing.track_title,
+                            "status": existing.status,
+                            "submitted_at": existing.submitted_at.isoformat() if existing.submitted_at else None
+                        }
+                    }
+                    raise HTTPException(status_code=409, detail=json.dumps(duplicate_info))
+
+        # Final check before creating: Ensure we aren't creating a duplicate active submission via reuse/force
+        # (If force_upload is True, we allow it, assuming user knows what they are doing or it's a new version)
+        # But if reuse_hash is used, we should double check.
+        if reuse_hash or (not files and not item.track_url.startswith("blob:")):
+             # Check if we are about to create a duplicate pending submission
+             check_hash = final_file_hash or (reused_submission.file_hash if reused_submission else None)
+             check_url = final_track_url
+             
+             stmt = select(models.Submission).filter(
+                models.Submission.user_id == current_user.id,
+                models.Submission.status.in_(['pending', 'playing'])
+             )
+             
+             if check_hash:
+                 stmt = stmt.filter(models.Submission.file_hash == check_hash)
+             else:
+                 stmt = stmt.filter(models.Submission.track_url == check_url)
+                 
+             result = await db.execute(stmt)
+             active_dup = result.scalars().first()
+             if active_dup and not force_upload:
+                  raise HTTPException(status_code=400, detail="This track is already in the queue.")
 
         # Log the hash being saved
         import logging
@@ -293,6 +381,43 @@ async def submit_smart(
         
         created_submissions.append(submission)
     
+    # --- ACHIEVEMENT TRIGGERS ---
+    # We do this after the loop to batch updates or just check once per batch
+    try:
+        from services import achievement_service
+        
+        # 1. Submission Count
+        # Get total count
+        count_stmt = select(func.count()).select_from(models.Submission).filter(models.Submission.user_id == current_user.id)
+        res_count = await db.execute(count_stmt)
+        total_submissions = res_count.scalar() or 0
+        await achievement_service.trigger_achievement(db, current_user.id, "SUBMISSION_COUNT", value=total_submissions)
+
+        # 2. Metadata Tags & Link Types
+        for item in payload.submissions:
+            title = (item.track_title or "").lower()
+            url = (item.track_url or "").lower()
+
+            # Producer Tag
+            if "(prod." in title:
+                await achievement_service.trigger_achievement(db, current_user.id, "METADATA_TAG", specific_slug="producer_tag")
+            
+            # Collaborator
+            if "feat." in title or "ft." in title:
+                await achievement_service.trigger_achievement(db, current_user.id, "METADATA_TAG", specific_slug="collaborator")
+
+            # SoundCloud Rapper
+            if "soundcloud.com" in url:
+                await achievement_service.trigger_achievement(db, current_user.id, "LINK_TYPE", specific_slug="soundcloud_rapper")
+
+            # DSP Pro
+            if "spotify.com" in url or "music.apple.com" in url:
+                await achievement_service.trigger_achievement(db, current_user.id, "LINK_TYPE", specific_slug="dsp_pro")
+
+    except Exception as e:
+        import logging
+        logging.error(f"Failed to trigger achievements on submission: {e}")
+
     # No need to commit here as create_submission commits
     return created_submissions
 
@@ -388,6 +513,23 @@ async def remove_submission(submission_id: int, db: AsyncSession = Depends(get_d
         raise HTTPException(status_code=404, detail="Submission not found")
     return {"status": "success", "message": "Submission removed"}
 
+@router.get("/{reviewer_id}/bookmarks", response_model=List[schemas.Submission], dependencies=[Depends(check_is_reviewer)])
+async def get_bookmarks(reviewer_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Fetches all bookmarked submissions for a reviewer.
+    """
+    return await queue_service.get_bookmarked_submissions(db, reviewer_id)
+
+@router.patch("/{reviewer_id}/queue/{submission_id}", response_model=schemas.Submission, dependencies=[Depends(check_is_reviewer)])
+async def update_submission(reviewer_id: int, submission_id: int, update_data: schemas.SubmissionUpdate, db: AsyncSession = Depends(get_db)):
+    """
+    Updates submission details, such as tags (playlists).
+    """
+    submission = await queue_service.update_submission_details(db, submission_id, update_data)
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    return submission
+
 @router.get("/{reviewer_id}/queue/initial-state", response_model=schemas.FullQueueState, dependencies=[Depends(check_is_reviewer)])
 async def get_initial_state(reviewer_id: int, db: AsyncSession = Depends(get_db)):
     """
@@ -457,6 +599,18 @@ async def get_public_reviewer_profile(identifier: str, db: AsyncSession = Depend
         reviewer.open_queue_tiers = []
 
     return reviewer
+
+@router.get("/{reviewer_id}/giveaway/state", response_model=Optional[schemas.GiveawayState])
+async def get_public_giveaway_state(reviewer_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Public endpoint to fetch the current giveaway state.
+    """
+    # Verify reviewer exists
+    reviewer = await queue_service.get_reviewer_by_id(db, reviewer_id)
+    if not reviewer:
+        raise HTTPException(status_code=404, detail="Reviewer not found")
+        
+    return await queue_service.get_giveaway_state(db, reviewer_id)
 
 @router.patch("/{reviewer_id}/settings", response_model=schemas.ReviewerProfile, dependencies=[Depends(check_is_reviewer)])
 async def update_reviewer_settings(reviewer_id: int, settings: schemas.ReviewerSettingsUpdate, db: AsyncSession = Depends(get_db)):
@@ -539,3 +693,35 @@ async def sync_reviewer_avatar(reviewer_id: int, db: AsyncSession = Depends(get_
         import logging
         logging.error(f"Error syncing avatar: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to sync avatar: {str(e)}")
+
+@router.get("/{reviewer_id}/discord/channels", response_model=List[schemas.DiscordChannel], dependencies=[Depends(check_is_reviewer)])
+async def get_discord_channels(reviewer_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Fetches available text and voice channels from the Discord guild.
+    """
+    from bot_instance import bot
+    import discord
+    
+    if not bot or not bot.is_ready():
+         raise HTTPException(status_code=503, detail="Discord bot is not ready")
+
+    # We need to find the guild. 
+    # Default to first guild for now as per ChannelCreatorCog
+    guild = None
+    if bot.guilds:
+        guild = bot.guilds[0]
+    
+    if not guild:
+        raise HTTPException(status_code=404, detail="Bot is not in any guild")
+
+    channels = []
+    for channel in guild.channels:
+        if isinstance(channel, (discord.TextChannel, discord.VoiceChannel)):
+             channels.append({
+                 "id": str(channel.id),
+                 "name": channel.name,
+                 "type": "text" if isinstance(channel, discord.TextChannel) else "voice",
+                 "category": channel.category.name if channel.category else None
+             })
+    
+    return channels

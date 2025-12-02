@@ -1,14 +1,18 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, func
 from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm.attributes import flag_modified
 import models
 import schemas
 from typing import Optional, List
 from services import broadcast as broadcast_service
+from services import giveaway_service
 from services import user_service
 from services import achievement_service
 import datetime
 import uuid
+
+AVERAGE_REVIEW_TIME_MINUTES = 4
 
 async def create_submission(db: AsyncSession, reviewer_id: int, user_id: int, track_url: str, track_title: str, archived_url: str, session_id: Optional[int] = None, batch_id: Optional[str] = None, sequence_order: int = 1, hook_start_time: Optional[int] = None, hook_end_time: Optional[int] = None, priority_value: int = 0, artist: Optional[str] = None, genre: Optional[str] = None, file_hash: Optional[str] = None) -> models.Submission:
     new_submission = models.Submission(
@@ -70,6 +74,12 @@ async def create_submission(db: AsyncSession, reviewer_id: int, user_id: int, tr
         unique_genres.add(genre)
         await achievement_service.trigger_achievement(db, user_id, "GENRE_COUNT", len(unique_genres))
 
+    # Anti-Cannibalization: Paid Override
+    # If this is a paid submission (priority > 0), extend the giveaway cooldown
+    if priority_value > 0:
+        # Extend by 5 minutes (or whatever rule)
+        await giveaway_service.extend_cooldown(db, reviewer_id, minutes=5)
+
     await db.commit()
 
     # FIXED: Re-fetch the submission to eager-load the 'user' relationship for the API response
@@ -79,8 +89,10 @@ async def create_submission(db: AsyncSession, reviewer_id: int, user_id: int, tr
 
     # Emit a queue update
     new_queue = await get_pending_queue(db, reviewer_id)
-    queue_schemas = [schemas.Submission.model_validate(s) for s in new_queue]
-    await broadcast_service.emit_queue_update(reviewer_id, [s.model_dump() for s in queue_schemas])
+    # Apply Zipper Merge
+    zipped_queue = apply_zipper_merge(new_queue)
+    queue_schemas = [schemas.Submission.model_validate(s) for s in zipped_queue]
+    await broadcast_service.emit_queue_update(reviewer_id, [s.model_dump(mode='json') for s in queue_schemas])
 
     return loaded_submission
 
@@ -96,6 +108,32 @@ async def get_pending_queue(db: AsyncSession, reviewer_id: int) -> list[models.S
     )
     return result.scalars().all()
 
+def apply_zipper_merge(queue: List[models.Submission]) -> List[models.Submission]:
+    """
+    Interleaves Paid (Priority) and Free submissions using a 3:1 ratio.
+    Pattern: Paid, Paid, Paid, Free, Paid...
+    """
+    priority_queue = [s for s in queue if s.priority_value > 0]
+    free_queue = [s for s in queue if s.priority_value == 0]
+    
+    merged_queue = []
+    
+    while priority_queue or free_queue:
+        # Add up to 3 priority tracks
+        for _ in range(3):
+            if priority_queue:
+                merged_queue.append(priority_queue.pop(0))
+        
+        # Add 1 free track
+        if free_queue:
+            merged_queue.append(free_queue.pop(0))
+            
+        # If no priority tracks left, append remaining free tracks? 
+        # Or if no free tracks left, append remaining priority?
+        # The loop continues until both are empty.
+        
+    return merged_queue
+
 async def set_queue_status(db: AsyncSession, reviewer_id: int, status: str):
     result = await db.execute(select(models.Reviewer).filter(models.Reviewer.id == reviewer_id))
     reviewer = result.scalars().first()
@@ -104,8 +142,6 @@ async def set_queue_status(db: AsyncSession, reviewer_id: int, status: str):
         await db.commit()
         await db.refresh(reviewer)
     return reviewer
-
-from sqlalchemy.orm.attributes import flag_modified
 
 async def _update_reviewer_active_track(db: AsyncSession, reviewer_id: int, submission_id: Optional[int]):
     """Helper to update the reviewer's active track configuration."""
@@ -170,12 +206,13 @@ async def advance_queue(db: AsyncSession, reviewer_id: int) -> Optional[models.S
 
         # Emit current track update so frontend knows what to play
         submission_schema = schemas.Submission.model_validate(submission)
-        await broadcast_service.emit_current_track_update(reviewer_id, submission_schema.model_dump())
+        await broadcast_service.emit_current_track_update(reviewer_id, submission_schema.model_dump(mode='json'))
 
         # Emit queue update as well since status changed
         new_queue = await get_pending_queue(db, reviewer_id)
-        queue_schemas = [schemas.Submission.model_validate(s) for s in new_queue]
-        await broadcast_service.emit_queue_update(reviewer_id, [s.model_dump() for s in queue_schemas])
+        zipped_queue = apply_zipper_merge(new_queue)
+        queue_schemas = [schemas.Submission.model_validate(s) for s in zipped_queue]
+        await broadcast_service.emit_queue_update(reviewer_id, [s.model_dump(mode='json') for s in queue_schemas])
     else:
         # Clear active track if queue is empty
         await _update_reviewer_active_track(db, reviewer_id, None)
@@ -210,12 +247,8 @@ async def set_track_playing(db: AsyncSession, reviewer_id: int, submission_id: i
     if not submission:
         return None
 
-    # Only change status to playing if it's currently pending
-    # Do NOT change status if it is 'reviewed', 'played', etc.
-    if submission.status == 'pending':
-        submission.status = 'playing'
-    elif submission.status == 'playing':
-        pass # Already playing
+    # Always set status to playing when selected as active track
+    submission.status = 'playing'
 
     # Update reviewer config pointer
     await _update_reviewer_active_track(db, reviewer_id, submission.id)
@@ -225,11 +258,12 @@ async def set_track_playing(db: AsyncSession, reviewer_id: int, submission_id: i
 
     # 3. Broadcast updates
     submission_schema = schemas.Submission.model_validate(submission)
-    await broadcast_service.emit_current_track_update(reviewer_id, submission_schema.model_dump())
+    await broadcast_service.emit_current_track_update(reviewer_id, submission_schema.model_dump(mode='json'))
 
     new_queue = await get_pending_queue(db, reviewer_id)
-    queue_schemas = [schemas.Submission.model_validate(s) for s in new_queue]
-    await broadcast_service.emit_queue_update(reviewer_id, [s.model_dump() for s in queue_schemas])
+    zipped_queue = apply_zipper_merge(new_queue)
+    queue_schemas = [schemas.Submission.model_validate(s) for s in zipped_queue]
+    await broadcast_service.emit_queue_update(reviewer_id, [s.model_dump(mode='json') for s in queue_schemas])
 
     return submission
 
@@ -258,8 +292,9 @@ async def return_active_to_queue(db: AsyncSession, reviewer_id: int):
 
     # Emit updates
     new_queue = await get_pending_queue(db, reviewer_id)
-    queue_schemas = [schemas.Submission.model_validate(s) for s in new_queue]
-    await broadcast_service.emit_queue_update(reviewer_id, [s.model_dump() for s in queue_schemas])
+    zipped_queue = apply_zipper_merge(new_queue)
+    queue_schemas = [schemas.Submission.model_validate(s) for s in zipped_queue]
+    await broadcast_service.emit_queue_update(reviewer_id, [s.model_dump(mode='json') for s in queue_schemas])
     
     await broadcast_service.emit_current_track_update(reviewer_id, None)
 
@@ -321,17 +356,21 @@ def _merge_reviewer_config(reviewer: Optional[models.Reviewer]) -> Optional[mode
         return None
 
     default_tiers = [
-        {"value": 0, "label": "Free", "color": "gray"},
-        {"value": 5, "label": "$5 Tier", "color": "green"},
-        {"value": 10, "label": "$10 Tier", "color": "blue"},
-        {"value": 15, "label": "$15 Tier", "color": "purple"},
-        {"value": 20, "label": "$20 Tier", "color": "yellow"},
-        {"value": 25, "label": "$25 Tier", "color": "red"},
-        {"value": 50, "label": "50+ Tier", "color": "pink"},
+        {"value": 3, "label": "⚡ Fast Pass", "color": "blue", "description": "Jump to Top 50%"},
+        {"value": 10, "label": "🚀 Priority", "color": "purple", "description": "Jump to Top 10 (Skips ~20 songs)"},
+        {"value": 25, "label": "👑 VIP Instant", "color": "red", "description": "Play Next (#1) - 2 Songs Back to Back"},
+        {"value": 50, "label": "💎 Super VIP", "color": "gold", "description": "3 Songs Back to Back to Back"},
     ]
+    
+    default_goal = {
+        "type": "LIKES",
+        "target": 1000,
+        "current": 0,
+        "description": "Reach 1000 Likes for a Hot Seat Draw!"
+    }
 
     if not reviewer.configuration:
-        reviewer.configuration = {"priority_tiers": default_tiers}
+        reviewer.configuration = {"priority_tiers": default_tiers, "community_goal": default_goal}
     
     # Ensure the configuration is a valid dict (though SQLAlchemy handles JSON decoding)
     if isinstance(reviewer.configuration, str):
@@ -339,11 +378,14 @@ def _merge_reviewer_config(reviewer: Optional[models.Reviewer]) -> Optional[mode
         try:
             reviewer.configuration = json.loads(reviewer.configuration)
         except json.JSONDecodeError:
-             reviewer.configuration = {"priority_tiers": default_tiers}
+             reviewer.configuration = {"priority_tiers": default_tiers, "community_goal": default_goal}
 
     if "priority_tiers" not in reviewer.configuration:
          # If config exists but no tiers, merge defaults
         reviewer.configuration["priority_tiers"] = default_tiers
+        
+    if "community_goal" not in reviewer.configuration:
+        reviewer.configuration["community_goal"] = default_goal
 
     return reviewer
 
@@ -360,6 +402,8 @@ async def update_reviewer_settings(db: AsyncSession, reviewer_id: int, settings_
         reviewer.tiktok_handle = update_data["tiktok_handle"]
     if "discord_channel_id" in update_data:
         reviewer.discord_channel_id = update_data["discord_channel_id"]
+    if "see_the_line_channel_id" in update_data:
+        reviewer.see_the_line_channel_id = update_data["see_the_line_channel_id"]
     if "avatar_url" in update_data:
         reviewer.avatar_url = update_data["avatar_url"]
     if "bio" in update_data:
@@ -388,6 +432,8 @@ async def update_reviewer_settings(db: AsyncSession, reviewer_id: int, settings_
              current_config[key] = value
 
         reviewer.configuration = current_config
+        # Explicitly flag as modified to ensure persistence of JSON changes
+        flag_modified(reviewer, "configuration")
 
     if "economy_configs" in update_data and update_data["economy_configs"] is not None:
         new_configs = update_data["economy_configs"]
@@ -416,7 +462,16 @@ async def update_reviewer_settings(db: AsyncSession, reviewer_id: int, settings_
     await db.refresh(reviewer)
 
     # Re-fetch with user to return full object
-    return await get_reviewer_by_user_id(db, reviewer.user_id)
+    updated_reviewer = await get_reviewer_by_user_id(db, reviewer.user_id)
+    
+    # Emit settings update
+    if updated_reviewer:
+        # We need to serialize the reviewer object to dict/json
+        # Using schemas.ReviewerProfile to validate and dump
+        reviewer_schema = schemas.ReviewerProfile.model_validate(updated_reviewer)
+        await broadcast_service.emit_reviewer_settings_update(reviewer_id, reviewer_schema.model_dump(mode='json'))
+
+    return updated_reviewer
 
 async def get_submissions_by_user(db: AsyncSession, user_id: int) -> list[models.Submission]:
     result = await db.execute(
@@ -475,8 +530,9 @@ async def update_priority(db: AsyncSession, submission_id: int, priority_value: 
         
         # Emit queue update because order might change
         new_queue = await get_pending_queue(db, submission.reviewer_id)
-        queue_schemas = [schemas.Submission.model_validate(s) for s in new_queue]
-        await broadcast_service.emit_queue_update(submission.reviewer_id, [s.model_dump() for s in queue_schemas])
+        zipped_queue = apply_zipper_merge(new_queue)
+        queue_schemas = [schemas.Submission.model_validate(s) for s in zipped_queue]
+        await broadcast_service.emit_queue_update(submission.reviewer_id, [s.model_dump(mode='json') for s in queue_schemas])
         
     return submission
 
@@ -570,10 +626,24 @@ async def get_current_track(db: AsyncSession, reviewer_id: int) -> Optional[mode
     )
     return result.scalars().first()
 
-AVERAGE_REVIEW_TIME_MINUTES = 4
-
 async def get_initial_state(db: AsyncSession, reviewer_id: int) -> schemas.FullQueueState:
+    # Trigger Lottery Check (Lazy Load) - Now Community Goal Check
+    # We don't need to check time-based lottery if we are doing goal-based.
+    # But we might want to keep it as a fallback? 
+    # User said "it could either rotate or it could have a time".
+    # Let's stick to Goal-Based for now as requested.
+    # The listener updates the goal progress. We just need to read it.
+    
+    # Ensure goal exists in config
+    reviewer = await get_reviewer_by_id(db, reviewer_id)
+    config = _merge_reviewer_config(reviewer)
+    if reviewer.configuration != config.configuration:
+        reviewer.configuration = config.configuration
+        flag_modified(reviewer, "configuration")
+        await db.commit()
+
     queue = await get_pending_queue(db, reviewer_id)
+    zipped_queue = apply_zipper_merge(queue)
     history = await get_played_queue(db, reviewer_id)
     bookmarks = await get_bookmarked_submissions(db, reviewer_id)
     spotlight = await get_spotlighted_submissions(db, reviewer_id)
@@ -585,13 +655,40 @@ async def get_initial_state(db: AsyncSession, reviewer_id: int) -> schemas.FullQ
     # But let's make sure we export the constant or handle it.
     # For now, frontend calculation is sufficient given the schema.
 
+    # Check for active LiveSession
+    is_live = False
+    reviewer = await get_reviewer_by_id(db, reviewer_id)
+    if reviewer:
+        stmt_live = select(models.LiveSession).filter(
+            models.LiveSession.user_id == reviewer.user_id,
+            models.LiveSession.status == 'LIVE'
+        )
+        result_live = await db.execute(stmt_live)
+        active_session = result_live.scalars().first()
+        if active_session:
+            is_live = True
+
+    # Get Giveaway State
+    giveaway_states = await giveaway_service.get_giveaway_states(db, reviewer_id)
+    # For backward compatibility, return the first one or None
+    giveaway_state = giveaway_states[0] if giveaway_states else None
+
     return schemas.FullQueueState(
-        queue=[schemas.Submission.model_validate(s) for s in queue],
+        queue=[schemas.Submission.model_validate(s) for s in zipped_queue],
         history=[schemas.Submission.model_validate(s) for s in history],
         bookmarks=[schemas.Submission.model_validate(s) for s in bookmarks],
         spotlight=[schemas.Submission.model_validate(s) for s in spotlight],
         current_track=schemas.Submission.model_validate(current_track) if current_track else None,
+        is_live=is_live,
+        giveaway_state=giveaway_state
     )
+
+async def get_giveaway_state(db: AsyncSession, reviewer_id: int) -> Optional[schemas.GiveawayState]:
+    """
+    Wrapper to fetch giveaway state from giveaway_service.
+    """
+    states = await giveaway_service.get_giveaway_states(db, reviewer_id)
+    return states[0] if states else None
 
 async def get_reviewer_stats(db: AsyncSession, reviewer_id: int) -> schemas.QueueStats:
     queue = await get_pending_queue(db, reviewer_id)
@@ -650,8 +747,9 @@ async def update_submission_details(db: AsyncSession, submission_id: int, update
     # If pending, emit queue update.
     if submission.status == 'pending':
         new_queue = await get_pending_queue(db, submission.reviewer_id)
-        queue_schemas = [schemas.Submission.model_validate(s) for s in new_queue]
-        await broadcast_service.emit_queue_update(submission.reviewer_id, [s.model_dump() for s in queue_schemas])
+        zipped_queue = apply_zipper_merge(new_queue)
+        queue_schemas = [schemas.Submission.model_validate(s) for s in zipped_queue]
+        await broadcast_service.emit_queue_update(submission.reviewer_id, [s.model_dump(mode='json') for s in queue_schemas])
     elif submission.status in ['played', 'reviewed']:
         # If history, emit history update?
         # Maybe not strictly necessary for editing history items, but good for consistency.
@@ -747,12 +845,13 @@ async def review_submission(db: AsyncSession, submission_id: int, review: schema
     # Emit a history update
     new_history = await get_played_queue(db, submission.reviewer_id)
     history_schemas = [schemas.Submission.model_validate(s) for s in new_history]
-    await broadcast_service.emit_history_update(submission.reviewer_id, [s.model_dump() for s in history_schemas])
+    await broadcast_service.emit_history_update(submission.reviewer_id, [s.model_dump(mode='json') for s in history_schemas])
 
     # Emit a queue update to remove the reviewed submission from the queue list
     new_queue = await get_pending_queue(db, submission.reviewer_id)
-    queue_schemas = [schemas.Submission.model_validate(s) for s in new_queue]
-    await broadcast_service.emit_queue_update(submission.reviewer_id, [s.model_dump() for s in queue_schemas])
+    zipped_queue = apply_zipper_merge(new_queue)
+    queue_schemas = [schemas.Submission.model_validate(s) for s in zipped_queue]
+    await broadcast_service.emit_queue_update(submission.reviewer_id, [s.model_dump(mode='json') for s in queue_schemas])
 
     # Emit current track update (clearing it, or keeping it as reviewed? Usually we move to next, but for now let's just update it)
     # Actually, if we just reviewed it, it's no longer "playing" in the sense of "waiting to be reviewed", but it might still be the current track until "Next" is clicked.
@@ -768,18 +867,14 @@ async def review_submission(db: AsyncSession, submission_id: int, review: schema
     # Then it calls `handleNextTrack` if not historical.
     # So `review_submission` should indeed move it to history.
     
-    # We should probably NOT emit a current_track_update here that clears it, because the user might still be looking at it.
-    # But if status is 'reviewed', it won't be picked up by 'get_current_track'.
-    # So if the frontend refreshes, it might disappear from "Now Playing" if we rely solely on 'playing' status.
-    # But `ReviewHub` uses `currentTrack` from store.
-    # If we update the submission, `updateSubmission` in store updates it.
-    # So we don't strictly need to emit current_track_update here if the frontend handles the response.
-    # BUT, other clients (viewers) need to know.
-    # If I review it, it goes to history. Does it stay as current track for viewers?
-    # Usually yes, until next track.
-    # So maybe 'reviewed' status should also be considered "current" if it was just playing?
-    # Or maybe we shouldn't change status to 'reviewed' until we click next?
-    # But the user said "submissions should only be removed from the queue and added to the list when that submission has the submit review and next track button pressed".
+    # Emit current track update (clearing it, or keeping it as reviewed? Usually we move to next, but for now let's just update it)
+    # Actually, if we just reviewed it, it's no longer "playing" in the sense of "waiting to be reviewed", but it might still be the current track until "Next" is clicked.
+    # However, the user wants it to move to history.
+    # If we change status to 'reviewed', get_current_track will return None.
+    # So we should emit a null current track update? Or let the frontend handle it?
+    # The frontend ReviewHub handles "Submit & Next".
+    # If we just submit, we might want to keep showing it until we click next.
+    # But the request says "submissions should only be removed from the queue and added to the list when that submission has the submit review and next track button pressed".
     # This implies the action is atomic or sequential.
     # If I click "Submit & Next", it does both.
     # If I just click "Save" (on played), it updates review.
@@ -789,7 +884,7 @@ async def review_submission(db: AsyncSession, submission_id: int, review: schema
     # We should also probably emit current_track_update with the reviewed submission so clients see the score/notes?
     # Yes.
     submission_schema = schemas.Submission.model_validate(submission)
-    await broadcast_service.emit_current_track_update(submission.reviewer_id, submission_schema.model_dump())
+    await broadcast_service.emit_current_track_update(submission.reviewer_id, submission_schema.model_dump(mode='json'))
 
     return submission
 
@@ -973,7 +1068,248 @@ async def remove_submission(db: AsyncSession, submission_id: int) -> Optional[mo
     
     # Emit queue update
     new_queue = await get_pending_queue(db, submission.reviewer_id)
+# If we just submit, we might want to keep showing it until we click next.
+    # But the request says "submissions should only be removed from the queue and added to the list when that submission has the submit review and next track button pressed".
+    # This implies the action is atomic or sequential.
+    # If I click "Submit & Next", it does both.
+    # If I just click "Save" (on played), it updates review.
+    
+    # Let's stick to the plan: review_submission sets status to 'reviewed'.
+    # And we emit history update.
+    # We should also probably emit current_track_update with the reviewed submission so clients see the score/notes?
+    # Yes.
+    submission_schema = schemas.Submission.model_validate(submission)
+    await broadcast_service.emit_current_track_update(submission.reviewer_id, submission_schema.model_dump(mode='json'))
+
+    return submission
+
+async def create_session(db: AsyncSession, reviewer_id: int, name: str, open_queue_tiers: Optional[list[int]] = None) -> models.ReviewSession:
+    await db.execute(
+        update(models.ReviewSession)
+        .where(models.ReviewSession.reviewer_id == reviewer_id)
+        .values(is_active=False)
+    )
+
+    # If open_queue_tiers is not provided, default to ALL tiers from reviewer config
+    if open_queue_tiers is None:
+        # Fetch reviewer to get config
+        reviewer = await get_reviewer_by_id(db, reviewer_id)
+        if reviewer and reviewer.configuration and "priority_tiers" in reviewer.configuration:
+            open_queue_tiers = [t["value"] for t in reviewer.configuration["priority_tiers"]]
+        else:
+            # Fallback defaults if no config
+            open_queue_tiers = [0, 5, 10, 15, 20, 25, 50]
+
+    new_session = models.ReviewSession(
+        reviewer_id=reviewer_id,
+        name=name,
+        is_active=True,
+        open_queue_tiers=open_queue_tiers
+    )
+    db.add(new_session)
+    
+    # Automate Queue Status: Open if Free tier (0) is active, else Closed
+    new_status = "open" if 0 in open_queue_tiers else "closed"
+    await set_queue_status(db, reviewer_id, new_status)
+
+    await db.commit()
+
+    # FIXED: Nested loading of submissions and their users
+    result = await db.execute(
+        select(models.ReviewSession)
+        .options(selectinload(models.ReviewSession.submissions).joinedload(models.Submission.user))
+        .filter(models.ReviewSession.id == new_session.id)
+    )
+    return result.scalars().first()
+
+async def get_sessions_by_reviewer(db: AsyncSession, reviewer_id: int) -> list[models.ReviewSession]:
+    # FIXED: Nested loading
+    result = await db.execute(
+        select(models.ReviewSession)
+        .options(selectinload(models.ReviewSession.submissions).joinedload(models.Submission.user))
+        .filter(models.ReviewSession.reviewer_id == reviewer_id)
+    )
+    return result.scalars().all()
+
+async def get_active_session_by_reviewer(db: AsyncSession, reviewer_id: int) -> Optional[models.ReviewSession]:
+    # FIXED: Nested loading of submissions.user so Pydantic can serialize it
+    result = await db.execute(
+        select(models.ReviewSession)
+        .options(selectinload(models.ReviewSession.submissions).joinedload(models.Submission.user))
+        .filter(
+            models.ReviewSession.reviewer_id == reviewer_id,
+            models.ReviewSession.is_active == True
+        )
+    )
+    return result.scalars().first()
+
+async def activate_session(db: AsyncSession, reviewer_id: int, session_id: int) -> models.ReviewSession:
+    await db.execute(
+        update(models.ReviewSession)
+        .where(models.ReviewSession.reviewer_id == reviewer_id)
+        .values(is_active=False)
+    )
+
+    # FIXED: Nested loading
+    result = await db.execute(
+        select(models.ReviewSession)
+        .options(selectinload(models.ReviewSession.submissions).joinedload(models.Submission.user))
+        .filter(models.ReviewSession.id == session_id)
+    )
+    session = result.scalars().first()
+
+    if not session:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    session.is_active = True
+    await db.commit()
+    return session
+
+async def archive_session(db: AsyncSession, reviewer_id: int, session_id: int) -> models.ReviewSession:
+    # FIXED: Nested loading
+    result = await db.execute(
+        select(models.ReviewSession)
+        .options(selectinload(models.ReviewSession.submissions).joinedload(models.Submission.user))
+        .filter(models.ReviewSession.id == session_id, models.ReviewSession.reviewer_id == reviewer_id)
+    )
+    session = result.scalars().first()
+
+    if not session:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    session.is_active = False
+    
+    # Archive all pending submissions for this reviewer
+    # This effectively clears the queue
+    pending_result = await db.execute(
+        select(models.Submission)
+        .filter(
+            models.Submission.reviewer_id == reviewer_id,
+            models.Submission.status == 'pending'
+        )
+    )
+    pending_submissions = pending_result.scalars().all()
+    
+    for sub in pending_submissions:
+        sub.status = 'archived'
+        
+    await db.commit()
+    
+    # Emit empty queue update
+    await broadcast_service.emit_queue_update(reviewer_id, [])
+    
+    return session
+
+async def update_session(db: AsyncSession, reviewer_id: int, session_id: int, session_update: schemas.ReviewSessionUpdate) -> models.ReviewSession:
+    # FIXED: Nested loading
+    result = await db.execute(
+        select(models.ReviewSession)
+        .options(selectinload(models.ReviewSession.submissions).joinedload(models.Submission.user))
+        .filter(models.ReviewSession.id == session_id, models.ReviewSession.reviewer_id == reviewer_id)
+    )
+    session = result.scalars().first()
+
+    if not session:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    update_data = session_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(session, key, value)
+
+    # Automate Queue Status on update if tiers changed
+    if "open_queue_tiers" in update_data:
+        tiers = update_data["open_queue_tiers"]
+        # If tiers is None (which shouldn't happen with exclude_unset=True unless explicitly set to None), handle it
+        if tiers is not None:
+            new_status = "open" if 0 in tiers else "closed"
+            await set_queue_status(db, reviewer_id, new_status)
+
+    await db.commit()
+
+    # Emit settings update so frontend knows about open/closed tiers
+    # We need to fetch the full reviewer object with the updated session info
+    rev_stmt = select(models.Reviewer).filter(models.Reviewer.id == reviewer_id)
+    rev_res = await db.execute(rev_stmt)
+    rev_obj = rev_res.scalars().first()
+    
+    if rev_obj:
+         updated_reviewer = await get_reviewer_by_user_id(db, rev_obj.user_id)
+         if updated_reviewer:
+            reviewer_schema = schemas.ReviewerProfile.model_validate(updated_reviewer)
+            await broadcast_service.emit_reviewer_settings_update(reviewer_id, reviewer_schema.model_dump(mode='json'))
+
+    return session
+
+async def get_session_by_id(db: AsyncSession, session_id: int) -> Optional[models.ReviewSession]:
+    # FIXED: Nested loading
+    result = await db.execute(
+        select(models.ReviewSession)
+        .options(selectinload(models.ReviewSession.submissions).joinedload(models.Submission.user))
+        .filter(models.ReviewSession.id == session_id)
+    )
+    return result.scalars().first()
+
+async def get_submissions_by_session(db: AsyncSession, session_id: int) -> list[models.Submission]:
+    # FIXED: Load user
+    result = await db.execute(
+        select(models.Submission)
+        .options(joinedload(models.Submission.user))
+        .filter(models.Submission.session_id == session_id)
+    )
+    return result.scalars().all()
+
+async def remove_submission(db: AsyncSession, submission_id: int) -> Optional[models.Submission]:
+    result = await db.execute(
+        select(models.Submission)
+        .filter(models.Submission.id == submission_id)
+    )
+    submission = result.scalars().first()
+    
+    if not submission:
+        return None
+        
+    submission.status = 'rejected'
+    await db.commit()
+    
+    # Emit queue update
+    new_queue = await get_pending_queue(db, submission.reviewer_id)
     queue_schemas = [schemas.Submission.model_validate(s) for s in new_queue]
     await broadcast_service.emit_queue_update(submission.reviewer_id, [s.model_dump() for s in queue_schemas])
     
     return submission
+
+async def apply_free_skip(db: AsyncSession, reviewer_id: int, user_id: int):
+    """
+    Applies a free skip to the winner (User ID).
+    Bumps their existing pending submission to priority.
+    """
+    # 1. Find user
+    user = await db.get(models.User, user_id)
+    if not user:
+        return
+
+    # 2. Check for existing pending submission
+    stmt = select(models.Submission).filter(
+        models.Submission.user_id == user.id,
+        models.Submission.reviewer_id == reviewer_id,
+        models.Submission.status == 'pending'
+    ).order_by(models.Submission.submitted_at.desc())
+    result = await db.execute(stmt)
+    submission = result.scalars().first()
+
+    if submission:
+        # Bump existing
+        submission.priority_value = 5 # Equivalent to $5 Tier
+        submission.is_priority = True
+        submission.notes = (submission.notes or "") + " [Free Skip Winner]"
+        
+        await db.commit()
+        
+        # Emit update
+        new_queue = await get_pending_queue(db, reviewer_id)
+        zipped_queue = apply_zipper_merge(new_queue)
+        queue_schemas = [schemas.Submission.model_validate(s) for s in zipped_queue]
+        await broadcast_service.emit_queue_update(reviewer_id, [s.model_dump(mode='json') for s in queue_schemas])

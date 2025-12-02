@@ -20,6 +20,15 @@ def create_app():
     app.include_router(upload_api.router, prefix="/api")
     app.include_router(achievements_api.router, prefix="/api")
     app.include_router(soundcloud_api.router, prefix="/api")
+    
+    from api import spotlight_api
+    app.include_router(spotlight_api.router, prefix="/api")
+    
+    from api import economy_api
+    app.include_router(economy_api.router, prefix="/api")
+
+    from api import queue_line_api
+    app.include_router(queue_line_api.router, prefix="/api")
 
     # Serve uploads (local file storage for Smart-Zone)
     from fastapi.staticfiles import StaticFiles

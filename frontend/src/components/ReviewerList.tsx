@@ -72,7 +72,7 @@ const ReviewerList = () => {
 
                     {/* Action Button */}
                     <Link
-                        to={`/submit/${reviewer.id}`}
+                        to={`/submit/${reviewer.tiktok_handle || reviewer.id}`}
                         className={`w-full py-2 px-4 rounded-lg font-bold text-center transition-colors ${reviewer.queue_status === "open"
                             ? "bg-purple-600 hover:bg-purple-500 text-white"
                             : "bg-gray-700 text-gray-400 cursor-not-allowed"

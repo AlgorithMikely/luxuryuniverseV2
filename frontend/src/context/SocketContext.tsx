@@ -20,38 +20,40 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const { token } = useAuthStore();
 
     useEffect(() => {
-        if (token) {
-            const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:8000', {
-                auth: { token },
-                transports: ['websocket'],
-            });
+        // If we have a token, connect as authenticated user
+        // If no token, connect as public guest (if allowed by backend)
 
-            newSocket.on('connect', () => {
-                console.log('Socket connected');
-                setIsConnected(true);
-            });
+        const authPayload = token ? { token } : { is_public: true };
 
-            newSocket.on('disconnect', () => {
-                console.log('Socket disconnected');
-                setIsConnected(false);
-            });
+        const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:8000', {
+            auth: authPayload,
+            transports: ['websocket'],
+        });
 
-            newSocket.on('connect_error', (err) => {
-                console.error('Socket connection error:', err);
-            });
+        newSocket.on('connect', () => {
+            console.log('Socket connected');
+            setIsConnected(true);
+        });
 
-            setSocket(newSocket);
+        newSocket.on('disconnect', () => {
+            console.log('Socket disconnected');
+            setIsConnected(false);
+        });
 
-            return () => {
-                newSocket.disconnect();
-            };
-        } else {
-            if (socket) {
-                socket.disconnect();
-                setSocket(null);
-                setIsConnected(false);
+        newSocket.on('connect_error', (err) => {
+            console.error('Socket connection error:', err);
+            // If authentication failed, and we were trying to use a token, maybe clear it?
+            if (err.message === "Authentication failed" && token) {
+                console.warn("Token expired or invalid. Logging out...");
+                useAuthStore.getState().logout();
             }
-        }
+        });
+
+        setSocket(newSocket);
+
+        return () => {
+            newSocket.disconnect();
+        };
     }, [token]);
 
     return (

@@ -47,32 +47,35 @@ const SubmissionPage = () => {
   if (!reviewer) return null;
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white relative overflow-hidden font-sans">
+    <div className="min-h-screen bg-gray-900 text-white relative font-sans">
 
-      {/* Dynamic Background */}
-      <div
-        className="absolute inset-0 bg-cover bg-center opacity-30 blur-3xl scale-110 z-0"
-        style={{
-          backgroundImage: reviewer.configuration?.banner_url
-            ? `url(${reviewer.configuration.banner_url})`
-            : reviewer.user?.avatar
-              ? `url(${reviewer.user.avatar.startsWith('http') ? reviewer.user.avatar : `https://cdn.discordapp.com/avatars/${reviewer.user.discord_id}/${reviewer.user.avatar}.png`})`
-              : 'none'
-        }}
-      />
-      <div className="absolute inset-0 bg-gradient-to-b from-gray-900/80 via-gray-900/95 to-gray-900 z-0" />
+      {/* Fixed Background Container */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+        {/* Dynamic Background */}
+        <div
+          className="absolute inset-0 bg-cover bg-center opacity-30 blur-3xl scale-110"
+          style={{
+            backgroundImage: reviewer.configuration?.banner_url
+              ? `url(${reviewer.configuration.banner_url})`
+              : reviewer.user?.avatar
+                ? `url(${reviewer.user.avatar.startsWith('http') ? reviewer.user.avatar : `https://cdn.discordapp.com/avatars/${reviewer.user.discord_id}/${reviewer.user.avatar}.png`})`
+                : 'none'
+          }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-gray-900/80 via-gray-900/95 to-gray-900" />
+      </div>
 
-      {/* Content */}
-      <div className="relative z-10 container mx-auto px-4 py-8 h-full flex flex-col items-center justify-center min-h-screen">
+      {/* Scrollable Content */}
+      <div className="relative z-10 container mx-auto px-4 py-8 pb-40 flex flex-col items-center min-h-[100dvh]">
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-8 text-center max-w-2xl mx-auto"
+          className="mb-8 text-center max-w-[670px] mx-auto"
         >
           {/* Banner Image */}
           {reviewer.configuration?.banner_url && (
-            <div className="w-full h-32 md:h-48 rounded-xl overflow-hidden mb-6 shadow-2xl border border-gray-700/50 relative">
+            <div className="w-full h-32 md:h-[190px] rounded-xl overflow-hidden mb-6 shadow-2xl border border-gray-700/50 relative">
               <img
                 src={reviewer.configuration.banner_url}
                 alt="Profile Banner"

@@ -1,15 +1,22 @@
 import axios from 'axios';
-import { useAuthStore } from '../stores/authStore';
 
 const api = axios.create({
   baseURL: '/api', // Use a relative URL for the proxy
 });
 
+let store: any;
+
+export const injectStore = (_store: any) => {
+  store = _store;
+};
+
 api.interceptors.request.use(
   (config) => {
-    const token = useAuthStore.getState().token;
-    if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`;
+    if (store) {
+      const token = store.getState().token;
+      if (token) {
+        config.headers['Authorization'] = `Bearer ${token}`;
+      }
     }
     return config;
   },
@@ -25,12 +32,14 @@ api.interceptors.response.use(
   },
   (error) => {
     if (error.response && error.response.status === 401) {
-      const { logout } = useAuthStore.getState();
-      logout();
-      // Optionally, redirect to login page
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+      if (store) {
+        const { logout } = store.getState();
+        logout();
       }
+      // Optionally, redirect to login page
+      // if (window.location.pathname !== '/login') {
+      //   window.location.href = '/login';
+      // }
     }
     return Promise.reject(error);
   }

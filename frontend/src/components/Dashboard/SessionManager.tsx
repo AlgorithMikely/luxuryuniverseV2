@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSessionStore, Session } from '../../stores/sessionStore';
 import { useQueueStore } from '../../stores/queueStore';
 import api from '../../services/api';
 import { PriorityTier, ReviewerProfile } from '../../types';
+import { MessageSquare, ChevronDown, ChevronUp, Power, Plus, Settings, Radio } from 'lucide-react';
 
 interface SessionManagerProps {
   reviewerId?: string;
@@ -24,8 +25,9 @@ const SessionManager: React.FC<SessionManagerProps> = ({ reviewerId }) => {
     { value: 50, label: '50+ Tier', color: 'pink' },
   ]);
 
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const { activeSession, fetchActiveSession } = useSessionStore();
-  const { queue } = useQueueStore();
+  const { queue, isLive } = useQueueStore();
 
   const fetchSessions = async () => {
     setIsLoading(true);
@@ -65,6 +67,38 @@ const SessionManager: React.FC<SessionManagerProps> = ({ reviewerId }) => {
       fetchSettings();
     }
   }, [isDropdownOpen]);
+
+  // Listen for real-time updates to settings/session
+  const { socket } = useQueueStore();
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleSettingsUpdate = () => {
+      console.log("SessionManager received settings update, refreshing...");
+      fetchActiveSession(reviewerId);
+      fetchSettings();
+    };
+
+    socket.on('reviewer_settings_updated', handleSettingsUpdate);
+
+    return () => {
+      socket.off('reviewer_settings_updated', handleSettingsUpdate);
+    };
+  }, [socket, reviewerId, fetchActiveSession]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,36 +204,83 @@ const SessionManager: React.FC<SessionManagerProps> = ({ reviewerId }) => {
   };
 
   return (
-    <div className="bg-gray-800 p-4 rounded-lg mb-4 relative">
-      <div className="flex justify-between items-center cursor-pointer" onClick={() => setIsDropdownOpen(!isDropdownOpen)}>
-        <h2 className="text-xl font-bold">
-          {activeSession ? `Session: ${activeSession.name}` : 'No Active Session'}
-        </h2>
-        <span className="text-gray-400">{isDropdownOpen ? '▲' : '▼'}</span>
+    <div className="relative z-40" ref={dropdownRef}>
+      {/* Main Header Bar */}
+      <div className="bg-gray-800/80 backdrop-blur-md border border-white/10 rounded-xl p-2 flex items-center justify-between shadow-lg">
+
+        {/* Left: Session Selector Trigger */}
+        <button
+          onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+          className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 transition-colors text-left group"
+        >
+          <div className={`p-1.5 rounded-md ${activeSession ? 'bg-green-500/20 text-green-400' : 'bg-gray-700 text-gray-400'}`}>
+            <Radio className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="text-xs text-white/40 font-medium uppercase tracking-wider">Current Session</div>
+            <div className="text-sm font-bold text-white flex items-center gap-2">
+              {activeSession ? activeSession.name : 'No Active Session'}
+              {isDropdownOpen ? <ChevronUp className="w-3 h-3 text-white/40" /> : <ChevronDown className="w-3 h-3 text-white/40" />}
+            </div>
+          </div>
+        </button>
+
+        {/* Right: Actions & Status */}
+        <div className="flex items-center gap-2 pr-2">
+          {/* Live Status Badge */}
+          {isLive && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/20 animate-pulse mr-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
+              <span className="text-xs font-bold text-red-500 uppercase tracking-wider">Live</span>
+            </div>
+          )}
+
+          {/* Chat Toggle Button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (reviewerId) {
+                window.open(`/chat/${reviewerId}`, '_blank', 'width=400,height=600');
+              }
+            }}
+            className="p-2.5 rounded-lg transition-all flex items-center gap-2 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
+            title="Open Live Chat"
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span className="text-sm font-medium hidden sm:block">Chat</span>
+          </button>
+        </div>
       </div>
 
+      {/* Dropdown Menu */}
       {isDropdownOpen && (
-        <div className="mt-4 border-t border-gray-700 pt-4">
-          {error && <p className="text-red-500 bg-red-900 p-2 rounded mb-2">{error}</p>}
+        <div className="absolute top-full left-0 mt-2 w-full md:w-96 bg-gray-900 border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
 
-          {/* Row 1: Global Controls */}
-          <div className="flex justify-between items-center mb-4">
-            <span className="font-semibold text-lg">{activeSession?.name || "Session Controls"}</span>
+          {/* Header of Dropdown */}
+          <div className="p-4 border-b border-white/5 bg-white/5 flex justify-between items-center">
+            <h3 className="font-bold text-white flex items-center gap-2">
+              <Settings className="w-4 h-4 text-white/40" />
+              Session Manager
+            </h3>
             {activeSession && (
               <button
                 onClick={handleEndSession}
-                className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm"
+                className="text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 px-2 py-1 rounded border border-red-500/20 transition-colors flex items-center gap-1"
               >
+                <Power className="w-3 h-3" />
                 End Session
               </button>
             )}
           </div>
 
-          {activeSession ? (
-            <>
-              <div className="bg-gray-900 p-3 rounded text-sm text-gray-400 mb-4">
-                <h3 className="font-semibold text-white mb-2">Queue Configuration</h3>
-                <div className="flex flex-wrap gap-2">
+          <div className="p-4 space-y-6">
+            {error && <div className="text-red-400 text-sm bg-red-500/10 p-3 rounded-lg border border-red-500/20">{error}</div>}
+
+            {/* Active Session Controls */}
+            {activeSession ? (
+              <div className="space-y-3">
+                <label className="text-xs font-bold text-white/40 uppercase tracking-wider">Queue Gates</label>
+                <div className="grid grid-cols-2 gap-2">
                   {tiers.map((tier) => {
                     const isOpen = activeSession.open_queue_tiers?.includes(tier.value);
                     const styles = getTierStyles(tier.color);
@@ -207,67 +288,63 @@ const SessionManager: React.FC<SessionManagerProps> = ({ reviewerId }) => {
                       <button
                         key={tier.value}
                         onClick={() => toggleGate(tier.value)}
-                        className={`px-4 py-2 rounded-lg font-bold transition-all duration-200 border flex flex-col items-center justify-center ${isOpen
+                        className={`px-3 py-2 rounded-lg text-xs font-bold transition-all border flex items-center justify-between ${isOpen
                           ? `bg-transparent ${styles.border} ${styles.text} ${styles.shadow}`
-                          : 'bg-gray-700 border-transparent text-gray-500 hover:bg-gray-600 hover:text-gray-300'
+                          : 'bg-white/5 border-transparent text-white/40 hover:bg-white/10 hover:text-white'
                           }`}
                       >
                         <span>{tier.label}</span>
-                        <span className="text-xs uppercase mt-1">{isOpen ? 'ON' : 'OFF'}</span>
+                        <div className={`w-2 h-2 rounded-full ${isOpen ? 'bg-current' : 'bg-white/20'}`} />
                       </button>
                     );
                   })}
                 </div>
               </div>
-
-              {/* Stats (Placeholder for now) */}
-              <div className="flex justify-between text-sm text-gray-400 bg-gray-900 p-2 rounded">
-                <span>Total Revenue: $--</span>
-                <span>Total Skips: --</span>
+            ) : (
+              /* Create New Session */
+              <div className="space-y-3">
+                <label className="text-xs font-bold text-white/40 uppercase tracking-wider">Start New Session</label>
+                <form onSubmit={handleCreateSession} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newSessionName}
+                    onChange={(e) => setNewSessionName(e.target.value)}
+                    placeholder="Session Name (e.g. Friday Vibes)"
+                    className="bg-black/20 text-white text-sm p-2.5 rounded-lg border border-white/10 flex-grow focus:outline-none focus:border-blue-500/50"
+                  />
+                  <button
+                    type="submit"
+                    className="bg-blue-600 hover:bg-blue-500 text-white p-2.5 rounded-lg transition-colors"
+                    disabled={!newSessionName.trim()}
+                  >
+                    <Plus className="w-5 h-5" />
+                  </button>
+                </form>
               </div>
-            </>
-          ) : (
-            <div className="text-center py-4 text-gray-400">
-              <p className="mb-2">Start a session to begin.</p>
-              <form onSubmit={handleCreateSession} className="flex gap-2">
-                <input
-                  type="text"
-                  value={newSessionName}
-                  onChange={(e) => setNewSessionName(e.target.value)}
-                  placeholder="New Session Name"
-                  className="bg-gray-700 text-white p-2 rounded flex-grow"
-                />
-                <button
-                  type="submit"
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-                  disabled={!newSessionName.trim()}
-                >
-                  Create
-                </button>
-              </form>
-            </div>
-          )}
+            )}
 
-          {/* Archived Sessions List */}
-          <div className="mt-4 pt-4 border-t border-gray-700">
-            <h3 className="text-sm font-semibold text-gray-400 mb-2">Switch Session</h3>
-            <ul className="space-y-1 max-h-40 overflow-y-auto">
-              {sessions.map(s => (
-                <li key={s.id} className="flex justify-between items-center text-sm p-1 hover:bg-gray-700 rounded">
-                  <span className={s.id === activeSession?.id ? 'text-green-400' : 'text-gray-300'}>
-                    {s.name}
-                  </span>
-                  {s.id !== activeSession?.id && (
-                    <button
-                      onClick={() => handleActivateSession(s.id)}
-                      className="text-blue-400 hover:text-blue-300 text-xs"
-                    >
-                      Activate
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
+            {/* Switch Session List */}
+            <div className="space-y-2 pt-4 border-t border-white/5">
+              <label className="text-xs font-bold text-white/40 uppercase tracking-wider">Switch Session</label>
+              <div className="max-h-40 overflow-y-auto space-y-1 pr-1 scrollbar-thin scrollbar-thumb-white/10">
+                {sessions.length === 0 && <div className="text-sm text-white/20 italic">No other sessions found.</div>}
+                {sessions.map(s => (
+                  <div key={s.id} className="flex justify-between items-center p-2 hover:bg-white/5 rounded-lg group transition-colors">
+                    <span className={`text-sm font-medium ${s.id === activeSession?.id ? 'text-green-400' : 'text-white/60 group-hover:text-white'}`}>
+                      {s.name}
+                    </span>
+                    {s.id !== activeSession?.id && (
+                      <button
+                        onClick={() => handleActivateSession(s.id)}
+                        className="text-xs bg-white/5 hover:bg-white/10 text-white/60 hover:text-white px-2 py-1 rounded transition-colors"
+                      >
+                        Activate
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}

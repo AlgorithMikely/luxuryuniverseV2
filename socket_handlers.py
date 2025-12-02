@@ -9,6 +9,11 @@ import logging
 
 @sio.on("connect")
 async def connect(sid, environ, auth):
+    # Allow public connection if explicitly requested
+    if auth and auth.get("is_public"):
+        logging.info(f"Public client connected: {sid}")
+        return True
+
     if not auth or "token" not in auth:
         logging.warning(f"Connection refused for {sid}: Missing token")
         raise ConnectionRefusedError("Authentication failed")
@@ -28,21 +33,6 @@ async def connect(sid, environ, auth):
         logging.info(f"Client connected: {sid}, User: {user.username} ({user.id})")
 
         # Add user to a room for their own user-specific events
-        user_room = f"user_room_{user.id}"
-        await sio.enter_room(sid, user_room)
-        logging.info(f"Added {sid} to room {user_room}")
-
-        # Note: We no longer automatically join the reviewer room here.
-        # The client must explicitly emit 'join_reviewer_room' with the desired reviewer ID.
-
-    return True
-
-    return True
-
-@sio.on("disconnect")
-async def disconnect(sid):
-    logging.info(f"Client disconnected: {sid}")
-
 @sio.on("join_reviewer_room")
 async def join_reviewer_room(sid, reviewer_id):
     """
@@ -55,32 +45,40 @@ async def join_reviewer_room(sid, reviewer_id):
         logging.error(f"Invalid reviewer_id: {reviewer_id}")
         return
 
-    room = f"reviewer_room_{reviewer_id}"
-    await sio.enter_room(sid, room)
-    logging.info(f"Client {sid} joined room {room}")
+    try:
+        room = f"reviewer_room_{reviewer_id}"
+        await sio.enter_room(sid, room)
+        logging.info(f"Client {sid} joined room {room}")
 
-    async with AsyncSessionLocal() as db:
-        # Fetch initial queue and history for the requested reviewer
-        pending_queue = await queue_service.get_pending_queue(db, reviewer_id)
-        played_history = await queue_service.get_played_queue(db, reviewer_id)
-        bookmarks = await queue_service.get_bookmarked_submissions(db, reviewer_id)
-        spotlight = await queue_service.get_spotlighted_submissions(db, reviewer_id)
-        current_track = await queue_service.get_current_track(db, reviewer_id)
+        async with AsyncSessionLocal() as db:
+            # Fetch initial queue and history for the requested reviewer
+            pending_queue = await queue_service.get_pending_queue(db, reviewer_id)
+            played_history = await queue_service.get_played_queue(db, reviewer_id)
+            bookmarks = await queue_service.get_bookmarked_submissions(db, reviewer_id)
+            spotlight = await queue_service.get_spotlighted_submissions(db, reviewer_id)
+            current_track = await queue_service.get_current_track(db, reviewer_id)
 
-        # Serialize data
-        queue_schemas = [schemas.Submission.model_validate(s) for s in pending_queue]
-        history_schemas = [schemas.Submission.model_validate(s) for s in played_history]
-        bookmarks_schemas = [schemas.Submission.model_validate(s) for s in bookmarks]
-        spotlight_schemas = [schemas.Submission.model_validate(s) for s in spotlight]
-        current_track_schema = schemas.Submission.model_validate(current_track) if current_track else None
+            # Serialize data
+            queue_schemas = [schemas.Submission.model_validate(s) for s in pending_queue]
+            history_schemas = [schemas.Submission.model_validate(s) for s in played_history]
+            bookmarks_schemas = [schemas.Submission.model_validate(s) for s in bookmarks]
+            spotlight_schemas = [schemas.Submission.model_validate(s) for s in spotlight]
+            current_track_schema = schemas.Submission.model_validate(current_track) if current_track else None
 
-        # Emit the initial state to the connecting client
-        initial_state = {
-            "queue": [s.model_dump() for s in queue_schemas],
-            "history": [s.model_dump() for s in history_schemas],
-            "bookmarks": [s.model_dump() for s in bookmarks_schemas],
-            "spotlight": [s.model_dump() for s in spotlight_schemas],
-            "current_track": current_track_schema.model_dump() if current_track_schema else None,
-        }
-        await sio.emit("initial_state", initial_state, room=sid)
-        logging.info(f"Emitted 'initial_state' for reviewer {reviewer_id} to {sid}")
+            # Emit the initial state to the connecting client
+            initial_state = {
+                "queue": [s.model_dump(mode='json') for s in queue_schemas],
+                "history": [s.model_dump(mode='json') for s in history_schemas],
+                "bookmarks": [s.model_dump(mode='json') for s in bookmarks_schemas],
+                "spotlight": [s.model_dump(mode='json') for s in spotlight_schemas],
+                "current_track": current_track_schema.model_dump(mode='json') if current_track_schema else None,
+            }
+            await sio.emit("initial_state", initial_state, room=sid)
+            logging.info(f"Emitted 'initial_state' for reviewer {reviewer_id} to {sid}")
+    except Exception as e:
+        logging.error(f"Error in join_reviewer_room: {e}")
+        await sio.emit("error", {"message": f"Join failed: {str(e)}"}, room=sid)
+
+@sio.on("ping")
+async def ping(sid):
+    await sio.emit("pong", {"message": "pong"}, room=sid)

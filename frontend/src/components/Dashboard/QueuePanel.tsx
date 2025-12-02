@@ -11,7 +11,7 @@ interface QueuePanelProps {
 }
 
 const QueuePanel: React.FC<QueuePanelProps> = ({ reviewerId: propReviewerId }) => {
-  const { queue, setCurrentTrack, socketStatus, currentTrack } = useQueueStore();
+  const { queue, setCurrentTrack, socketStatus, currentTrack, updateSubmission } = useQueueStore();
   const { user } = useAuthStore();
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -70,11 +70,21 @@ const QueuePanel: React.FC<QueuePanelProps> = ({ reviewerId: propReviewerId }) =
 
   const handleMove = async (e: React.MouseEvent, track: Submission, priorityValue: number) => {
     e.stopPropagation(); // Prevent track selection
+
+    // Optimistic update
+    updateSubmission({
+      ...track,
+      priority_value: priorityValue,
+      is_priority: priorityValue > 0
+    });
+
     try {
       await api.post(`/reviewer/${track.reviewer_id}/queue/${track.id}/priority?priority_value=${priorityValue}`);
       setOpenMenuId(null);
     } catch (error) {
       console.error("Failed to update priority:", error);
+      // Revert if we did optimistic update
+      updateSubmission(track);
     }
   };
 

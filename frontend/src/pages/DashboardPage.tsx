@@ -14,9 +14,11 @@ const DashboardRedirect = () => {
 
     if (user) {
       if (user.roles?.includes('admin') && user.moderated_reviewers && user.moderated_reviewers.length > 0) {
-        navigate(`/reviewer/${user.moderated_reviewers[0].id}`);
+        const reviewer = user.moderated_reviewers[0];
+        navigate(`/reviewer/${reviewer.tiktok_handle || reviewer.id}`);
       } else if (user.reviewer_profile) {
-        navigate(`/reviewer/${user.reviewer_profile.id}`);
+        const reviewer = user.reviewer_profile;
+        navigate(`/reviewer/${reviewer.tiktok_handle || reviewer.id}`);
       } else {
         navigate('/hub');
       }

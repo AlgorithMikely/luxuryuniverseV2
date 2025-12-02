@@ -2,14 +2,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import models
 from services import broadcast as broadcast_service
+import datetime
 
-async def add_coins(db: AsyncSession, reviewer_id: int, user_id: int, amount: int, reason: str):
+async def add_coins(db: AsyncSession, reviewer_id: int, user_id: int, amount: int, reason: str, meta_data: dict = None):
+    if amount <= 0:
+        raise ValueError("Amount must be positive")
+    
     # Create a transaction for the audit log
     transaction = models.Transaction(
         reviewer_id=reviewer_id,
         user_id=user_id,
         amount=amount,
-        reason=reason
+        reason=reason,
+        meta_data=meta_data
     )
     db.add(transaction)
 
@@ -41,10 +46,64 @@ async def add_coins(db: AsyncSession, reviewer_id: int, user_id: int, amount: in
     await db.commit()
     await db.refresh(wallet)
 
+    # Log to file
+    log_transaction(reviewer_id, user_id, amount, reason, "CREDIT")
+
     # Emit a balance update
     await broadcast_service.emit_balance_update(reviewer_id, user_id, wallet.balance)
 
     return wallet
+
+async def deduct_coins(db: AsyncSession, reviewer_id: int, user_id: int, amount: int, reason: str, meta_data: dict = None):
+    if amount <= 0:
+        raise ValueError("Amount must be positive")
+
+    # Create a transaction for the audit log
+    transaction = models.Transaction(
+        reviewer_id=reviewer_id,
+        user_id=user_id,
+        amount=-amount, # Store as negative for deduction
+        reason=reason,
+        meta_data=meta_data
+    )
+    db.add(transaction)
+
+    # Find the user's wallet
+    result = await db.execute(
+        select(models.Wallet)
+        .filter(
+            models.Wallet.user_id == user_id,
+            models.Wallet.reviewer_id == reviewer_id
+        )
+        .with_for_update()
+    )
+    wallet = result.scalars().first()
+
+    if not wallet or wallet.balance < amount:
+        # Should we raise an error or just return False?
+        # Raising an error is safer for transactions.
+        raise ValueError("Insufficient funds")
+
+    wallet.balance -= amount
+    
+    await db.commit()
+    await db.refresh(wallet)
+
+    # Log to file
+    log_transaction(reviewer_id, user_id, amount, reason, "DEBIT")
+
+    # Emit a balance update
+    await broadcast_service.emit_balance_update(reviewer_id, user_id, wallet.balance)
+
+    return wallet
+
+def log_transaction(reviewer_id: int, user_id: int, amount: int, reason: str, type: str):
+    try:
+        with open("transactions.log", "a") as f:
+            timestamp = datetime.datetime.now().isoformat()
+            f.write(f"[{timestamp}] [{type}] Reviewer: {reviewer_id} | User: {user_id} | Amount: {amount} | Reason: {reason}\n")
+    except Exception as e:
+        print(f"Failed to log transaction: {e}")
 
 async def get_balance(db: AsyncSession, reviewer_id: int, user_id: int) -> int:
     result = await db.execute(

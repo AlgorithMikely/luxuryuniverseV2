@@ -41,7 +41,7 @@ class Settings(BaseSettings):
         if self.SQLALCHEMY_DATABASE_URI is None:
             self.SQLALCHEMY_DATABASE_URI = (
                 f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
-                f"@{self.POSTGRES_SERVER}:5432/{self.POSTGRES_DB}"
+                f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
             )
         return self
 
@@ -66,5 +66,8 @@ class Settings(BaseSettings):
     R2_SECRET_ACCESS_KEY: Optional[str] = None
     R2_BUCKET_NAME: Optional[str] = None
     R2_PUBLIC_URL: Optional[str] = None
+
+    # TikTok Settings
+    TIKTOK_SIGN_API_KEY: Optional[str] = None
 
 settings = Settings()

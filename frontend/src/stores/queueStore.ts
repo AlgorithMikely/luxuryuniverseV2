@@ -6,12 +6,28 @@ import api from '../services/api'; // Make sure api service is imported
 
 export type { Submission };
 
+export interface GiveawayState {
+  is_active: boolean;
+  progress: number;
+  target: number;
+  cooldown_end: string | null;
+  description?: string;
+}
+
+export interface GiveawayWinner {
+  username: string;
+  tickets: number;
+  prize: string;
+}
+
 export interface FullQueueState {
   queue: Submission[];
   history: Submission[];
   bookmarks: Submission[];
   spotlight: Submission[];
   current_track?: Submission | null;
+  is_live?: boolean;
+  giveaway_state?: GiveawayState | null;
 }
 
 interface QueueState {
@@ -22,6 +38,9 @@ interface QueueState {
   bookmarks: Submission[];
   spotlight: Submission[];
   currentTrack: Submission | null;
+  isLive: boolean;
+  giveawayState: GiveawayState | null;
+  giveawayWinner: GiveawayWinner | null;
   connect: (token: string, reviewerId: string) => void;
   fetchInitialStateHttp: (reviewerId: string) => Promise<void>;
   disconnect: () => void;
@@ -29,6 +48,7 @@ interface QueueState {
   updateSubmission: (updatedSubmission: Submission) => void;
   toggleBookmark: (trackId: number) => void;
   toggleSpotlight: (trackId: number) => void;
+  setGiveawayWinner: (winner: GiveawayWinner | null) => void;
 }
 
 export const useQueueStore = create<QueueState>()(
@@ -41,6 +61,9 @@ export const useQueueStore = create<QueueState>()(
       bookmarks: [],
       spotlight: [],
       currentTrack: null,
+      isLive: false,
+      giveawayState: null,
+      giveawayWinner: null,
 
       fetchInitialStateHttp: async (reviewerId) => {
         try {
@@ -53,6 +76,8 @@ export const useQueueStore = create<QueueState>()(
             spotlight: response.data.spotlight || [],
             // Set the current track from the response, or fallback to first in queue if not provided (legacy behavior, though backend now provides it)
             currentTrack: response.data.current_track || response.data.queue?.[0] || null,
+            isLive: response.data.is_live || false,
+            giveawayState: response.data.giveaway_state || null,
           });
         } catch (error) {
           console.error("Failed to fetch initial state via HTTP:", error);
@@ -62,7 +87,7 @@ export const useQueueStore = create<QueueState>()(
       connect: (token, reviewerId) => {
         // Check environment variable or window flag (for testing)
         const disableSocket = import.meta.env.VITE_DISABLE_SOCKETIO === 'true' ||
-                              (window as any).DISABLE_SOCKET_IO === true;
+          (window as any).DISABLE_SOCKET_IO === true;
 
         if (disableSocket) {
           console.log("Socket.IO disabled. Fetching initial state via HTTP.");
@@ -74,8 +99,12 @@ export const useQueueStore = create<QueueState>()(
         if (get().socket || get().socketStatus === 'connecting') return;
 
         set({ socketStatus: 'connecting' });
+
+        // Allow connection without token for public overlays
+        const authPayload = token ? { token } : { is_public: true };
+
         const newSocket = io(import.meta.env.VITE_API_URL || 'http://localhost:8000', {
-          auth: { token },
+          auth: authPayload,
           transports: ['websocket'],
         });
 
@@ -86,11 +115,24 @@ export const useQueueStore = create<QueueState>()(
         });
 
         newSocket.on('disconnect', () => {
-          set({ socket: null, socketStatus: 'disconnected', queue: [], history: [], bookmarks: [], spotlight: [], currentTrack: null });
+          set({ socket: null, socketStatus: 'disconnected', queue: [], history: [], bookmarks: [], spotlight: [], currentTrack: null, isLive: false, giveawayState: null, giveawayWinner: null });
         });
 
         newSocket.on('connect_error', (error) => {
           console.error('Socket connection error:', error);
+          if (error.message === "Authentication failed" && token) {
+            console.warn("Token expired or invalid in QueueStore. Logging out...");
+            // Import store dynamically to avoid circular dependency if possible, or just use the window/api interceptor logic
+            // But since we are in a store, we can try to access the auth store if it's not circular.
+            // Ideally, we should let the API interceptor handle 401s, but sockets don't use axios.
+            // We can dispatch a custom event or just clear storage.
+            // For now, let's try to use the auth store via the window object or just clear local storage and reload?
+            // Actually, we can just import useAuthStore. Circular dependency might be an issue.
+            // Let's try to use the same logic as SocketContext.
+            import('./authStore').then(({ useAuthStore }) => {
+              useAuthStore.getState().logout();
+            });
+          }
           set({ socketStatus: 'disconnected' });
           get().disconnect();
         });
@@ -102,6 +144,8 @@ export const useQueueStore = create<QueueState>()(
             bookmarks: state.bookmarks || [],
             spotlight: state.spotlight || [],
             currentTrack: state.current_track || state.queue?.[0] || null,
+            isLive: state.is_live || false,
+            giveawayState: state.giveaway_state || null,
           });
         });
 
@@ -116,6 +160,9 @@ export const useQueueStore = create<QueueState>()(
           }
           set({ currentTrack: track });
         });
+
+        newSocket.on('giveaway_updated', (state: GiveawayState) => set({ giveawayState: state }));
+        newSocket.on('giveaway_winner', (winner: GiveawayWinner) => set({ giveawayWinner: winner }));
       },
 
       disconnect: () => {
@@ -130,11 +177,14 @@ export const useQueueStore = create<QueueState>()(
           history: [],
           bookmarks: [],
           spotlight: [],
-          currentTrack: null
+          currentTrack: null,
+          giveawayState: null,
+          giveawayWinner: null
         });
       },
 
       setCurrentTrack: (track) => set({ currentTrack: track }),
+      setGiveawayWinner: (winner) => set({ giveawayWinner: winner }),
 
       updateSubmission: (updatedSubmission) => {
         const updateList = (list: Submission[]) =>

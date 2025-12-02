@@ -49,8 +49,20 @@ async def get_user_achievements(
     res_max = await db.execute(max_viewers_stmt)
     max_viewers = res_max.scalar_one_or_none() or 0
 
-    badges = []
+    # Filter definitions based on role
+    # If user is NOT a reviewer, hide Streamer specific achievements
+    is_reviewer = user.reviewer_profile is not None
+    
+    filtered_definitions = []
+    streamer_categories = ["LIFETIME_LIKES", "LIFETIME_DIAMONDS", "CONCURRENT_VIEWERS"]
+    
     for ach in definitions:
+        if not is_reviewer and ach.category in streamer_categories:
+            continue
+        filtered_definitions.append(ach)
+
+    badges = []
+    for ach in filtered_definitions:
         is_unlocked = ach.id in unlocked_map
         unlocked_date = unlocked_map[ach.id].unlocked_at if is_unlocked else None
         role_status = unlocked_map[ach.id].discord_sync_status if is_unlocked else None
@@ -71,6 +83,18 @@ async def get_user_achievements(
             current_value = user.discord_msg_count or 0
         elif ach.category == "DISCORD_VOICE_MINS":
             current_value = user.discord_voice_mins or 0
+        elif ach.category == "LIFETIME_LIKES_SENT":
+            current_value = user.lifetime_likes_sent or 0
+        elif ach.category == "LIFETIME_GIFTS_SENT":
+            current_value = user.lifetime_gifts_sent or 0
+        elif ach.category == "LIFETIME_TIKTOK_COMMENTS":
+            current_value = user.lifetime_tiktok_comments or 0
+        elif ach.category == "LIFETIME_TIKTOK_SHARES":
+            current_value = user.lifetime_tiktok_shares or 0
+        elif ach.category == "DISCORD_SCREEN_SHARE_MINS":
+            # TODO: We need to track this in User model too if we want progress bars
+            # For now, assume 0 or handle via separate tracking service
+            current_value = 0 
         # Boolean types (Poll/Score) are either 0 or 100% effectively for progress bar unless we query max
         elif ach.category == "POLL_WIN_PERCENT":
             # Show max poll percent achieved? Too expensive to query max every time?
@@ -81,6 +105,22 @@ async def get_user_achievements(
 
         if ach.threshold_value > 0:
             progress = min((current_value / ach.threshold_value) * 100, 100)
+
+        # Lazy Unlock Check: If we have the stats but no record, unlock it now!
+        if not is_unlocked and current_value >= ach.threshold_value:
+            try:
+                from services import achievement_service
+                # We trigger it to persist the unlock
+                await achievement_service.trigger_achievement(db, user.id, ach.category, value=current_value, specific_slug=ach.slug)
+                
+                # Update local state for the response
+                is_unlocked = True
+                from datetime import datetime
+                unlocked_date = datetime.now()
+                role_status = "PENDING"
+                progress = 100
+            except Exception as e:
+                print(f"Error auto-unlocking {ach.slug}: {e}")
 
         badges.append({
             "slug": ach.slug,
@@ -98,15 +138,28 @@ async def get_user_achievements(
             "role_icon": ach.role_icon
         })
 
-    return {
+    response_data = {
         "artist_stats": {
             "submissions": submission_count,
             "avg_score": float(user.average_review_score or 0)
         },
-        "streamer_stats": {
+        "badges": badges
+    }
+
+    # Only include streamer stats if reviewer
+    if is_reviewer:
+        response_data["streamer_stats"] = {
             "likes": user.lifetime_live_likes,
             "diamonds": user.lifetime_diamonds,
             "viewers_peak": max_viewers
-        },
-        "badges": badges
-    }
+        }
+    else:
+        # For non-reviewers, maybe show "Super Fan" stats?
+        response_data["fan_stats"] = {
+            "likes_sent": user.lifetime_likes_sent or 0,
+            "gifts_sent": user.lifetime_gifts_sent or 0,
+            "comments_sent": user.lifetime_tiktok_comments or 0,
+            "shares_sent": user.lifetime_tiktok_shares or 0
+        }
+
+    return response_data

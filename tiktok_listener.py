@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 from TikTokLive import TikTokLiveClient
-from TikTokLive.events import ConnectEvent, GiftEvent, LikeEvent, CommentEvent, ViewerUpdateEvent
+from TikTokLive.events import ConnectEvent, GiftEvent, LikeEvent, CommentEvent, ViewerUpdateEvent, ShareEvent
 from database import AsyncSessionLocal
 from services import economy_service, user_service, queue_service
 import models
@@ -10,6 +10,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import joinedload
 # Import achievement service
 from services import achievement_service
+from services import giveaway_service
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,7 +30,7 @@ class StreamBuffer:
         self.emoji_cry_count = 0
 
         # Chat Activity for Achievements
-        # Structure: {tiktok_user_id: { 'rainbow': set(), 'all_caps': bool, 'emoji_only': bool }}
+        # Structure: {tiktok_user_id: { 'rainbow': set(), 'all_caps': bool, 'emoji_only': bool, 'likes_sent': int, 'gifts_sent': int, 'msg_count': int, 'shares_sent': int }}
         self.user_chat_activity = {}
 
     def add_likes(self, count: int):
@@ -75,7 +76,16 @@ class ReviewerListener:
         self.reviewer_id = reviewer_id
         self.tiktok_handle = tiktok_handle
         self.buffer = StreamBuffer()
-        self.client = TikTokLiveClient(unique_id=tiktok_handle)
+        
+        # Prepare client arguments
+        import os
+        client_kwargs = {}
+        tiktok_session_id = os.getenv("TIKTOK_SESSION_ID")
+        if tiktok_session_id:
+            client_kwargs["cookies"] = {"sessionid": tiktok_session_id}
+            logger.info(f"Using configured TIKTOK_SESSION_ID for connection to @{tiktok_handle}")
+
+        self.client = TikTokLiveClient(unique_id=tiktok_handle, **client_kwargs)
         self.running = False
         self.flush_task = None
 
@@ -103,6 +113,14 @@ class ReviewerListener:
             # We can track delta or just trust the stream.
             # Using event.count is safer for "new likes since last event".
             self.buffer.add_likes(event.count)
+            
+            # Track user likes sent
+            user_id = event.user.unique_id
+            if user_id not in self.buffer.user_chat_activity:
+                self.buffer.user_chat_activity[user_id] = {
+                    'rainbow': set(), 'all_caps': False, 'emoji_only': False, 'msg_count': 0, 'likes_sent': 0, 'gifts_sent': 0, 'shares_sent': 0
+                }
+            self.buffer.user_chat_activity[user_id]['likes_sent'] += event.count
 
             # Economy logic (Coins for Likes) - Keep this immediate or buffer?
             # PRD says "Flush... update database".
@@ -114,18 +132,14 @@ class ReviewerListener:
                  config = await economy_service.get_economy_config(db, self.reviewer_id)
                  amount = config.get("like", 1)
                  # Processing every like event for economy might be heavy.
-                 # Ideally we batch this too. For now, leaving it but catching errors.
-                 try:
-                     user = await user_service.get_user_by_tiktok_username(db, event.user.unique_id)
-                     if user:
-                        await economy_service.add_coins(db, self.reviewer_id, user.id, amount, "TikTok Like")
-                 except Exception as e:
-                     logger.error(f"Economy error: {e}")
 
-        @self.client.on("gift")
-        async def on_gift(event: GiftEvent):
-            if event.gift.diamond_count:
-                self.buffer.add_diamonds(event.gift.diamond_count)
+            # Track user gifts sent (diamonds value)
+            user_id = event.user.unique_id
+            if user_id not in self.buffer.user_chat_activity:
+                self.buffer.user_chat_activity[user_id] = {
+                    'rainbow': set(), 'all_caps': False, 'emoji_only': False, 'msg_count': 0, 'likes_sent': 0, 'gifts_sent': 0, 'shares_sent': 0
+                }
+            self.buffer.user_chat_activity[user_id]['gifts_sent'] += event.gift.diamond_count
 
             # Economy Logic
             async with AsyncSessionLocal() as db:
@@ -142,6 +156,19 @@ class ReviewerListener:
         async def on_viewer_update(event: ViewerUpdateEvent):
              self.buffer.add_viewer_sample(event.viewer_count)
 
+        @self.client.on("share")
+        async def on_share(event: ShareEvent):
+            user_id = event.user.unique_id
+            if user_id not in self.buffer.user_chat_activity:
+                self.buffer.user_chat_activity[user_id] = {
+                    'rainbow': set(), 'all_caps': False, 'emoji_only': False, 'msg_count': 0, 'likes_sent': 0, 'gifts_sent': 0, 'shares_sent': 0
+                }
+            self.buffer.user_chat_activity[user_id]['shares_sent'] += 1
+
+            # Community Goal: SHARES
+            async with AsyncSessionLocal() as db:
+                await giveaway_service.update_community_goal_progress(db, self.reviewer_id, 'SHARES', 1, username=event.user.unique_id)
+
         # Fallback for Polls: Chat Emoji Tracking
         @self.client.on("comment")
         async def on_comment(event: CommentEvent):
@@ -153,6 +180,10 @@ class ReviewerListener:
             elif "😭" in content or "l" in content or "👎" in content:
                 self.buffer.add_emoji_vote(is_positive=False)
 
+            # Community Goal: COMMENTS
+            async with AsyncSessionLocal() as db:
+                await giveaway_service.update_community_goal_progress(db, self.reviewer_id, 'COMMENTS', 1, username=event.user.unique_id, user_id=event.user.unique_id)
+
             # --- TRACKING FOR ACHIEVEMENTS (Rainbow, Town Crier, Emoji Chef) ---
             user_id = event.user.unique_id
             if user_id not in self.buffer.user_chat_activity:
@@ -160,8 +191,31 @@ class ReviewerListener:
                     'rainbow': set(),
                     'all_caps': False,
                     'emoji_only': False,
-                    'msg_count': 0
+                    'msg_count': 0,
+                    'likes_sent': 0,
+                    'gifts_sent': 0,
+                    'shares_sent': 0
                 }
+
+            # Update Avatar if needed (Self-Healing)
+            try:
+                # TikTokLive User object usually has avatar_thumb.url_list
+                avatar_url = None
+                if hasattr(event.user, 'avatar_thumb') and hasattr(event.user.avatar_thumb, 'url_list'):
+                    if event.user.avatar_thumb.url_list:
+                        avatar_url = event.user.avatar_thumb.url_list[0]
+                
+                if avatar_url:
+                    async with AsyncSessionLocal() as db:
+                        user = await user_service.get_user_by_tiktok_username(db, user_id)
+                        # Only update if user is a guest OR has no avatar set
+                        # We want to preserve the Discord avatar for verified users
+                        if user and (user.is_guest or not user.avatar):
+                            if user.avatar != avatar_url:
+                                user.avatar = avatar_url
+                                await db.commit()
+            except Exception as e:
+                logger.error(f"Failed to update avatar for {user_id}: {e}")
 
             activity = self.buffer.user_chat_activity[user_id]
             activity['msg_count'] += 1
@@ -191,7 +245,7 @@ class ReviewerListener:
 
     async def flush_loop(self):
         while self.running:
-            await asyncio.sleep(10)
+            await asyncio.sleep(2)
             await self.flush()
 
     async def flush(self):
@@ -206,14 +260,29 @@ class ReviewerListener:
 
                 user = await db.get(models.User, reviewer.user_id)
 
-                # Update Lifetime Stats
+                # 2. Update Lifetime Stats
                 likes_to_add = self.buffer.current_session_likes
                 diamonds_to_add = self.buffer.current_session_diamonds
+
+                if likes_to_add > 0:
+                    logger.info(f"Flushing {likes_to_add} likes for reviewer {self.reviewer_id}")
 
                 if likes_to_add > 0 or diamonds_to_add > 0:
                     user.lifetime_live_likes = (user.lifetime_live_likes or 0) + likes_to_add
                     user.lifetime_diamonds = (user.lifetime_diamonds or 0) + diamonds_to_add
                     db.add(user)
+
+                    # --- COMMUNITY GOAL BATCH UPDATE (LIKES) ---
+                    if likes_to_add > 0:
+                        # Aggregate user likes for tickets
+                        user_likes_map = {}
+                        for uid, activity in self.buffer.user_chat_activity.items():
+                            if activity['likes_sent'] > 0:
+                                user_likes_map[uid] = activity['likes_sent']
+                        
+                        await giveaway_service.batch_update_community_goal_progress(
+                            db, self.reviewer_id, 'LIKES', likes_to_add, user_likes_map
+                        )
 
                 # 2. Update Active Submission Stats (Average Viewers & Polls)
                 # Get active submission
@@ -285,6 +354,25 @@ class ReviewerListener:
                     viewer_user = await user_service.get_user_by_tiktok_username(db, tiktok_username)
                     if not viewer_user:
                         continue
+                        
+                    # Update Viewer Stats
+                    if activity['likes_sent'] > 0:
+                        viewer_user.lifetime_likes_sent = (viewer_user.lifetime_likes_sent or 0) + activity['likes_sent']
+                        await achievement_service.trigger_achievement(db, viewer_user.id, "LIFETIME_LIKES_SENT", viewer_user.lifetime_likes_sent)
+                        
+                    if activity['gifts_sent'] > 0:
+                        viewer_user.lifetime_gifts_sent = (viewer_user.lifetime_gifts_sent or 0) + activity['gifts_sent']
+                        await achievement_service.trigger_achievement(db, viewer_user.id, "LIFETIME_GIFTS_SENT", viewer_user.lifetime_gifts_sent)
+
+                    if activity['msg_count'] > 0:
+                        viewer_user.lifetime_tiktok_comments = (viewer_user.lifetime_tiktok_comments or 0) + activity['msg_count']
+                        await achievement_service.trigger_achievement(db, viewer_user.id, "LIFETIME_TIKTOK_COMMENTS", viewer_user.lifetime_tiktok_comments)
+
+                    if activity['shares_sent'] > 0:
+                        viewer_user.lifetime_tiktok_shares = (viewer_user.lifetime_tiktok_shares or 0) + activity['shares_sent']
+                        await achievement_service.trigger_achievement(db, viewer_user.id, "LIFETIME_TIKTOK_SHARES", viewer_user.lifetime_tiktok_shares)
+                        
+                    db.add(viewer_user)
 
                     # Rainbow
                     if len(activity['rainbow']) >= 4:

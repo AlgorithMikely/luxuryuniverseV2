@@ -1,18 +1,26 @@
 import { useState, useEffect } from 'react';
 import { useQueueStore } from '../../stores/queueStore';
 import { useAuthStore } from '../../stores/authStore';
-import { useParams } from 'react-router-dom';
 import api from '../../services/api';
 import { Star, Bookmark, Zap, Save, SkipForward } from 'lucide-react';
 
-const ReviewHub = () => {
+interface ReviewHubProps {
+  reviewerId: string;
+}
+
+import SubmitterProfileModal from './SubmitterProfileModal';
+
+const ReviewHub: React.FC<ReviewHubProps> = ({ reviewerId }) => {
   const { currentTrack, updateSubmission, setCurrentTrack, toggleBookmark, toggleSpotlight, bookmarks, spotlight } = useQueueStore();
   const { user } = useAuthStore();
-  const { reviewerId } = useParams<{ reviewerId: string }>();
 
   // Local state for the review form
   const [notes, setNotes] = useState('');
   const [score, setScore] = useState<number>(0);
+
+  // Submitter Profile Modal State
+  const [isSubmitterModalOpen, setIsSubmitterModalOpen] = useState(false);
+  const [selectedSubmitterId, setSelectedSubmitterId] = useState<number | null>(null);
 
   // When the currentTrack changes, update the form fields
   useEffect(() => {
@@ -45,6 +53,13 @@ const ReviewHub = () => {
     syncReviewData();
     toggleSpotlight(currentTrack.id);
   }
+
+  const openSubmitterProfile = () => {
+    if (currentTrack?.user?.id) {
+      setSelectedSubmitterId(currentTrack.user.id);
+      setIsSubmitterModalOpen(true);
+    }
+  };
 
 
   const handleSubmitReview = async (e: React.FormEvent) => {
@@ -111,13 +126,21 @@ const ReviewHub = () => {
   }
 
   return (
-    <div className="bg-gray-900/50 backdrop-blur-xl border border-white/10 rounded-2xl shadow-xl h-full flex flex-col overflow-hidden">
+    <div className={`bg-gray-900/50 backdrop-blur-xl border border-white/10 rounded-2xl shadow-xl h-full flex flex-col overflow-hidden ${currentTrack.is_community_winner ? 'community-winner-border' : ''}`}>
       {/* Header */}
       <div className="p-6 border-b border-white/10 bg-white/5">
-        <h3 className="text-2xl font-bold text-white truncate tracking-tight">{currentTrack.track_title || currentTrack.track_url}</h3>
+        <div className="flex items-center gap-3">
+          <h3 className="text-2xl font-bold text-white truncate tracking-tight">{currentTrack.track_title || currentTrack.track_url}</h3>
+        </div>
         <div className="flex items-center justify-between mt-2">
-          <p className="text-white/50 text-sm">
-            Submitted by <span className="text-white font-medium">{currentTrack.user?.username || 'Unknown User'}</span>
+          <p className="text-white/50 text-sm flex items-center gap-1">
+            Submitted by
+            <button
+              onClick={openSubmitterProfile}
+              className="text-white font-medium hover:text-purple-400 hover:underline transition-colors focus:outline-none"
+            >
+              {currentTrack.user?.username || 'Unknown User'}
+            </button>
           </p>
 
           <div className="flex gap-2">
@@ -230,6 +253,15 @@ const ReviewHub = () => {
           {getButtonText()}
         </button>
       </form>
+
+      {/* Submitter Profile Modal */}
+      <SubmitterProfileModal
+        isOpen={isSubmitterModalOpen}
+        onClose={() => setIsSubmitterModalOpen(false)}
+        userId={selectedSubmitterId}
+      />
+
+
     </div>
   );
 };

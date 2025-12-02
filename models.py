@@ -65,6 +65,10 @@ class User(Base):
     average_review_score = Column(Numeric(4, 2), default=0.00)
     discord_msg_count = Column(BigInteger, default=0)
     discord_voice_mins = Column(BigInteger, default=0)
+    lifetime_likes_sent = Column(BigInteger, default=0)
+    lifetime_gifts_sent = Column(BigInteger, default=0)
+    lifetime_tiktok_comments = Column(BigInteger, default=0)
+    lifetime_tiktok_shares = Column(BigInteger, default=0)
 
     # Generic Gamification Stats (JSON)
     # Stores: poll_votes, consec_wins, unique_tags, etc.
@@ -83,6 +87,7 @@ class Reviewer(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
     tiktok_handle = Column(String, unique=True)
     discord_channel_id = Column(String, unique=True, nullable=True)
+    see_the_line_channel_id = Column(String, unique=True, nullable=True)
     queue_status = Column(String, default="closed", nullable=False)
     configuration = Column(JSON, nullable=True)
     avatar_url = Column(String, nullable=True)
@@ -128,6 +133,10 @@ class Submission(Base):
     priority_value = Column(Integer, default=0, nullable=False)
     bookmarked = Column(Boolean, default=False, nullable=False)
     spotlighted = Column(Boolean, default=False, nullable=False)
+
+    @property
+    def is_community_winner(self):
+        return "[Free Skip Winner]" in (self.notes or "")
 
     # Gamification Fields
     review_score = Column(Numeric(4, 2), nullable=True) # Re-mapping float score to precision decimal
@@ -292,3 +301,12 @@ class UserAchievement(Base):
 
     user = relationship("User", back_populates="achievements")
     achievement = relationship("AchievementDefinition", back_populates="user_achievements")
+
+
+
+
+class GlobalConfig(Base):
+    __tablename__ = "global_configs"
+    key = Column(String, primary_key=True, index=True)
+    value = Column(JSON, nullable=True)
+
