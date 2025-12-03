@@ -23,6 +23,7 @@ class ReviewerConfiguration(BaseModel):
     priority_tiers: Optional[List[PriorityTier]] = None
     community_goal: Optional[CommunityGoal] = None
     banner_url: Optional[str] = None
+    banner_r2_uri: Optional[str] = None
     theme_color: Optional[str] = None
     social_link_url: Optional[str] = None
     social_link_text: Optional[str] = None
@@ -76,6 +77,7 @@ class ReviewerSettingsUpdate(BaseModel):
     configuration: Optional[ReviewerConfiguration] = None
     economy_configs: Optional[List[EconomyConfigUpdate]] = None
     avatar_url: Optional[str] = None
+    avatar_r2_uri: Optional[str] = None
     bio: Optional[str] = None
     community_goal_cooldown_minutes: Optional[int] = None
 
@@ -164,6 +166,7 @@ class ReviewerProfile(BaseModel):
     economy_configs: List[EconomyConfig] = []
     user: Optional[User] = None
     avatar_url: Optional[str] = None
+    avatar_r2_uri: Optional[str] = None
     bio: Optional[str] = None
     community_goal_cooldown_minutes: int = 5
 

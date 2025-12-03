@@ -14,6 +14,7 @@ export interface ReviewerConfiguration {
   visible_free_limit?: number; // Added this
   line_show_skips?: boolean;
   banner_url?: string;
+  banner_r2_uri?: string;
   theme_color?: string;
   social_link_url?: string;
   social_link_text?: string;
@@ -90,6 +91,7 @@ export interface ReviewerProfile {
   economy_configs?: EconomyConfig[];
   user?: User;
   avatar_url?: string;
+  avatar_r2_uri?: string;
   bio?: string;
   community_goal_cooldown_minutes?: number;
 }

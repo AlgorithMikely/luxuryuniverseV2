@@ -19,12 +19,16 @@ class StorageService:
             
         self.endpoint_url = f"https://{settings.R2_ACCOUNT_ID}.r2.cloudflarestorage.com" if settings.R2_ACCOUNT_ID else None
         
-    async def upload_file(self, file_obj, filename: str, content_type: str = "application/octet-stream") -> str:
+    async def upload_file(self, file_obj, filename: str, content_type: str = "application/octet-stream", bucket_name: str = None) -> str:
         if not self.session:
             raise ImportError("aioboto3 is not installed")
             
         if not self._check_config():
             raise Exception("R2 configuration is missing")
+            
+        target_bucket = bucket_name or settings.R2_BUCKET_NAME
+        if not target_bucket:
+             raise ValueError("No R2 bucket configured")
 
         try:
             from botocore.config import Config
@@ -37,7 +41,7 @@ class StorageService:
             ) as s3:
                 await s3.upload_fileobj(
                     file_obj, 
-                    settings.R2_BUCKET_NAME, 
+                    target_bucket, 
                     filename,
                     ExtraArgs={'ContentType': content_type}
                 )

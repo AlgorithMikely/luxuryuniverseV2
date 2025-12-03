@@ -79,43 +79,35 @@ async def stage_upload(
         # Determine content type
         content_type = file.content_type or "application/octet-stream"
         
+        # Determine bucket and public URL base
+        bucket_name = settings.R2_BUCKET_NAME
+        public_url_base = None
+        
+        # Categories that go to the PUBLIC bucket
+        if category in ["reviewer_banner", "reviewer_avatar", "user_avatar"]:
+            if settings.R2_PUBLIC_BUCKET_NAME:
+                bucket_name = settings.R2_PUBLIC_BUCKET_NAME
+                public_url_base = settings.R2_PUBLIC_URL
+        
         # Upload
-        r2_uri = await storage_service.upload_file(file.file, key, content_type)
+        r2_uri = await storage_service.upload_file(file.file, key, content_type, bucket_name=bucket_name)
         
         # Construct Public URL
-        # If R2_PUBLIC_URL is set in settings, use it. Otherwise, generate a presigned URL or use the r2:// URI.
-        # Ideally, we should have a public domain mapped to the bucket (e.g. cdn.luxuryuniverse.com)
-        # For now, we'll assume a public R2 dev URL or similar is available, OR we return the r2:// URI 
-        # and let the frontend/proxy handle it.
-        
-        # However, the frontend expects a usable URL.
-        # If we don't have a public domain, we might need to generate a presigned URL.
-        # But presigned URLs expire. 
-        
-        # Let's check if we can construct a public URL.
-        # Usually: https://pub-xxxxxxxx.r2.dev/key
-        
-        # For this implementation, I will return the r2:// URI and a presigned URL for immediate display.
-        # But wait, the database stores the URL. If we store a presigned URL, it will break.
-        # We should store the r2:// URI or the public URL.
-        
-        # Let's assume there is a public domain or we use the worker/public bucket access.
-        # If settings has a PUBLIC_CDN_URL, use that.
-        
         public_url = r2_uri
-        if hasattr(settings, 'R2_PUBLIC_URL') and settings.R2_PUBLIC_URL:
+        
+        if public_url_base:
+             # If we uploaded to the public bucket and have a public URL configured
+             public_url = f"{public_url_base}/{key}"
+             # IMPORTANT: For public bucket uploads, we want to save the PUBLIC URL, not the r2:// URI.
+             # If we save r2://, the media_service will try to sign it against the PRIVATE bucket (default), which will 404.
+             r2_uri = public_url
+        elif hasattr(settings, 'R2_PUBLIC_URL') and settings.R2_PUBLIC_URL and bucket_name == settings.R2_PUBLIC_BUCKET_NAME:
+             # Fallback if logic above missed it but we are in public bucket
              public_url = f"{settings.R2_PUBLIC_URL}/{key}"
+             r2_uri = public_url
         else:
+             # Private bucket or no public URL configured
              # Fallback: Generate a long-lived presigned URL (not ideal for permanent storage but works for now)
-             # OR just return the r2:// URI and have a proxy endpoint.
-             # Given the user wants "folders", they likely have a public bucket or domain.
-             # I'll try to generate a presigned URL for the response so the frontend can show it immediately.
-             # But for storage, we should probably return the key or r2:// URI.
-             
-             # The frontend sets 'bannerUrl' to this returned value.
-             # If we return r2://..., the <img> tag won't work.
-             
-             # Let's generate a presigned URL for now.
              presigned = await storage_service.generate_presigned_url(key)
              if presigned:
                  public_url = presigned

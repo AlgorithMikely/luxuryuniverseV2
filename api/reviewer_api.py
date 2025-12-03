@@ -13,7 +13,7 @@ import models
 import schemas
 import security
 from database import get_db
-from services import economy_service, user_service, queue_service
+from services import economy_service, user_service, queue_service, media_service
 
 router = APIRouter(prefix="/reviewer", tags=["Reviewer"])
 
@@ -58,7 +58,8 @@ async def get_all_reviewers(db: AsyncSession = Depends(get_db)):
             selectinload(models.Reviewer.economy_configs)
         )
     )
-    return result.scalars().all()
+    reviewers = result.scalars().all()
+    return [await media_service.enrich_reviewer_profile(r) for r in reviewers]
 
 
 
@@ -673,7 +674,7 @@ async def get_reviewer_settings(reviewer_id: int, db: AsyncSession = Depends(get
 
     # TODO: Mask payment credentials if not authorized?
     
-    return reviewer
+    return await media_service.enrich_reviewer_profile(reviewer)
 
 @router.get("/public/{identifier}", response_model=schemas.ReviewerProfile)
 async def get_public_reviewer_profile(identifier: str, db: AsyncSession = Depends(get_db)):
@@ -703,7 +704,7 @@ async def get_public_reviewer_profile(identifier: str, db: AsyncSession = Depend
     else:
         reviewer.open_queue_tiers = []
 
-    return reviewer
+    return await media_service.enrich_reviewer_profile(reviewer)
 
 @router.get("/{reviewer_id}/giveaway/state", response_model=Optional[schemas.GiveawayState])
 async def get_public_giveaway_state(reviewer_id: int, db: AsyncSession = Depends(get_db)):
@@ -754,7 +755,7 @@ async def update_reviewer_settings(reviewer_id: int, settings: schemas.ReviewerS
         else:
              logger.warning("Bot not ready or not found when updating reviewer handle")
 
-    return updated_reviewer
+    return await media_service.enrich_reviewer_profile(updated_reviewer)
 
 @router.get("/{reviewer_id}/stats", response_model=schemas.QueueStats)
 async def get_reviewer_stats(reviewer_id: int, db: AsyncSession = Depends(get_db)):
@@ -824,7 +825,8 @@ async def sync_reviewer_avatar(reviewer_id: int, db: AsyncSession = Depends(get_
 
         # Update reviewer
         update_data = schemas.ReviewerSettingsUpdate(avatar_url=avatar_url)
-        return await queue_service.update_reviewer_settings(db, reviewer_id, update_data)
+        updated_reviewer = await queue_service.update_reviewer_settings(db, reviewer_id, update_data)
+        return await media_service.enrich_reviewer_profile(updated_reviewer)
 
     except Exception as e:
         import logging

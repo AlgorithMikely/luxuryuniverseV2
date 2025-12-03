@@ -27,6 +27,7 @@ const ReviewerSettingsPage: React.FC = () => {
     const [communityGoalCooldown, setCommunityGoalCooldown] = useState<number | ''>('');
     const [bio, setBio] = useState('');
     const [bannerUrl, setBannerUrl] = useState('');
+    const [bannerR2Uri, setBannerR2Uri] = useState('');
     const [bannerLoadError, setBannerLoadError] = useState(false);
 
     useEffect(() => {
@@ -34,6 +35,7 @@ const ReviewerSettingsPage: React.FC = () => {
     }, [bannerUrl]);
 
     const [avatarUrl, setAvatarUrl] = useState('');
+    const [avatarR2Uri, setAvatarR2Uri] = useState('');
     const [themeColor, setThemeColor] = useState('purple');
     const [tiers, setTiers] = useState<PriorityTier[]>([]);
     const [economyConfigs, setEconomyConfigs] = useState<EconomyConfig[]>([]);
@@ -177,7 +179,57 @@ const ReviewerSettingsPage: React.FC = () => {
                 }
                 setBio(profile.bio || '');
                 setBannerUrl(profile.configuration?.banner_url || '');
+                setBannerR2Uri(profile.configuration?.banner_r2_uri || '');
+                // If the loaded URL is already an r2:// URI (shouldn't be if enriched, but just in case)
+                // Actually, the API now returns enriched URLs (presigned).
+                // But we don't have the original R2 URI unless we store it separately or infer it.
+                // Wait, if we save the R2 URI, the API enriches it to a presigned URL on GET.
+                // So `bannerUrl` will be the presigned URL.
+                // If the user doesn't change it, we save the presigned URL back?
+                // NO! That would break it again after expiration.
+
+                // We need the API to return the R2 URI as well, OR we need to detect if it's a presigned URL and NOT overwrite it if unchanged?
+                // Or better: The API should return the R2 URI in a separate field? 
+                // But we didn't add that to the schema.
+
+                // Alternative: If the user hasn't uploaded a NEW image, we shouldn't send the banner_url in the update unless it changed.
+                // But `handleSave` sends everything.
+
+                // If we receive a presigned URL, we can't easily convert it back to r2://.
+                // However, if we don't change the image, we want to keep the existing value in the DB (which is r2://).
+
+                // Issue: The frontend sends the full configuration object. If we send the presigned URL, it overwrites the r2:// URI in the DB.
+
+                // FIX: We need to modify the backend `update_reviewer_settings` to NOT update fields if they look like presigned URLs?
+                // Or better: The frontend should check if `bannerUrl` starts with `http` and contains `X-Amz-Signature` (common for presigned), 
+                // and if so, maybe NOT send it? But we need to send something.
+
+                // Actually, if we just uploaded, `bannerR2Uri` is set.
+                // If we loaded from DB, `bannerR2Uri` is empty.
+                // If `bannerR2Uri` is empty, we send `bannerUrl`.
+                // If `bannerUrl` is the presigned URL from the server, we are saving a temporary URL. This is BAD.
+
+                // We need the backend to expose the underlying R2 URI or we need to avoid re-saving the URL if it hasn't changed.
+
+                // Let's check `api/reviewer_api.py`. `update_reviewer_settings` merges the config.
+
+                // Quick fix: In `handleSave`, if `bannerR2Uri` is empty AND `bannerUrl` hasn't changed from `reviewerProfile.configuration.banner_url`, 
+                // we should send the ORIGINAL value from the DB? 
+                // But `reviewerProfile` from the API *already* has the enriched (presigned) URL.
+
+                // We are stuck unless we know the original R2 URI.
+
+                // I need to update the Schema to include `banner_r2_uri` and `avatar_r2_uri`? 
+                // Or just `original_banner_url`?
+
+                // Or, I can update `enrich_reviewer_profile` to populate a new field `banner_r2_uri` in the response, 
+                // but I'd need to add it to the Pydantic model.
+
+                // Let's add `banner_r2_uri` and `avatar_r2_uri` to the `ReviewerProfile` schema (and `ReviewerConfiguration`).
+                // This is the cleanest way.
+
                 setAvatarUrl(profile.avatar_url || '');
+                setAvatarR2Uri(profile.avatar_r2_uri || '');
                 setThemeColor(profile.configuration?.theme_color || 'purple');
                 setLineShowSkips(profile.configuration?.line_show_skips !== false);
                 setSocialLinkUrl(profile.configuration?.social_link_url || '');
@@ -245,6 +297,7 @@ const ReviewerSettingsPage: React.FC = () => {
                 social_handle: socialHandle,
                 community_goal_cooldown_minutes: communityGoalCooldown === '' ? 5 : Number(communityGoalCooldown),
                 economy_configs: economyConfigs.map(c => ({ event_name: c.event_name, coin_amount: c.coin_amount })),
+                avatar_url: avatarR2Uri || avatarUrl,
                 configuration: {
                     ...reviewerProfile.configuration,
                     visible_free_limit: visibleFreeLimit === '' ? 20 : Number(visibleFreeLimit),
@@ -257,7 +310,7 @@ const ReviewerSettingsPage: React.FC = () => {
                         'COMMENTS': { base_target: commentsBaseTarget === '' ? 500 : Number(commentsBaseTarget), description: "Chat {target} times for a Free Skip!" },
                     },
                     line_show_skips: lineShowSkips,
-                    banner_url: bannerUrl,
+                    banner_url: bannerR2Uri || bannerUrl,
                     theme_color: themeColor,
                     social_link_url: socialLinkUrl,
                     social_link_text: socialLinkText,
@@ -364,9 +417,27 @@ const ReviewerSettingsPage: React.FC = () => {
             });
 
             if (croppingType === 'banner') {
+                // Prefer R2 URI for storage if available, but we need to show the URL immediately
+                // The backend returns { url: "...", r2_uri: "..." }
+                // We should store the r2_uri in state if we want to save it, but display the url.
+                // However, the state `bannerUrl` is used for both display and saving.
+                // We need a separate state or logic.
+                // Let's just set bannerUrl to r2_uri if available, but wait... 
+                // If we set it to r2://..., the <img> tag will break immediately.
+
+                // Solution: We need to store the r2_uri in a separate ref or state to send on save,
+                // OR we just rely on the fact that the backend returns the r2_uri and we should probably
+                // update the `bannerUrl` state to the r2_uri, but then the preview breaks.
+
+                // Better approach:
+                // 1. Set `bannerUrl` to `data.url` (presigned) so preview works.
+                // 2. When saving, if we have a `bannerR2Uri` state, send that instead.
+
                 setBannerUrl(data.url);
+                setBannerR2Uri(data.r2_uri || data.url);
             } else {
                 setAvatarUrl(data.url);
+                setAvatarR2Uri(data.r2_uri || data.url);
             }
             setMessage({ text: `${croppingType === 'banner' ? 'Banner' : 'Avatar'} uploaded successfully!`, type: 'success' });
         } catch (err) {
