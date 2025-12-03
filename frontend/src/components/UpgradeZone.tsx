@@ -11,6 +11,9 @@ import { useAuthStore } from "../stores/authStore";
 import SubmissionSlot from "./SubmissionSlot";
 import { SmartSubmissionItem } from "../types";
 import { useSubmissionSlots } from "../hooks/useSubmissionSlots";
+import { useSubmission } from "../hooks/useSubmission";
+
+console.log("UpgradeZone Module Loaded - DEBUG CHECK " + Date.now());
 
 interface UpgradeZoneProps {
     reviewer: ReviewerProfile;
@@ -66,13 +69,42 @@ const UpgradeZone: React.FC<UpgradeZoneProps> = ({ reviewer, existingSubmission,
         if (allowedSubmissions < 3 && slot3) setSlot3(null);
     }, [allowedSubmissions, slot2, slot3]);
 
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [checkoutAmount, setCheckoutAmount] = useState<number | null>(null);
 
-    const handleUpgrade = async () => {
+    const { submit, upgrade, isSubmitting } = useSubmission({
+        reviewer,
+        onSuccess: () => {
+            // Determine if it was an upgrade or new submission for the toast? 
+            // The hook handles success toast, but we can add more specific ones if needed.
+            // Actually hook says "Submission successful" or "Upgrade successful".
+            onSuccess();
+            onClose();
+        },
+        onOpenCheckout: (shortfall) => {
+            if (shortfall !== undefined) {
+                setCheckoutAmount(shortfall / 100);
+            } else {
+                setCheckoutAmount(null);
+            }
+            setIsCheckoutOpen(true);
+        },
+        onOpenDuplicateModal: (info) => {
+            toast.error("This track is already in the queue.");
+            // Future: Implement duplicate modal here if needed
+        },
+        onHistoryDuplicate: (info) => {
+            let cleared = false;
+            if (slot1?.is_history && slot1.track_url === info.track_url) { setSlot1(null); cleared = true; }
+            if (slot2?.is_history && slot2.track_url === info.track_url) { setSlot2(null); cleared = true; }
+            if (slot3?.is_history && slot3.track_url === info.track_url) { setSlot3(null); cleared = true; }
+        }
+    });
+
+    const processUpgrade = async () => {
+        console.log("processUpgrade START");
         const cost = Math.max(0, priorityValue - baseValue);
 
         if (cost <= 0 && priorityValue === baseValue && existingSubmission) {
-            // No upgrade selected
             toast.error("Please select a higher tier to upgrade.");
             return;
         }
@@ -82,88 +114,20 @@ const UpgradeZone: React.FC<UpgradeZoneProps> = ({ reviewer, existingSubmission,
             return;
         }
 
-        setIsCheckoutOpen(true);
-    };
-
-    const performUpgrade = async () => {
-        setIsSubmitting(true);
-        try {
-            if (!existingSubmission) {
-                // NEW SUBMISSION FLOW
-                await performNewSubmission();
-                return;
-            }
-
-            // UPGRADE FLOW
-            const newSubmissions = [];
-            if (allowedSubmissions >= 2 && slot2) newSubmissions.push(slot2);
-            if (allowedSubmissions >= 3 && slot3) newSubmissions.push(slot3);
-
-            if ((slot2?.file) || (slot3?.file)) {
-                toast.error("File uploads are not yet supported for upgrades. Please use links (SoundCloud, Dropbox, etc).");
-                setIsSubmitting(false);
-                return;
-            }
-
-            const payload = {
-                target_priority_value: priorityValue,
-                new_submissions: newSubmissions
-            };
-
-            await api.post(`/queue/line/${reviewer.id}/submission/${existingSubmission.id}/upgrade`, payload);
-
-            toast.success("Upgrade successful!");
-            onSuccess();
-            onClose();
-
-        } catch (e: any) {
-            console.error(e);
-            if (e.response?.status === 402) {
-                toast.error("Insufficient funds. Please top up.");
-                setIsCheckoutOpen(true);
-            } else {
-                toast.error(e.response?.data?.detail || "Upgrade failed.");
-            }
-        } finally {
-            setIsSubmitting(false);
+        if (existingSubmission) {
+            await upgrade(
+                existingSubmission.id,
+                priorityValue,
+                { slot2, slot3 },
+                allowedSubmissions
+            );
+        } else {
+            await submit(
+                { slot1, slot2, slot3 },
+                priorityValue,
+                allowedSubmissions
+            );
         }
-    };
-
-    const performNewSubmission = async () => {
-        // Construct FormData for new submission
-        const formData = new FormData();
-        const items = [];
-
-        if (slot1) items.push({ ...slot1, sequence_order: 1, priority_value: priorityValue });
-        if (allowedSubmissions >= 2 && slot2) items.push({ ...slot2, sequence_order: 2, priority_value: priorityValue });
-        if (allowedSubmissions >= 3 && slot3) items.push({ ...slot3, sequence_order: 3, priority_value: priorityValue });
-
-        // Handle files
-        if (slot1?.file) formData.append('files', slot1.file);
-        if (slot2?.file) formData.append('files', slot2.file);
-        if (slot3?.file) formData.append('files', slot3.file);
-
-        // Sanitize items for JSON (remove file objects)
-        const sanitizedItems = items.map(item => {
-            const { file, ...rest } = item;
-            return rest;
-        });
-
-        const payload = {
-            submissions: sanitizedItems,
-            is_priority: priorityValue > 0
-        };
-
-        formData.append('submissions_json', JSON.stringify(payload));
-        if ((user as any)?.email) formData.append('email', (user as any).email);
-
-        await api.post(`/reviewer/${reviewer.id}/submit`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-        });
-
-        toast.success("Submission successful!");
-        onSuccess();
-        onClose();
     };
 
     const upgradeCost = Math.max(0, priorityValue - baseValue);
@@ -301,7 +265,7 @@ const UpgradeZone: React.FC<UpgradeZoneProps> = ({ reviewer, existingSubmission,
                         )}
 
                         <button
-                            onClick={handleUpgrade}
+                            onClick={processUpgrade}
                             disabled={isSubmitting || (existingSubmission ? upgradeCost <= 0 : !slot1) || !isDisclaimerChecked}
                             className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all
                                 ${(isSubmitting || (existingSubmission ? upgradeCost <= 0 : !slot1) || !isDisclaimerChecked) ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:scale-[1.02]'}
@@ -325,19 +289,21 @@ const UpgradeZone: React.FC<UpgradeZoneProps> = ({ reviewer, existingSubmission,
             <CheckoutModal
                 isOpen={isCheckoutOpen}
                 onClose={() => setIsCheckoutOpen(false)}
-                amount={upgradeCost}
+                amount={checkoutAmount !== null ? checkoutAmount : upgradeCost}
                 reviewerId={reviewer.id}
+                submissionId={existingSubmission?.id}
                 metadata={{
                     type: 'wallet_topup', // Just top up, we handle upgrade after
                     email: (user as any)?.email, // Ensure email is passed if needed
-                    track_url: slot1?.track_url,
+                    track_url: slot1?.track_url || (slot1?.file ? "File Upload" : undefined),
                     track_title: slot1?.track_title,
                     artist: slot1?.artist,
-                    genre: slot1?.genre
+                    genre: slot1?.genre,
+                    tier: existingSubmission ? "Upgrade" : "Submission"
                 }}
                 onSuccess={() => {
                     setIsCheckoutOpen(false);
-                    performUpgrade(); // Trigger upgrade after successful payment/topup
+                    processUpgrade(); // Trigger upgrade/submission after successful payment/topup
                 }}
             />
         </div>

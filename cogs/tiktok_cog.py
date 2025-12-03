@@ -134,11 +134,18 @@ class StreamBuffer:
         # Structure: {tiktok_user_id: { 'rainbow': set(), 'all_caps': bool, 'emoji_only': bool, 'likes_sent': int, 'gifts_sent': int, 'msg_count': int, 'shares_sent': int }}
         self.user_chat_activity = {}
 
+        # Community Goal Specifics
+        self.goal_diamonds = 0
+        self.last_total_likes = 0
+
     def add_likes(self, count: int):
         self.current_session_likes += count
 
     def add_diamonds(self, count: int):
         self.current_session_diamonds += count
+
+    def add_goal_diamonds(self, count: int):
+        self.goal_diamonds += count
 
     def add_viewer_sample(self, count: int):
         self.viewer_count_samples.append(count)
@@ -149,6 +156,13 @@ class StreamBuffer:
             self.emoji_smile_count += 1
         else:
             self.emoji_cry_count += 1
+
+    def add_shares(self, count: int):
+        # Shares are tracked in user_chat_activity but we might want a session total too
+        # For now, just a placeholder if needed for session stats, 
+        # but the main usage is in user_chat_activity which is updated directly in on_share.
+        # However, on_share calls buffer.add_shares(share_count), so we need this method.
+        pass
 
     def get_average_viewers(self) -> int:
         if not self.viewer_count_samples:
@@ -165,6 +179,7 @@ class StreamBuffer:
         # Reset flushed metrics
         self.current_session_likes = 0
         self.current_session_diamonds = 0
+        self.goal_diamonds = 0
         self.emoji_smile_count = 0
         self.emoji_cry_count = 0
         self.user_chat_activity = {}
@@ -186,6 +201,7 @@ class TikTokCog(commands.Cog):
         self.reviewer_map = {} # handle -> reviewer_id
         self.buffers = {} # handle -> StreamBuffer
         self.flush_tasks = {} # handle -> task
+        self.background_tasks = set() # Store strong refs to background tasks
 
         # State for tracking song-specific interactions
         self.current_submission_id = None
@@ -196,7 +212,15 @@ class TikTokCog(commands.Cog):
         self.like_counts = {}
         self.share_counts = {}
 
-        self.bot.loop.create_task(self.load_persistent_connections())
+        self.share_counts = {}
+        self.stats_tasks = {} # handle -> task
+
+        self.stats_tasks = {} # handle -> task
+        
+        # Start persistent connections loader
+        task = self.bot.loop.create_task(self.load_persistent_connections())
+        self.background_tasks.add(task)
+        task.add_done_callback(self.background_tasks.discard)
 
     def start_tracking(self, submission_id: int):
         """Start tracking interactions for a specific song."""
@@ -267,6 +291,10 @@ class TikTokCog(commands.Cog):
         if handle in self.flush_tasks:
             self.flush_tasks[handle].cancel()
             del self.flush_tasks[handle]
+
+        if handle in self.stats_tasks:
+            self.stats_tasks[handle].cancel()
+            del self.stats_tasks[handle]
         
         if handle in self.buffers:
             del self.buffers[handle]
@@ -317,9 +345,14 @@ class TikTokCog(commands.Cog):
                 for handle in unique_handles:
                     if handle and handle not in self.live_clients:
                         self.persistent_connections.add(handle)
-                        self.bot.loop.create_task(self._background_connect(None, handle, True))
+                        task = self.bot.loop.create_task(self._background_connect(None, handle, True))
+                        self.background_tasks.add(task)
+                        task.add_done_callback(self.background_tasks.discard)
             except Exception as e:
                 logger.error(f"Error loading persistent connections: {e}", exc_info=True)
+
+    # room_stats_loop removed as it was unreliable and caused age-restriction errors.
+    # We now rely on event.total (likes) and event.share_count (shares) for accurate counting.
 
     async def flush_loop(self, tiktok_handle: str, reviewer_id: int):
         while True:
@@ -333,6 +366,36 @@ class TikTokCog(commands.Cog):
         if not buffer:
             return
 
+        # --- SNAPSHOT & RESET ---
+        # We must capture the current state and reset the buffer IMMEDIATELY.
+        # This prevents a race condition where new events come in while we are awaiting DB calls,
+        # and then get wiped out when we call reset() at the end.
+        
+        # 1. Capture Data
+        likes_to_add = buffer.current_session_likes
+        diamonds_to_add = buffer.current_session_diamonds
+        goal_diamonds_to_add = buffer.goal_diamonds
+        
+        # Deep copy chat activity since it's a dict of dicts/sets
+        import copy
+        user_chat_activity_snapshot = copy.deepcopy(buffer.user_chat_activity)
+        
+        # Capture Viewer Stats
+        viewer_count_samples = list(buffer.viewer_count_samples)
+        
+        # Capture Poll/Emoji Stats
+        emoji_smile_count = buffer.emoji_smile_count
+        emoji_cry_count = buffer.emoji_cry_count
+        
+        # 2. Reset Buffer Immediately
+        buffer.reset()
+        # We also need to clear the samples/sum which reset() does partially but let's be explicit
+        # buffer.reset() handles: likes, diamonds, goal_diamonds, emojis, chat_activity, viewer_samples
+        
+        # If nothing to flush, just return (optimization)
+        if likes_to_add == 0 and diamonds_to_add == 0 and not user_chat_activity_snapshot and not viewer_count_samples:
+            return
+
         try:
             async with AsyncSessionLocal() as db:
                 # 1. Update Reviewer (User) Stats
@@ -343,9 +406,6 @@ class TikTokCog(commands.Cog):
                 user = await db.get(models.User, reviewer.user_id)
 
                 # 2. Update Lifetime Stats
-                likes_to_add = buffer.current_session_likes
-                diamonds_to_add = buffer.current_session_diamonds
-
                 if likes_to_add > 0:
                     logger.info(f"Flushing {likes_to_add} likes for reviewer {reviewer_id}")
 
@@ -358,7 +418,7 @@ class TikTokCog(commands.Cog):
                     if likes_to_add > 0:
                         # Aggregate user likes for tickets
                         user_likes_map = {}
-                        for uid, activity in buffer.user_chat_activity.items():
+                        for uid, activity in user_chat_activity_snapshot.items():
                             if activity['likes_sent'] > 0:
                                 user_likes_map[uid] = activity['likes_sent']
                         
@@ -366,28 +426,58 @@ class TikTokCog(commands.Cog):
                             db, reviewer_id, 'LIKES', likes_to_add, user_likes_map
                         )
 
+                    # --- COMMUNITY GOAL BATCH UPDATE (SHARES) ---
+                    shares_to_add = sum(a['shares_sent'] for a in user_chat_activity_snapshot.values())
+                    if shares_to_add > 0:
+                        user_shares_map = {}
+                        for uid, activity in user_chat_activity_snapshot.items():
+                            if activity['shares_sent'] > 0:
+                                user_shares_map[uid] = activity['shares_sent']
+                        
+                        await giveaway_service.batch_update_community_goal_progress(
+                            db, reviewer_id, 'SHARES', shares_to_add, user_shares_map
+                        )
+
+                    # --- COMMUNITY GOAL BATCH UPDATE (COMMENTS) ---
+                    comments_to_add = sum(a['msg_count'] for a in user_chat_activity_snapshot.values())
+                    if comments_to_add > 0:
+                        user_comments_map = {}
+                        for uid, activity in user_chat_activity_snapshot.items():
+                            if activity['msg_count'] > 0:
+                                user_comments_map[uid] = activity['msg_count']
+                        
+                        await giveaway_service.batch_update_community_goal_progress(
+                            db, reviewer_id, 'COMMENTS', comments_to_add, user_comments_map
+                        )
+
                     # --- COMMUNITY GOAL BATCH UPDATE (GIFTS) ---
-                    if diamonds_to_add > 0:
-                        # Aggregate user gifts for tickets
+                    if goal_diamonds_to_add > 0:
                         user_gifts_map = {}
-                        for uid, activity in buffer.user_chat_activity.items():
+                        for uid, activity in user_chat_activity_snapshot.items():
                             if activity['gifts_sent'] > 0:
                                 user_gifts_map[uid] = activity['gifts_sent']
                         
                         await giveaway_service.batch_update_community_goal_progress(
-                            db, reviewer_id, 'GIFTS', diamonds_to_add, user_gifts_map
+                            db, reviewer_id, 'GIFTS', goal_diamonds_to_add, user_gifts_map
                         )
 
                 # 2. Update Active Submission Stats (Average Viewers & Polls)
                 active_sub = await queue_service.get_active_submission(db, reviewer_id)
                 if active_sub:
-                    # Viewers
-                    avg_viewers = buffer.get_average_viewers()
+                    # Viewers - Calculate from snapshot
+                    avg_viewers = 0
+                    if viewer_count_samples:
+                        avg_viewers = sum(viewer_count_samples) // len(viewer_count_samples)
+                    
                     if avg_viewers > 0:
                          active_sub.average_concurrent_viewers = avg_viewers
 
-                    # Polls
-                    poll_percent = buffer.get_poll_win_percent()
+                    # Polls - Calculate from snapshot
+                    total_votes = emoji_smile_count + emoji_cry_count
+                    poll_percent = None
+                    if total_votes > 0:
+                        poll_percent = int((emoji_smile_count / total_votes) * 100)
+
                     if poll_percent is not None:
                          active_sub.poll_result_w_percent = poll_percent
 
@@ -401,13 +491,18 @@ class TikTokCog(commands.Cog):
                 )
                 live_session = session.scalars().first()
 
+                # Helper to get avg viewers from snapshot
+                current_avg_viewers = 0
+                if viewer_count_samples:
+                    current_avg_viewers = sum(viewer_count_samples) // len(viewer_count_samples)
+
                 if not live_session:
                     # Create one if we have activity
                     if likes_to_add > 0 or diamonds_to_add > 0:
                          live_session = models.LiveSession(
                              user_id=user.id,
                              tiktok_room_id=str(self.live_clients[tiktok_handle].room_id) if tiktok_handle in self.live_clients and self.live_clients[tiktok_handle].connected else None,
-                             max_concurrent_viewers=buffer.get_average_viewers()
+                             max_concurrent_viewers=current_avg_viewers
                          )
                          db.add(live_session)
                 else:
@@ -415,7 +510,7 @@ class TikTokCog(commands.Cog):
                     live_session.total_likes = (live_session.total_likes or 0) + likes_to_add
                     live_session.total_diamonds = (live_session.total_diamonds or 0) + diamonds_to_add
                     current_max = live_session.max_concurrent_viewers or 0
-                    window_max = max(buffer.viewer_count_samples) if buffer.viewer_count_samples else 0
+                    window_max = max(viewer_count_samples) if viewer_count_samples else 0
                     if window_max > current_max:
                         live_session.max_concurrent_viewers = window_max
                     db.add(live_session)
@@ -428,7 +523,7 @@ class TikTokCog(commands.Cog):
                 await achievement_service.trigger_achievement(db, user.id, "CONCURRENT_VIEWERS", live_session.max_concurrent_viewers if live_session else 0)
 
                 # 5. Check Achievements for Viewers
-                for tiktok_username, activity in buffer.user_chat_activity.items():
+                for tiktok_username, activity in user_chat_activity_snapshot.items():
                     viewer_user = await user_service.get_user_by_tiktok_username(db, tiktok_username)
                     if not viewer_user:
                         continue
@@ -463,11 +558,6 @@ class TikTokCog(commands.Cog):
                     # Emoji Chef
                     if activity['emoji_only']:
                         await achievement_service.trigger_achievement(db, viewer_user.id, "CHAT_EMOJI_ONLY", specific_slug="emoji_chef")
-
-                # Reset Buffer
-                buffer.reset()
-                buffer.viewer_count_samples = [] # Clear samples for next window
-                buffer.viewer_count_sum = 0
 
         except Exception as e:
             logger.error(f"Flush error for reviewer {reviewer_id}: {e}")
@@ -568,11 +658,15 @@ class TikTokCog(commands.Cog):
                 logger.error(f"Error ending LiveSession on live end: {e}", exc_info=True)
             
             disconnect_event.set()
-
         @client.on(GiftEvent)
         async def on_gift(event: GiftEvent):
-            # If the gift is streakable and the streak is not over, wait for the final event
-            if hasattr(event.gift, 'streakable') and event.gift.streakable and hasattr(event, 'streaking') and event.streaking:
+            """
+            Handles gift events.
+            - Checks for skip upgrades (immediate).
+            - Buffers for community goals (batch).
+            """
+            # Filter out 0-value gifts (likes sent as gifts?)
+            if event.gift.diamond_count <= 0:
                 return
 
             user_handle = event.user.unique_id
@@ -592,14 +686,52 @@ class TikTokCog(commands.Cog):
             # Community Goal: GIFTS
             if reviewer_id:
                 async with AsyncSessionLocal() as db:
-                    await giveaway_service.update_community_goal_progress(
-                        db, 
-                        reviewer_id, 
-                        'GIFTS', 
-                        event.gift.diamond_count, 
-                        user_id=event.user.unique_id,
-                        username=event.user.unique_id
-                    )
+                    try:
+                        # Check if this gift should trigger a skip upgrade
+                        # We need to await this since it involves DB lookups
+                        action = await queue_service.process_gift_interaction(
+                            db, 
+                            reviewer_id, 
+                            event.user.unique_id, 
+                            event.gift.diamond_count
+                        )
+                        
+                        logger.info(f"Gift Event: {event.user.unique_id} sent {event.gift.diamond_count} diamonds. Action: {action}")
+
+                        if action == 'GOAL':
+                            # Add to buffer for batch update
+                            if tiktok_handle in self.buffers:
+                                self.buffers[tiktok_handle].add_goal_diamonds(event.gift.diamond_count)
+                                logger.info(f"Buffered {event.gift.diamond_count} diamonds for goal. Total buffered: {self.buffers[tiktok_handle].goal_diamonds}")
+                            
+                            # We NO LONGER update immediately here to avoid double counting / race conditions
+                            # The flush loop will handle it.
+                            pass
+                        
+                        elif action == 'SKIP_UPGRADE':
+                            # Notify frontend of upgrade
+                            # queue_service.update_priority already emits queue update
+                            logger.info(f'Gift from {event.user.unique_id} triggered a SKIP UPGRADE.')
+                            pass
+
+                        elif action == 'COINS':
+                            # Award FULL value (skip equivalent)
+                            # We need to fetch the account to check if linked
+                            async with AsyncSessionLocal() as session_coins:
+                                 account = await self.get_or_create_tiktok_account(session_coins, event.user.unique_id)
+                                 if account.user_id:
+                                     # Linked: Award immediately
+                                     await self.award_luxury_coins(session_coins, account.user_id, event.gift.diamond_count, reviewer_id, "TikTok Gift Reward (Skip Value)")
+                                     logger.info(f"Awarded {event.gift.diamond_count} coins to {event.user.unique_id} (Linked)")
+                                 else:
+                                     # Unlinked: Accrue pending
+                                     account.pending_coins += event.gift.diamond_count
+                                     session_coins.add(account)
+                                     await session_coins.commit()
+                                     logger.info(f"Accrued {event.gift.diamond_count} pending coins for unlinked handle @{event.user.unique_id}")
+
+                    except Exception as e:
+                        logger.error(f"Error processing gift interaction: {e}")
 
             async with AsyncSessionLocal() as session:
                 try:
@@ -644,27 +776,51 @@ class TikTokCog(commands.Cog):
             
             # Buffer Logic
             if tiktok_handle in self.buffers:
-                self.buffers[tiktok_handle].add_likes(event.count)
+                buffer = self.buffers[tiktok_handle]
                 
-                # Track user likes sent
-                user_id = event.user.unique_id
-                if user_id not in self.buffers[tiktok_handle].user_chat_activity:
-                    self.buffers[tiktok_handle].user_chat_activity[user_id] = {
-                        'rainbow': set(), 'all_caps': False, 'emoji_only': False, 'msg_count': 0, 'likes_sent': 0, 'gifts_sent': 0, 'shares_sent': 0
-                    }
-                self.buffers[tiktok_handle].user_chat_activity[user_id]['likes_sent'] += event.count
+                # Use event.total for robust counting (catches dropped events)
+                total_likes = getattr(event, 'total', 0)
+                likes_to_add = event.count
+                
+                if total_likes > 0:
+                    if buffer.last_total_likes == 0:
+                        # First sync - trust the event count but set the baseline
+                        buffer.last_total_likes = total_likes
+                    else:
+                        # Calculate delta from last known total
+                        delta = total_likes - buffer.last_total_likes
+                        if delta > 0:
+                            likes_to_add = delta
+                            buffer.last_total_likes = total_likes
+                        else:
+                            # Out of order or duplicate event, ignore or use count?
+                            # If delta is 0 or negative, we might have processed this already.
+                            # But to be safe against "lower" totals (which shouldn't happen), 
+                            # we'll just stick to event.count if total seems wonky, 
+                            # OR we can just ignore it. 
+                            # Let's trust the total is monotonic.
+                            if delta == 0:
+                                likes_to_add = 0
+                            else:
+                                # Negative delta? Reset baseline?
+                                # This might happen if the stream restarts or something weird.
+                                # Let's just reset baseline and use count.
+                                buffer.last_total_likes = total_likes
+                
+                if likes_to_add > 0:
+                    buffer.add_likes(likes_to_add)
+                    
+                    # Track user likes sent
+                    user_id = event.user.unique_id
+                    if user_id not in buffer.user_chat_activity:
+                        buffer.user_chat_activity[user_id] = {
+                            'rainbow': set(), 'all_caps': False, 'emoji_only': False, 'msg_count': 0, 'likes_sent': 0, 'gifts_sent': 0, 'shares_sent': 0
+                        }
+                    buffer.user_chat_activity[user_id]['likes_sent'] += likes_to_add
 
             # Community Goal: LIKES
-            if reviewer_id:
-                async with AsyncSessionLocal() as db:
-                    await giveaway_service.update_community_goal_progress(
-                        db, 
-                        reviewer_id, 
-                        'LIKES', 
-                        event.count, 
-                        user_id=event.user.unique_id,
-                        username=event.user.unique_id
-                    )
+            # REMOVED: Immediate update. Now handled in flush loop.
+            pass
 
             async with AsyncSessionLocal() as session:
                 try:
@@ -702,27 +858,38 @@ class TikTokCog(commands.Cog):
                     self.buffers[tiktok_handle].user_chat_activity[user_id] = {
                         'rainbow': set(), 'all_caps': False, 'emoji_only': False, 'msg_count': 0, 'likes_sent': 0, 'gifts_sent': 0, 'shares_sent': 0
                     }
-                self.buffers[tiktok_handle].user_chat_activity[user_id]['shares_sent'] += 1
+                
+                # Use event.share_count for accurate batch size
+                share_count = getattr(event, 'share_count', 1)
+                
+                self.buffers[tiktok_handle].add_shares(share_count)
+                self.buffers[tiktok_handle].user_chat_activity[user_id]['shares_sent'] += share_count
+
+                # Community Goal: SHARES
+                # REMOVED: Immediate update. Now handled in flush loop.
+                
+                # Points & Coins
+                # Award points for EACH share in the batch
+                await self.giveaway_service.add_points(user_id, user_handle, 50 * share_count)
+                await self.giveaway_service.add_luxury_coins(user_id, user_handle, 10 * share_count)
+
+                self.buffers[tiktok_handle].user_chat_activity[user_id]['shares_sent'] += share_count
                 
             # Community Goal: SHARES
-            if reviewer_id:
-                async with AsyncSessionLocal() as db:
-                    await giveaway_service.update_community_goal_progress(
-                        db, 
-                        reviewer_id, 
-                        'SHARES', 
-                        1, 
-                        user_id=event.user.unique_id,
-                        username=event.user.unique_id
-                    )
+            # REMOVED: Immediate update. Now handled in flush loop.
+            pass
 
             async with AsyncSessionLocal() as session:
                 try:
                     tiktok_account = await self.get_or_create_tiktok_account(session, user_handle)
-                    await self.award_points(session, tiktok_account.id, 5)
-                    logger.info(f"{user_handle} shared the stream.")
-                    # Award luxury coins for shares
-                    await self._award_coins_for_interaction(session, client.unique_id, tiktok_account, 'SHARE')
+                    # Award points based on share count (5 points per share)
+                    points_to_award = 5 * share_count
+                    await self.award_points(session, tiktok_account.id, points_to_award)
+                    logger.info(f"{user_handle} shared the stream {share_count} times (Batch: {share_count > 1}).")
+                    
+                    # Award luxury coins for shares (1 per share)
+                    for _ in range(share_count):
+                        await self._award_coins_for_interaction(session, client.unique_id, tiktok_account, 'SHARE')
 
                     # Log interaction
                     interaction = models.TikTokInteraction(
@@ -730,7 +897,7 @@ class TikTokCog(commands.Cog):
                         tiktok_account_id=tiktok_account.id,
                         host_handle=client.unique_id,
                         interaction_type='SHARE',
-                        value='1',
+                        value=str(share_count),
                         user_level=user_level
                     )
                     session.add(interaction)
@@ -1062,6 +1229,38 @@ class TikTokCog(commands.Cog):
             ).values(tiktok_username=handle)
             result_sub = await session.execute(stmt_sub)
             update_count = result_sub.rowcount
+            
+            # Transfer pending coins
+            pending = account.pending_coins
+            if pending > 0:
+                # We need a reviewer ID to attribute the coins to. 
+                # Ideally, we track which reviewer generated the pending coins, but we only have a single counter.
+                # We'll attribute it to the system or the first reviewer found?
+                # Or we just use a generic reason.
+                # Since award_luxury_coins requires a reviewer_id for the transaction log, we might need to find one.
+                # Let's try to find a reviewer this user has interacted with, or just use the first one.
+                # For now, let's use the reviewer associated with the current interaction if possible, or just 1.
+                # Actually, we can pass None as reviewer_id to economy_service if we update it, but it expects one.
+                # Let's find the most recent reviewer they interacted with.
+                stmt_last_interaction = select(models.TikTokInteraction).where(
+                    models.TikTokInteraction.tiktok_account_id == account.id
+                ).order_by(models.TikTokInteraction.timestamp.desc()).limit(1)
+                result_interaction = await session.execute(stmt_last_interaction)
+                last_interaction = result_interaction.scalar_one_or_none()
+                
+                reviewer_id_for_coins = 1 # Default fallback
+                if last_interaction:
+                    # Find reviewer by host handle
+                    stmt_rev = select(models.Reviewer).where(models.Reviewer.tiktok_handle == last_interaction.host_handle)
+                    res_rev = await session.execute(stmt_rev)
+                    rev = res_rev.scalar_one_or_none()
+                    if rev:
+                        reviewer_id_for_coins = rev.id
+                
+                await self.award_luxury_coins(session, user.id, pending, reviewer_id_for_coins, "Retroactive TikTok rewards")
+                account.pending_coins = 0
+                session.add(account)
+            
             await session.commit()
 
         response_message = f"✅ Your Discord account has been successfully linked to the TikTok handle **@{handle}**."
@@ -1125,8 +1324,12 @@ class TikTokCog(commands.Cog):
                         WebDefaults.tiktok_sign_api_key = settings.TIKTOK_SIGN_API_KEY
                         logger.info(f"Configured WebDefaults.tiktok_sign_api_key for connection to @{unique_id}")
 
+                    logger.info(f"Creating TikTokLiveClient for @{unique_id}...")
                     client = TikTokLiveClient(unique_id=f"@{unique_id}", **client_kwargs)
+                    logger.info(f"TikTokLiveClient created for @{unique_id}. Setting up listeners...")
+                    
                     self._setup_listeners(client, disconnect_event, session_id)
+                    logger.info(f"Listeners setup for @{unique_id}. Initializing buffer...")
 
                     self.live_clients[unique_id] = client
                     
@@ -1139,10 +1342,13 @@ class TikTokCog(commands.Cog):
                     if persistent:
                         self.persistent_connections.add(unique_id)
 
+                    logger.info(f"Starting client for @{unique_id}...")
                     await client.start()
+                    logger.info(f"Client started for @{unique_id}. Waiting for disconnect event...")
 
                     # Wait until the disconnect event is set
                     await disconnect_event.wait()
+                    logger.info(f"Disconnect event set for @{unique_id}. Exiting background task.")
                 except UserOfflineError:
                     logger.info(f"Connection attempt failed for @{unique_id} because the user is offline.")
                     if interaction:
@@ -1213,7 +1419,9 @@ class TikTokCog(commands.Cog):
             return
 
         # Start background connection task
-        self.bot.loop.create_task(self._background_connect(interaction, handle, persistent=False))
+        task = self.bot.loop.create_task(self._background_connect(interaction, handle, persistent=False))
+        self.background_tasks.add(task)
+        task.add_done_callback(self.background_tasks.discard)
 
     @app_commands.command(name="disconnect_tiktok", description="Disconnect from a TikTok Live stream")
     async def disconnect_tiktok(self, interaction: discord.Interaction, handle: str):
@@ -1240,6 +1448,31 @@ class TikTokCog(commands.Cog):
         except Exception as e:
             logger.error(f"Error disconnecting from @{handle}: {e}", exc_info=True)
             await interaction.followup.send(f"❌ Error disconnecting from **@{handle}**: {e}", ephemeral=True)
+
+    def cog_unload(self):
+        """Cleanup tasks and clients when the cog is unloaded."""
+        logger.info("Unloading TikTokCog...")
+        
+        # Cancel background tasks
+        for task in self.background_tasks:
+            task.cancel()
+        self.background_tasks.clear()
+        
+        # Stop live clients
+        for handle, client in self.live_clients.items():
+            try:
+                # client.stop() is async, so we schedule it on the loop
+                self.bot.loop.create_task(client.stop())
+            except Exception as e:
+                logger.error(f"Error stopping client for @{handle} during unload: {e}")
+        self.live_clients.clear()
+        
+        # Cancel flush tasks
+        for handle, task in self.flush_tasks.items():
+            task.cancel()
+        self.flush_tasks.clear()
+        
+        logger.info("TikTokCog unloaded and cleaned up.")
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(TikTokCog(bot))

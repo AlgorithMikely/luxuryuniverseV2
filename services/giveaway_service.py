@@ -13,7 +13,7 @@ from services import broadcast as broadcast_service
 logger = logging.getLogger(__name__)
 
 # Constants
-GIVEAWAY_COOLDOWN_MINUTES = 5
+GIVEAWAY_COOLDOWN_MINUTES = 5 # Moved to Reviewer model but used as fallback
 
 # Default Goal Definitions
 DEFAULT_GOAL_TYPES = {
@@ -297,7 +297,7 @@ async def batch_update_community_goal_progress(db: AsyncSession, reviewer_id: in
              goals_config[event_type] = _initialize_goal_config(event_type, goal_settings)
         else:
             return
-            
+
     goal_config = goals_config[event_type]
 
     # Check Cooldown
@@ -337,3 +337,62 @@ async def batch_update_community_goal_progress(db: AsyncSession, reviewer_id: in
             description=goal_config.get("description")
         )
         await broadcast_service.emit_giveaway_update(reviewer_id, state.model_dump(mode='json'))
+
+async def extend_cooldown(db: AsyncSession, reviewer_id: int, minutes: int):
+    """
+    Extends the cooldown for all community goals.
+    """
+    reviewer = await db.get(models.Reviewer, reviewer_id)
+    if not reviewer:
+        return
+
+    if not reviewer.configuration:
+        return
+    
+    config = dict(reviewer.configuration)
+    goals_config = config.get("community_goals", {})
+    
+    if not goals_config:
+        return
+
+    needs_save = False
+    now = datetime.now(timezone.utc)
+    new_cooldown_end = now + timedelta(minutes=minutes)
+
+    for g_type, g_config in goals_config.items():
+        current_end_str = g_config.get("cooldown_end")
+        
+        if current_end_str:
+            current_end = datetime.fromisoformat(current_end_str)
+            if current_end > now:
+                # Extend existing
+                updated_end = current_end + timedelta(minutes=minutes)
+                g_config["cooldown_end"] = updated_end.isoformat()
+            else:
+                # Expired, set new
+                g_config["cooldown_end"] = new_cooldown_end.isoformat()
+        else:
+            # No cooldown, set new
+            g_config["cooldown_end"] = new_cooldown_end.isoformat()
+            
+        goals_config[g_type] = g_config
+        needs_save = True
+
+    if needs_save:
+        config["community_goals"] = goals_config
+        reviewer.configuration = config
+        flag_modified(reviewer, "configuration")
+        await db.commit()
+        
+        # We could broadcast updates, but might be too noisy for just a cooldown extension?
+        # Let's broadcast to be safe so UI updates.
+        for g_type, g_config in goals_config.items():
+             state = schemas.GiveawayState(
+                type=g_type,
+                is_active=g_config.get("is_active", True),
+                progress=g_config.get("current", 0),
+                target=g_config.get("target", 1000),
+                cooldown_end=datetime.fromisoformat(g_config["cooldown_end"]),
+                description=g_config.get("description")
+            )
+             await broadcast_service.emit_giveaway_update(reviewer_id, state.model_dump(mode='json'))

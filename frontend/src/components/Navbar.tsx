@@ -19,11 +19,12 @@ const Navbar = () => {
   const isAdmin = user?.roles?.includes("admin");
 
   // Construct Discord Avatar URL
-  // Format: https://cdn.discordapp.com/avatars/{user_id}/{user_avatar}.png
-  // Since we don't have the hash in the User type yet, we'll use a default or try to fetch it if available in future.
-  const avatarUrl = user?.discord_id && user?.avatar
-    ? `https://cdn.discordapp.com/avatars/${user.discord_id}/${user.avatar}.png`
-    : "https://cdn.discordapp.com/embed/avatars/0.png";
+  // Handle both hash (standard) and full URL (legacy/migrated)
+  const avatarUrl = user?.avatar?.startsWith("http")
+    ? user.avatar
+    : (user?.discord_id && user?.avatar
+      ? `https://cdn.discordapp.com/avatars/${user.discord_id}/${user.avatar}.png`
+      : "https://cdn.discordapp.com/embed/avatars/0.png");
 
   const handleLogout = () => {
     logout();
@@ -203,6 +204,17 @@ const Navbar = () => {
                     ))}
                   </div>
                 )}
+
+                {/* User Settings Link */}
+                <div className="py-1 border-b border-gray-800">
+                  <Link
+                    to="/settings"
+                    className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white"
+                    onClick={() => setIsProfileOpen(false)}
+                  >
+                    User Settings
+                  </Link>
+                </div>
 
                 {/* Reviewer Settings Link */}
                 {user?.reviewer_profile && (

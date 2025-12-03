@@ -41,12 +41,14 @@ export const useAuthStore = create<AuthState>()(
       },
       checkAuth: async (background = false) => {
         const { token } = get();
+        console.log("AuthStore checkAuth - Token:", token, "Background:", background);
         if (token) {
           if (!background) {
             set({ isLoading: true });
           }
           try {
             const response = await api.get('/user/me');
+            console.log("AuthStore checkAuth - Success:", response.data);
             set({ user: response.data, isLoading: false });
             // After fetching user, fetch their active session
             await useSessionStore.getState().fetchActiveSession();

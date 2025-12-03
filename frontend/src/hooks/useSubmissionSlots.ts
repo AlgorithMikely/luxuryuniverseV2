@@ -9,9 +9,10 @@ interface UseSubmissionSlotsProps {
         slot2?: SmartSubmissionItem | null;
         slot3?: SmartSubmissionItem | null;
     };
+    defaultArtistName?: string;
 }
 
-export const useSubmissionSlots = ({ initialSlots = {} }: UseSubmissionSlotsProps = {}) => {
+export const useSubmissionSlots = ({ initialSlots = {}, defaultArtistName = "" }: UseSubmissionSlotsProps = {}) => {
     const [slot1, setSlot1] = useState<SmartSubmissionItem | null>(initialSlots.slot1 || null);
     const [slot2, setSlot2] = useState<SmartSubmissionItem | null>(initialSlots.slot2 || null);
     const [slot3, setSlot3] = useState<SmartSubmissionItem | null>(initialSlots.slot3 || null);
@@ -33,6 +34,7 @@ export const useSubmissionSlots = ({ initialSlots = {} }: UseSubmissionSlotsProp
         const item: SmartSubmissionItem = {
             track_url: url,
             track_title: file.name.replace(/\.[^/.]+$/, ""),
+            artist: defaultArtistName,
             file: file,
             priority_value: 0,
             sequence_order: slotNum
@@ -47,12 +49,13 @@ export const useSubmissionSlots = ({ initialSlots = {} }: UseSubmissionSlotsProp
             e.preventDefault();
 
             let title = "Loading...";
-            let artist = "";
+            let artist = defaultArtistName;
             let previewUrl = "";
 
             const item: SmartSubmissionItem = {
                 track_url: text,
                 track_title: title,
+                artist: artist,
                 priority_value: 0,
                 sequence_order: slotNum
             };
@@ -64,7 +67,9 @@ export const useSubmissionSlots = ({ initialSlots = {} }: UseSubmissionSlotsProp
                 if (text.includes('spotify.com/track')) {
                     const { data } = await api.post('/spotify/proxy/track', { url: text });
                     title = data.name;
-                    artist = data.artists.map((a: any) => a.name).join(', ');
+                    // Only overwrite if API returns a valid artist, otherwise keep default or empty
+                    const apiArtist = data.artists.map((a: any) => a.name).join(', ');
+                    artist = apiArtist || defaultArtistName;
                     previewUrl = data.preview_url;
                     const genre = data.primary_genre || (data.genres && data.genres.length > 0 ? data.genres[0] : "");
 
@@ -72,11 +77,21 @@ export const useSubmissionSlots = ({ initialSlots = {} }: UseSubmissionSlotsProp
                     updateSlot(slotNum, updatedItem);
                 } else if (text.includes('youtube.com') || text.includes('youtu.be')) {
                     const { data } = await api.post('/proxy/metadata', { url: text });
-                    const updatedItem = { ...item, track_title: data.title || "YouTube Video", artist: data.artist || "", genre: data.genre || "" };
+                    const updatedItem = {
+                        ...item,
+                        track_title: data.title || "YouTube Video",
+                        artist: data.artist || defaultArtistName,
+                        genre: data.genre || ""
+                    };
                     updateSlot(slotNum, updatedItem);
                 } else if (text.includes('soundcloud.com')) {
                     const { data } = await api.post('/soundcloud/metadata', { url: text });
-                    const updatedItem = { ...item, track_title: data.title || "SoundCloud Track", artist: data.artist || "", genre: data.genre || "" };
+                    const updatedItem = {
+                        ...item,
+                        track_title: data.title || "SoundCloud Track",
+                        artist: data.artist || defaultArtistName,
+                        genre: data.genre || ""
+                    };
                     updateSlot(slotNum, updatedItem);
                 } else {
                     const loadedItem = { ...item, track_title: "Link Loaded" };

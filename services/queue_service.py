@@ -88,11 +88,15 @@ async def create_submission(db: AsyncSession, reviewer_id: int, user_id: int, tr
     loaded_submission = result.scalars().first()
 
     # Emit a queue update
-    new_queue = await get_pending_queue(db, reviewer_id)
-    # Apply Zipper Merge
-    zipped_queue = apply_zipper_merge(new_queue)
-    queue_schemas = [schemas.Submission.model_validate(s) for s in zipped_queue]
-    await broadcast_service.emit_queue_update(reviewer_id, [s.model_dump(mode='json') for s in queue_schemas])
+    try:
+        new_queue = await get_pending_queue(db, reviewer_id)
+        # Apply Zipper Merge
+        zipped_queue = apply_zipper_merge(new_queue)
+        queue_schemas = [schemas.Submission.model_validate(s) for s in zipped_queue]
+        await broadcast_service.emit_queue_update(reviewer_id, [s.model_dump(mode='json') for s in queue_schemas])
+    except Exception as e:
+        import logging
+        logging.error(f"Failed to emit queue update: {e}")
 
     return loaded_submission
 
@@ -408,6 +412,9 @@ async def update_reviewer_settings(db: AsyncSession, reviewer_id: int, settings_
         reviewer.avatar_url = update_data["avatar_url"]
     if "bio" in update_data:
         reviewer.bio = update_data["bio"]
+    if "community_goal_cooldown_minutes" in update_data:
+        reviewer.community_goal_cooldown_minutes = update_data["community_goal_cooldown_minutes"]
+
     if "configuration" in update_data and update_data["configuration"] is not None:
         # If updating configuration, we should merge or replace.
         # Since the input is a full configuration object, we can replace the specific keys.
@@ -485,6 +492,7 @@ async def get_submissions_by_user(db: AsyncSession, user_id: int) -> list[models
             )
         )
         .filter(models.Submission.user_id == user_id)
+        .order_by(models.Submission.submitted_at.desc())
     )
     return result.scalars().all()
 
@@ -1313,3 +1321,56 @@ async def apply_free_skip(db: AsyncSession, reviewer_id: int, user_id: int):
         zipped_queue = apply_zipper_merge(new_queue)
         queue_schemas = [schemas.Submission.model_validate(s) for s in zipped_queue]
         await broadcast_service.emit_queue_update(reviewer_id, [s.model_dump(mode='json') for s in queue_schemas])
+async def process_gift_interaction(db: AsyncSession, reviewer_id: int, tiktok_username: str, gift_coins: int) -> str:
+    """
+    Determines how to handle a gift interaction.
+    Returns: 'GOAL', 'SKIP_UPGRADE', 'COINS', or 'NONE'
+    """
+    # 1. Define Thresholds
+    SKIP_THRESHOLD = 500 # Minimum coins to be considered for a skip
+    
+    # 2. Check if Gift is below Skip Threshold
+    if gift_coins < SKIP_THRESHOLD:
+        return 'GOAL'
+
+    # 3. Gift is >= 500. Check if it maps to an OPEN tier.
+    active_session = await get_active_session_by_reviewer(db, reviewer_id)
+    open_tiers = active_session.open_queue_tiers if active_session else []
+    
+    # Calculate max potential priority value (e.g. 500 coins -> 5, 1200 coins -> 12)
+    max_potential_priority = gift_coins // 100
+    
+    # Find the highest open tier that fits within this budget
+    valid_tiers = [t for t in open_tiers if t <= max_potential_priority and t > 0]
+    
+    if not valid_tiers:
+        # No open line for this amount.
+        # Fallback to coins.
+        return 'COINS'
+        
+    target_priority = max(valid_tiers)
+
+    # 4. Check for User and Pending Submission
+    user = await user_service.get_user_by_tiktok_username(db, tiktok_username)
+    if not user:
+        return 'COINS'
+        
+    stmt = select(models.Submission).filter(
+        models.Submission.reviewer_id == reviewer_id,
+        models.Submission.user_id == user.id,
+        models.Submission.status == 'pending'
+    )
+    result = await db.execute(stmt)
+    submission = result.scalars().first()
+    
+    if not submission:
+        return 'COINS'
+        
+    # 5. Check if this improves their current priority
+    if target_priority > submission.priority_value:
+        # Upgrade!
+        await update_priority(db, submission.id, target_priority)
+        return 'SKIP_UPGRADE'
+        
+    # If they are already at this priority or higher, just give them coins.
+    return 'COINS'

@@ -70,6 +70,14 @@ class User(Base):
     lifetime_tiktok_comments = Column(BigInteger, default=0)
     lifetime_tiktok_shares = Column(BigInteger, default=0)
 
+    # User Profile Settings
+    artist_name = Column(String, nullable=True)
+    instagram_handle = Column(String, nullable=True)
+    twitter_handle = Column(String, nullable=True)
+    youtube_channel = Column(String, nullable=True)
+    soundcloud_url = Column(String, nullable=True)
+    apple_music_url = Column(String, nullable=True)
+
     # Generic Gamification Stats (JSON)
     # Stores: poll_votes, consec_wins, unique_tags, etc.
     gamification_stats = Column(JSON, default={}, nullable=True)
@@ -92,6 +100,7 @@ class Reviewer(Base):
     configuration = Column(JSON, nullable=True)
     avatar_url = Column(String, nullable=True)
     bio = Column(String, nullable=True)
+    community_goal_cooldown_minutes = Column(Integer, default=5, nullable=False)
 
     user = relationship("User", back_populates="reviewer_profile")
     submissions = relationship("Submission", back_populates="reviewer")
@@ -187,6 +196,20 @@ class Transaction(Base):
     user = relationship("User", back_populates="transactions")
 
 
+class PlatformFee(Base):
+    __tablename__ = "platform_fees"
+    id = Column(Integer, primary_key=True, index=True)
+    reviewer_id = Column(Integer, ForeignKey("reviewers.id"), nullable=False)
+    amount = Column(Integer, nullable=False) # Amount in cents
+    currency = Column(String, default="USD", nullable=False)
+    source = Column(String, nullable=False) # e.g. "paypal"
+    reference_id = Column(String, nullable=False, index=True) # e.g. PayPal Order ID
+    is_settled = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    reviewer = relationship("Reviewer")
+
+
 class Wallet(Base):
     __tablename__ = "wallets"
     id = Column(Integer, primary_key=True, index=True)
@@ -225,6 +248,7 @@ class TikTokAccount(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     points = Column(Integer, default=0, nullable=False)
     monitored = Column(Boolean, default=False, nullable=False)
+    pending_coins = Column(Integer, default=0, nullable=False)
 
     user = relationship("User")
 

@@ -70,4 +70,7 @@ class Settings(BaseSettings):
     # TikTok Settings
     TIKTOK_SIGN_API_KEY: Optional[str] = None
 
+    # Security
+    ENCRYPTION_KEY: Optional[str] = None # 32 url-safe base64-encoded bytes
+
 settings = Settings()

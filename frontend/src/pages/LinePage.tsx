@@ -88,6 +88,44 @@ const generateGradient = (seed: string) => {
     return `linear-gradient(135deg, hsl(${h1}, 60%, 40%), hsl(${h2}, 75%, 50%), hsl(${h3}, 90%, 60%))`;
 };
 
+const colorOptions = [
+    { name: 'Gray', value: 'gray', hex: '#9ca3af' },
+    { name: 'Slate', value: 'slate', hex: '#94a3b8' },
+    { name: 'Zinc', value: 'zinc', hex: '#a1a1aa' },
+    { name: 'Neutral', value: 'neutral', hex: '#a3a3a3' },
+    { name: 'Stone', value: 'stone', hex: '#a8a29e' },
+    { name: 'Red', value: 'red', hex: '#ef4444' },
+    { name: 'Crimson', value: 'crimson', hex: '#dc2626' },
+    { name: 'Orange', value: 'orange', hex: '#f97316' },
+    { name: 'Amber', value: 'amber', hex: '#f59e0b' },
+    { name: 'Gold', value: 'gold', hex: '#ffd700' },
+    { name: 'Yellow', value: 'yellow', hex: '#eab308' },
+    { name: 'Lime', value: 'lime', hex: '#84cc16' },
+    { name: 'Green', value: 'green', hex: '#22c55e' },
+    { name: 'Emerald', value: 'emerald', hex: '#10b981' },
+    { name: 'Mint', value: 'mint', hex: '#6ee7b7' },
+    { name: 'Teal', value: 'teal', hex: '#14b8a6' },
+    { name: 'Cyan', value: 'cyan', hex: '#06b6d4' },
+    { name: 'Sky', value: 'sky', hex: '#0ea5e9' },
+    { name: 'Blue', value: 'blue', hex: '#3b82f6' },
+    { name: 'Royal', value: 'royal', hex: '#1e40af' },
+    { name: 'Indigo', value: 'indigo', hex: '#6366f1' },
+    { name: 'Violet', value: 'violet', hex: '#8b5cf6' },
+    { name: 'Purple', value: 'purple', hex: '#a855f7' },
+    { name: 'Lavender', value: 'lavender', hex: '#c084fc' },
+    { name: 'Fuchsia', value: 'fuchsia', hex: '#d946ef' },
+    { name: 'Pink', value: 'pink', hex: '#ec4899' },
+    { name: 'Rose', value: 'rose', hex: '#f43f5e' },
+    { name: 'Coral', value: 'coral', hex: '#fb7185' },
+];
+
+const getTierColor = (amount: number, tiers: PriorityTier[]) => {
+    const tier = tiers.find(t => t.value === amount);
+    if (!tier) return '#8b5cf6'; // Default purple
+    const colorOpt = colorOptions.find(c => c.value === tier.color);
+    return colorOpt ? colorOpt.hex : '#8b5cf6';
+};
+
 const PlatformIcon = ({ url }: { url: string }) => {
     if (!url) return <Music size={14} />;
     if (url.includes('spotify')) return <img src="https://open.spotifycdn.com/cdn/images/favicon.png" alt="Spotify" className="w-4 h-4" />;
@@ -165,6 +203,7 @@ interface QueueSectionProps {
     peopleAhead: number;
     activeGoal: MissionBar | null;
     handlePurchase: (tier: PriorityTier) => void;
+    pricing_tiers: PriorityTier[];
 }
 
 const QueueSection: React.FC<QueueSectionProps> = React.memo(({
@@ -173,7 +212,8 @@ const QueueSection: React.FC<QueueSectionProps> = React.memo(({
     lowestTier,
     peopleAhead,
     activeGoal,
-    handlePurchase
+    handlePurchase,
+    pricing_tiers
 }) => (
     <div className="view-queue">
         {/* VIP Section */}
@@ -183,65 +223,84 @@ const QueueSection: React.FC<QueueSectionProps> = React.memo(({
                 <span className="header-meta">{priority_queue.length} in line</span>
             </div>
             <div className="queue-list">
-                {/* Upsell Card */}
-                <div
-                    className="queue-card vip-card cursor-pointer hover:brightness-110 transition-all"
-                    onClick={() => lowestTier && handlePurchase(lowestTier)}
-                    style={{ borderStyle: 'dashed', borderColor: 'rgba(139, 92, 246, 0.5)', background: 'rgba(139, 92, 246, 0.05)' }}
-                >
-                    <div className="qc-left">
-                        <span className="qc-rank" style={{ color: '#a78bfa', width: 'auto', paddingRight: '8px' }}>You could go next.</span>
-                        <div className="qc-art">
-                            <div className="qc-art-placeholder" style={{ background: 'rgba(139, 92, 246, 0.1)', border: '1px solid rgba(139, 92, 246, 0.3)' }}>
-                                <Zap size={16} color="#a78bfa" />
-                            </div>
-                        </div>
-                        <div className="qc-info">
-                            <div className="qc-title-row">
-                                <span className="qc-title" style={{ color: '#e9d5ff' }}>Your Song Here</span>
-                            </div>
-                            <div className="qc-meta-row">
-                                <span className="qc-artist" style={{ color: 'rgba(167, 139, 250, 0.7)' }}>Skip {peopleAhead} people</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="qc-right">
-                        <div style={{ padding: '2px 8px', borderRadius: '4px', background: 'rgba(139, 92, 246, 0.2)', border: '1px solid rgba(139, 92, 246, 0.3)', fontSize: '12px', color: '#d8b4fe', fontWeight: 500 }}>
-                            Starting at ${lowestTier?.value ?? 5}
-                        </div>
-                    </div>
-                </div>
-
-                {priority_queue.map((item) => (
-                    <div key={item.pos} className={`queue-card vip-card ${item.style === 'FIRE' ? 'style-fire' : ''}`}>
+                {/* Upsell Card - Only visible if VIP queue is empty */}
+                {priority_queue.length === 0 && (
+                    <div
+                        className="queue-card vip-card cursor-pointer hover:brightness-110 transition-all"
+                        onClick={() => lowestTier && handlePurchase(lowestTier)}
+                        style={{ borderStyle: 'dashed', borderColor: 'rgba(139, 92, 246, 0.5)', background: 'rgba(139, 92, 246, 0.05)' }}
+                    >
                         <div className="qc-left">
-                            <span className="qc-rank">#{item.pos}</span>
+                            <span className="qc-rank" style={{ color: '#a78bfa', width: 'auto', paddingRight: '8px' }}>You could go next.</span>
                             <div className="qc-art">
-                                {item.cover_art_url ? (
-                                    <img src={item.cover_art_url} alt="Art" />
-                                ) : (
-                                    <div className="qc-art-placeholder" style={{ background: generateGradient(item.track_title || '') }}>
-                                        <Music size={16} color="white" />
-                                    </div>
-                                )}
+                                <div className="qc-art-placeholder" style={{ background: 'rgba(139, 92, 246, 0.1)', border: '1px solid rgba(139, 92, 246, 0.3)' }}>
+                                    <Zap size={16} color="#a78bfa" />
+                                </div>
                             </div>
                             <div className="qc-info">
                                 <div className="qc-title-row">
-                                    <span className="qc-title">{item.track_title}</span>
+                                    <span className="qc-title" style={{ color: '#e9d5ff' }}>Your Song Here</span>
                                 </div>
                                 <div className="qc-meta-row">
-                                    <span className="qc-artist">{item.artist}</span>
-                                    <span className="qc-dot">•</span>
-                                    <span className="qc-user">@{item.user}</span>
+                                    <span className="qc-artist" style={{ color: 'rgba(167, 139, 250, 0.7)' }}>Skip {peopleAhead} people</span>
                                 </div>
                             </div>
                         </div>
                         <div className="qc-right">
-                            {item.type === 'PAID_PRIORITY' && <Zap size={16} className="icon-vip" />}
-                            {item.type === 'HOT_SEAT' && <span className="icon-fire">🔥</span>}
+                            <div style={{ padding: '2px 8px', borderRadius: '4px', background: 'rgba(139, 92, 246, 0.2)', border: '1px solid rgba(139, 92, 246, 0.3)', fontSize: '12px', color: '#d8b4fe', fontWeight: 500 }}>
+                                Starting at ${lowestTier?.value ?? 5}
+                            </div>
                         </div>
                     </div>
-                ))}
+                )}
+
+                {priority_queue.map((item) => {
+                    const tierColor = getTierColor(item.amount, pricing_tiers);
+                    const isWinner = item.is_community_winner;
+
+                    return (
+                        <div
+                            key={item.pos}
+                            className={`queue-card vip-card ${item.style === 'FIRE' ? 'style-fire' : ''}`}
+                            style={{
+                                borderColor: `${tierColor}80`, // 50% opacity border
+                                background: `linear-gradient(90deg, ${tierColor}10 0%, ${tierColor}05 100%)` // Subtle gradient background
+                            }}
+                        >
+                            <div className="qc-left">
+                                <span className="qc-rank" style={{ color: tierColor }}>#{item.pos}</span>
+                                <div className="qc-art">
+                                    {item.cover_art_url ? (
+                                        <img src={item.cover_art_url} alt="Art" style={{ borderColor: `${tierColor}40` }} />
+                                    ) : (
+                                        <div className="qc-art-placeholder" style={{ background: generateGradient(item.track_title || '') }}>
+                                            <Music size={16} color="white" />
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="qc-info">
+                                    <div className="qc-title-row">
+                                        <span className="qc-title">{item.track_title}</span>
+                                    </div>
+                                    <div className="qc-meta-row">
+                                        <span className="qc-artist">{item.artist}</span>
+                                        <span className="qc-dot">•</span>
+                                        <span className="qc-user">@{item.user}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="qc-right">
+                                {isWinner && (
+                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 flex items-center gap-1">
+                                        🏆 WINNER
+                                    </span>
+                                )}
+                                {item.type === 'PAID_PRIORITY' && <Zap size={16} style={{ color: tierColor }} />}
+                                {item.type === 'HOT_SEAT' && <span className="icon-fire">🔥</span>}
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
         </div>
 
@@ -600,6 +659,7 @@ const LinePage = () => {
                                     peopleAhead={peopleAhead}
                                     activeGoal={activeGoal}
                                     handlePurchase={handlePurchase}
+                                    pricing_tiers={pricing_tiers}
                                 />
                             </motion.div>
                         ) : (
@@ -635,6 +695,7 @@ const LinePage = () => {
                             peopleAhead={peopleAhead}
                             activeGoal={activeGoal}
                             handlePurchase={handlePurchase}
+                            pricing_tiers={pricing_tiers}
                         />
                     </div>
                 </div>

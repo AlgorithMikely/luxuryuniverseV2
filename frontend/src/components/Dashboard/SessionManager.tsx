@@ -271,6 +271,13 @@ const SessionManager: React.FC<SessionManagerProps> = ({ reviewerId }) => {
                 End Session
               </button>
             )}
+            <button
+              onClick={() => window.location.href = '/settings/reviewer'}
+              className="text-xs bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white px-2 py-1 rounded border border-white/10 transition-colors flex items-center gap-1 ml-2"
+            >
+              <Settings className="w-3 h-3" />
+              Config
+            </button>
           </div>
 
           <div className="p-4 space-y-6">

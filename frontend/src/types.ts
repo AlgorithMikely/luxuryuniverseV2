@@ -4,6 +4,7 @@ export interface PriorityTier {
   value: number;
   label: string;
   color: string;
+  tier_name?: string;
   submissions_count?: number;
 }
 
@@ -44,8 +45,17 @@ export interface User {
   id: number;
   discord_id: string;
   username: string;
+  email?: string;
   avatar?: string;
   tiktok_username?: string;
+  // Settings
+  artist_name?: string;
+  instagram_handle?: string;
+  twitter_handle?: string;
+  youtube_channel?: string;
+  soundcloud_url?: string;
+  apple_music_url?: string;
+
   reviewer_profile?: ReviewerProfile;
   spotify_connected?: boolean;
   xp: number;
@@ -73,8 +83,8 @@ export interface ReviewerProfile {
   user?: User;
   avatar_url?: string;
   bio?: string;
+  community_goal_cooldown_minutes?: number;
 }
-
 // --- Submissions & Queue ---
 export interface Submission {
   id: number;

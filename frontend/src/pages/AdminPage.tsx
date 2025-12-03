@@ -476,6 +476,69 @@ const AdminPage = () => {
           </div>
         )}
       </div>
+      {/* Platform Fees */}
+      <div className="bg-gray-800 p-4 rounded-lg mt-6">
+        <h2 className="text-xl font-semibold mb-4">Platform Fees (Owed)</h2>
+        <PlatformFeesTable />
+      </div>
+    </div>
+  );
+};
+
+const PlatformFeesTable = () => {
+  const [fees, setFees] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchFees = async () => {
+      try {
+        const res = await api.get('/admin/platform-fees');
+        setFees(res.data);
+      } catch (err) {
+        console.error("Failed to fetch fees", err);
+      }
+    };
+    fetchFees();
+  }, []);
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm text-left text-gray-400">
+        <thead className="text-xs text-gray-400 uppercase bg-gray-700">
+          <tr>
+            <th className="px-4 py-3">Date</th>
+            <th className="px-4 py-3">Reviewer</th>
+            <th className="px-4 py-3">Source</th>
+            <th className="px-4 py-3">Ref ID</th>
+            <th className="px-4 py-3 text-right">Amount</th>
+            <th className="px-4 py-3 text-center">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {fees.map((fee) => (
+            <tr key={fee.id} className="bg-gray-800 border-b border-gray-700 hover:bg-gray-700/50">
+              <td className="px-4 py-3">{new Date(fee.created_at).toLocaleDateString()}</td>
+              <td className="px-4 py-3 font-medium text-white">{fee.reviewer_name}</td>
+              <td className="px-4 py-3 uppercase">{fee.source}</td>
+              <td className="px-4 py-3 font-mono text-xs">{fee.reference_id}</td>
+              <td className="px-4 py-3 text-right text-white">
+                ${(fee.amount / 100).toFixed(2)}
+              </td>
+              <td className="px-4 py-3 text-center">
+                {fee.is_settled ? (
+                  <span className="bg-green-900 text-green-300 text-xs font-medium px-2.5 py-0.5 rounded">Paid</span>
+                ) : (
+                  <span className="bg-yellow-900 text-yellow-300 text-xs font-medium px-2.5 py-0.5 rounded">Owed</span>
+                )}
+              </td>
+            </tr>
+          ))}
+          {fees.length === 0 && (
+            <tr>
+              <td colSpan={6} className="px-4 py-3 text-center">No fees recorded.</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 };

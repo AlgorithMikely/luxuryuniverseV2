@@ -7,6 +7,7 @@ class PriorityTier(BaseModel):
     label: str
     color: str
     description: Optional[str] = None
+    tier_name: Optional[str] = None
     submissions_count: Optional[int] = 1
 
 class CommunityGoal(BaseModel):
@@ -76,6 +77,7 @@ class ReviewerSettingsUpdate(BaseModel):
     economy_configs: Optional[List[EconomyConfigUpdate]] = None
     avatar_url: Optional[str] = None
     bio: Optional[str] = None
+    community_goal_cooldown_minutes: Optional[int] = None
 
 
 class Achievement(BaseModel):
@@ -102,9 +104,26 @@ class UserBase(BaseModel):
     avatar: Optional[str] = None
     is_guest: bool = False
     is_verified: bool = False
+    
+    # New Settings Fields
+    artist_name: Optional[str] = None
+    instagram_handle: Optional[str] = None
+    twitter_handle: Optional[str] = None
+    youtube_channel: Optional[str] = None
+    soundcloud_url: Optional[str] = None
+    apple_music_url: Optional[str] = None
 
 class UserCreate(UserBase):
     pass
+
+class UserSettingsUpdate(BaseModel):
+    artist_name: Optional[str] = None
+    tiktok_username: Optional[str] = None
+    instagram_handle: Optional[str] = None
+    twitter_handle: Optional[str] = None
+    youtube_channel: Optional[str] = None
+    soundcloud_url: Optional[str] = None
+    apple_music_url: Optional[str] = None
 
 class User(UserBase):
     id: int
@@ -141,8 +160,12 @@ class ReviewerProfile(BaseModel):
     payment_configs: List[PaymentConfig] = []
     economy_configs: List[EconomyConfig] = []
     user: Optional[User] = None
+    payment_configs: List[PaymentConfig] = []
+    economy_configs: List[EconomyConfig] = []
+    user: Optional[User] = None
     avatar_url: Optional[str] = None
     bio: Optional[str] = None
+    community_goal_cooldown_minutes: int = 5
 
     avg_concurrent_viewers: int = 0
     max_concurrent_viewers: int = 0
@@ -159,6 +182,7 @@ class UserProfile(UserBase):
     spotify_connected: bool = False
     achievements: List[Achievement] = [] # List of unlocked achievements
     is_line_authorized: bool = False
+    tiktok_username: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 class ReviewCreate(BaseModel):

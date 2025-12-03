@@ -209,10 +209,42 @@ async def add_reviewer(
 
         print(f"Found/created user: {db_user.id}, {db_user.username}")
 
+        # Check for existing handle to detect changes
+        old_handle = None
+        if db_user.reviewer_profile:
+            old_handle = db_user.reviewer_profile.tiktok_handle
+
         # The service now handles re-fetching the user with the profile loaded
         result = await user_service.add_reviewer_profile(
             db, user=db_user, tiktok_handle=reviewer_data.tiktok_handle
         )
+
+        # Check if TikTok handle changed/added and update monitoring dynamically
+        new_handle = reviewer_data.tiktok_handle
+        
+        # Normalize for comparison
+        old_h_norm = old_handle.lower() if old_handle else ""
+        new_h_norm = new_handle.lower() if new_handle else ""
+
+        if old_h_norm != new_h_norm:
+            print(f"TikTok handle changed from {old_handle} to {new_handle} via Admin. Updating monitoring...")
+            try:
+                import bot_instance
+                if bot_instance.bot and bot_instance.bot.is_ready():
+                    tiktok_cog = bot_instance.bot.get_cog("TikTokCog")
+                    if tiktok_cog:
+                        # Stop tracking old handle
+                        if old_handle:
+                            await tiktok_cog.update_monitoring(old_handle, False)
+                        # Start tracking new handle
+                        if new_handle:
+                            await tiktok_cog.update_monitoring(new_handle, True)
+                    else:
+                        print("TikTokCog not found when updating reviewer handle via Admin")
+                else:
+                     print("Bot not ready or not found when updating reviewer handle via Admin")
+            except Exception as e:
+                print(f"Error updating monitoring via Admin: {e}")
 
         print(f"Added reviewer profile successfully for user {result.username}")
         return result
@@ -568,3 +600,30 @@ async def update_global_settings(
         
     return {"ok": True}
 
+    return {"ok": True}
+
+
+@router.get("/platform-fees")
+async def get_platform_fees(db: AsyncSession = Depends(get_db)):
+    """Fetch all platform fees."""
+    stmt = (
+        select(models.PlatformFee)
+        .options(joinedload(models.PlatformFee.reviewer).joinedload(models.Reviewer.user))
+        .order_by(models.PlatformFee.created_at.desc())
+    )
+    result = await db.execute(stmt)
+    fees = result.scalars().all()
+    
+    return [
+        {
+            "id": fee.id,
+            "reviewer_name": fee.reviewer.user.username if fee.reviewer and fee.reviewer.user else "Unknown",
+            "amount": fee.amount,
+            "currency": fee.currency,
+            "source": fee.source,
+            "reference_id": fee.reference_id,
+            "is_settled": fee.is_settled,
+            "created_at": fee.created_at
+        }
+        for fee in fees
+    ]

@@ -47,12 +47,6 @@ async def callback(code: str, db: AsyncSession = Depends(get_db)):
         user_response.raise_for_status()
         discord_user = user_response.json()
 
-    # Construct Avatar URL
-    avatar_hash = discord_user.get("avatar")
-    avatar_url = None
-    if avatar_hash:
-        avatar_url = f"https://cdn.discordapp.com/avatars/{discord_user['id']}/{avatar_hash}.png"
-
     # Create or update the user in the database
     try:
         user = await user_service.get_or_create_user(
@@ -60,7 +54,7 @@ async def callback(code: str, db: AsyncSession = Depends(get_db)):
             discord_id=discord_user["id"], 
             username=discord_user["username"],
             email=discord_user.get("email"),
-            avatar=avatar_url
+            avatar=discord_user.get("avatar") # Store the hash, not the URL
         )
     except ValueError as e:
         # Handle the case where email is already in use by another account

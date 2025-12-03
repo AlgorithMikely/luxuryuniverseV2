@@ -88,15 +88,63 @@ async def submit_smart(
     if not current_user:
         if not email:
             raise HTTPException(status_code=401, detail="Authentication required or email must be provided for guest submission.")
+        if not tiktok_handle:
+            raise HTTPException(status_code=400, detail="TikTok handle is required for submission.")
         
         # Find or create guest user
         user = await user_service.get_or_create_guest_user(db, email, tiktok_handle)
         current_user = user
+    else:
+        # Ensure logged-in user has a TikTok handle
+        if not current_user.tiktok_username:
+            if not tiktok_handle:
+                raise HTTPException(status_code=400, detail="Please provide your TikTok handle to link it to your account.")
+            
+            # Update user profile
+            # We need to ensure uniqueness or handle conflicts? 
+            # user_service.update_user? Or just direct update.
+            # Direct update for now, assuming unique constraint will raise IntegrityError if duplicate.
+            # But wait, if they provide a handle that is already taken by another user?
+            # We should probably check.
+            existing_user = await user_service.get_user_by_tiktok_username(db, tiktok_handle)
+            if existing_user and existing_user.id != current_user.id:
+                 raise HTTPException(status_code=409, detail="This TikTok handle is already linked to another account.")
 
+            current_user.tiktok_username = tiktok_handle
+            db.add(current_user)
+            await db.commit()
+            await db.refresh(current_user)
+
+            # Link TikTokAccount and transfer pending coins if any
+            # We need to import models here or use existing imports
+            # Check for existing TikTokAccount
+            stmt_account = select(models.TikTokAccount).where(models.TikTokAccount.unique_id == tiktok_handle)
+            result_account = await db.execute(stmt_account)
+            tiktok_account = result_account.scalar_one_or_none()
+            
+            if tiktok_account:
+                tiktok_account.user_id = current_user.id
+                
+                if tiktok_account.pending_coins > 0:
+                    # Award pending coins
+                    # We need economy_service
+                    # And a reviewer_id. We can use the current reviewer_id from the request.
+                    try:
+                        await economy_service.add_coins(db, reviewer_id, current_user.id, tiktok_account.pending_coins, "Retroactive TikTok rewards")
+                        tiktok_account.pending_coins = 0
+                    except Exception as e:
+                        logging.error(f"Failed to transfer pending coins: {e}")
+                
+                db.add(tiktok_account)
+                await db.commit()
+
+    import logging
     try:
         payload_data = json.loads(submissions_json)
         payload = schemas.SmartSubmissionCreate(**payload_data)
+        logging.info(f"Processing submission for user {current_user.id if current_user else 'Guest'}")
     except Exception as e:
+        logging.error(f"JSON Parse Error: {e}")
         raise HTTPException(status_code=400, detail=f"Invalid JSON payload: {str(e)}")
 
 
@@ -193,10 +241,17 @@ async def submit_smart(
     if total_cost > 0:
         current_balance = await economy_service.get_balance(db, reviewer_id, current_user.id)
         if current_balance < total_cost:
-            raise HTTPException(status_code=400, detail=f"Insufficient balance. Required: {total_cost}, Available: {current_balance}")
+            raise HTTPException(status_code=402, detail=f"Insufficient balance. Required: {total_cost}, Available: {current_balance}")
 
         # Deduct coins
-        await economy_service.add_coins(db, reviewer_id, current_user.id, -total_cost, "submission_fee")
+        try:
+            await economy_service.deduct_coins(db, reviewer_id, current_user.id, total_cost, "submission_fee")
+        except ValueError as e:
+            raise HTTPException(status_code=402, detail=f"Insufficient balance: {str(e)}")
+        except Exception as e:
+            import logging
+            logging.error(f"Deduction failed: {e}")
+            raise HTTPException(status_code=500, detail="Payment processing failed. Please contact support.")
 
     # 2. Handle Files and Create Submissions
     # Generate a batch_id if multiple submissions or just for consistency
@@ -320,19 +375,26 @@ async def submit_smart(
 
                 if existing:
                     is_active = existing.status in ['pending', 'playing']
-                    duplicate_info = {
-                        "message": "Track already in queue" if is_active else "Duplicate link detected",
-                        "type": "link",
-                        "track_url": item.track_url,
-                        "is_active": is_active,
-                        "existing_submission": {
-                            "id": existing.id,
-                            "track_title": existing.track_title,
-                            "status": existing.status,
-                            "submitted_at": existing.submitted_at.isoformat() if existing.submitted_at else None
+                    
+                    if is_active:
+                        duplicate_info = {
+                            "message": "Track already in queue",
+                            "type": "link",
+                            "track_url": item.track_url,
+                            "is_active": is_active,
+                            "existing_submission": {
+                                "id": existing.id,
+                                "track_title": existing.track_title,
+                                "status": existing.status,
+                                "submitted_at": existing.submitted_at.isoformat() if existing.submitted_at else None
+                            }
                         }
-                    }
-                    raise HTTPException(status_code=409, detail=json.dumps(duplicate_info))
+                        raise HTTPException(status_code=409, detail=json.dumps(duplicate_info))
+                    else:
+                        # Not active? Reuse silently.
+                        # For links, we don't need to do anything special, just let it proceed to create a new submission
+                        # with the same URL.
+                        pass
 
         # Final check before creating: Ensure we aren't creating a duplicate active submission via reuse/force
         # (If force_upload is True, we allow it, assuming user knows what they are doing or it's a new version)
@@ -614,9 +676,41 @@ async def get_public_giveaway_state(reviewer_id: int, db: AsyncSession = Depends
 
 @router.patch("/{reviewer_id}/settings", response_model=schemas.ReviewerProfile, dependencies=[Depends(check_is_reviewer)])
 async def update_reviewer_settings(reviewer_id: int, settings: schemas.ReviewerSettingsUpdate, db: AsyncSession = Depends(get_db)):
+    # Fetch current reviewer to check for handle changes
+    current_reviewer = await queue_service.get_reviewer_by_id(db, reviewer_id)
+    old_handle = current_reviewer.tiktok_handle if current_reviewer else None
+
     updated_reviewer = await queue_service.update_reviewer_settings(db, reviewer_id, settings)
     if not updated_reviewer:
         raise HTTPException(status_code=404, detail="Reviewer not found")
+    
+    # Check if TikTok handle changed and update monitoring dynamically
+    new_handle = updated_reviewer.tiktok_handle
+    
+    # Normalize for comparison (handle None)
+    old_h_norm = old_handle.lower() if old_handle else ""
+    new_h_norm = new_handle.lower() if new_handle else ""
+
+    if old_h_norm != new_h_norm:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"TikTok handle changed from {old_handle} to {new_handle}. Updating monitoring...")
+        
+        from bot_instance import bot
+        if bot and bot.is_ready():
+            tiktok_cog = bot.get_cog("TikTokCog")
+            if tiktok_cog:
+                # Stop tracking old handle
+                if old_handle:
+                    await tiktok_cog.update_monitoring(old_handle, False)
+                # Start tracking new handle
+                if new_handle:
+                    await tiktok_cog.update_monitoring(new_handle, True)
+            else:
+                logger.error("TikTokCog not found when updating reviewer handle")
+        else:
+             logger.warning("Bot not ready or not found when updating reviewer handle")
+
     return updated_reviewer
 
 @router.get("/{reviewer_id}/stats", response_model=schemas.QueueStats)

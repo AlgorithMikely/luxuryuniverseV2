@@ -17,6 +17,7 @@ const ReviewerSettingsPage: React.FC = () => {
     const [discordChannels, setDiscordChannels] = useState<DiscordChannel[]>([]);
     const [freeLineLimit, setFreeLineLimit] = useState<number | ''>('');
     const [maxFreeSubmissionsSession, setMaxFreeSubmissionsSession] = useState<number | ''>('');
+    const [communityGoalCooldown, setCommunityGoalCooldown] = useState<number | ''>('');
     const [bio, setBio] = useState('');
     const [bannerUrl, setBannerUrl] = useState('');
     const [avatarUrl, setAvatarUrl] = useState('');
@@ -49,6 +50,7 @@ const ReviewerSettingsPage: React.FC = () => {
     // New Tier State
     const [newTierValue, setNewTierValue] = useState<number>(0);
     const [newTierLabel, setNewTierLabel] = useState('');
+    const [newTierName, setNewTierName] = useState('');
     const [newTierColor, setNewTierColor] = useState('gray');
     const [newTierSubmissions, setNewTierSubmissions] = useState<number>(1);
 
@@ -58,6 +60,12 @@ const ReviewerSettingsPage: React.FC = () => {
     // Cropping State
     const [croppingImage, setCroppingImage] = useState<string | null>(null);
     const [croppingType, setCroppingType] = useState<'banner' | 'avatar' | null>(null);
+
+    // PayPal Modal State
+    const [isPayPalModalOpen, setIsPayPalModalOpen] = useState(false);
+    const [payPalClientId, setPayPalClientId] = useState('');
+    const [payPalSecret, setPayPalSecret] = useState('');
+    const [payPalMode, setPayPalMode] = useState('sandbox');
 
     const handleTierChange = (index: number, field: keyof PriorityTier, value: any) => {
         const newTiers = [...tiers];
@@ -99,13 +107,13 @@ const ReviewerSettingsPage: React.FC = () => {
     ];
 
     const defaultTiers: PriorityTier[] = [
-        { value: 0, label: "Free", color: "gray" },
-        { value: 5, label: "$5 Tier", color: "green" },
-        { value: 10, label: "$10 Tier", color: "blue" },
-        { value: 15, label: "$15 Tier", color: "purple" },
-        { value: 20, label: "$20 Tier", color: "yellow" },
-        { value: 25, label: "$25 Tier", color: "red" },
-        { value: 50, label: "50+ Tier", color: "pink" },
+        { value: 0, label: "Free", color: "gray", tier_name: "Free Tier" },
+        { value: 5, label: "$5 Tier", color: "green", tier_name: "Supporter" },
+        { value: 10, label: "$10 Tier", color: "blue", tier_name: "VIP" },
+        { value: 15, label: "$15 Tier", color: "purple", tier_name: "Super VIP" },
+        { value: 20, label: "$20 Tier", color: "yellow", tier_name: "Mega VIP" },
+        { value: 25, label: "$25 Tier", color: "red", tier_name: "Ultra VIP" },
+        { value: 50, label: "50+ Tier", color: "pink", tier_name: "God Tier" },
     ];
 
     useEffect(() => {
@@ -136,6 +144,7 @@ const ReviewerSettingsPage: React.FC = () => {
                 setSeeTheLineChannelId(profile.see_the_line_channel_id || '');
                 setFreeLineLimit(profile.configuration?.free_line_limit ?? '');
                 setMaxFreeSubmissionsSession(profile.configuration?.max_free_submissions_session ?? '');
+                setCommunityGoalCooldown(profile.community_goal_cooldown_minutes ?? 5);
 
                 // Fetch available Discord channels
                 try {
@@ -212,6 +221,7 @@ const ReviewerSettingsPage: React.FC = () => {
                 see_the_line_channel_id: seeTheLineChannelId,
                 social_platform: socialPlatform,
                 social_handle: socialHandle,
+                community_goal_cooldown_minutes: communityGoalCooldown === '' ? 5 : Number(communityGoalCooldown),
                 economy_configs: economyConfigs.map(c => ({ event_name: c.event_name, coin_amount: c.coin_amount })),
                 configuration: {
                     ...reviewerProfile.configuration,
@@ -247,6 +257,7 @@ const ReviewerSettingsPage: React.FC = () => {
         const newTier: PriorityTier = {
             value: newTierValue,
             label: newTierLabel || `${newTierValue} Tier`,
+            tier_name: newTierName,
             color: newTierColor,
             submissions_count: newTierSubmissions
         };
@@ -258,6 +269,7 @@ const ReviewerSettingsPage: React.FC = () => {
         // Reset form
         setNewTierValue(0);
         setNewTierLabel('');
+        setNewTierName('');
         setNewTierColor('gray');
         setNewTierSubmissions(1);
         setIsColorDropdownOpen(false);
@@ -522,6 +534,18 @@ const ReviewerSettingsPage: React.FC = () => {
                                 />
                                 <p className="text-xs text-gray-500 mt-1">Limit the total number of free submissions allowed per live session.</p>
                             </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-400 mb-2">Community Goal Cooldown (Minutes)</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={communityGoalCooldown}
+                                    onChange={(e) => setCommunityGoalCooldown(e.target.value === '' ? '' : parseInt(e.target.value))}
+                                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-purple-500"
+                                    placeholder="5"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">Duration of cooldown after a community goal is reached.</p>
+                            </div>
                         </div>
                     </section>
 
@@ -675,6 +699,8 @@ const ReviewerSettingsPage: React.FC = () => {
                         </div>
                     </section>
 
+
+
                     {/* Priority Tiers Configuration */}
                     <section className="bg-gray-800 rounded-xl p-6 shadow-lg">
                         <div className="flex justify-between items-center mb-4">
@@ -694,6 +720,7 @@ const ReviewerSettingsPage: React.FC = () => {
                                     <tr className="bg-gray-700 text-gray-300 text-sm">
                                         <th className="p-3 font-medium">Value</th>
                                         <th className="p-3 font-medium">Label</th>
+                                        <th className="p-3 font-medium">Tier Name</th>
                                         <th className="p-3 font-medium"># of Submissions</th>
                                         <th className="p-3 font-medium">Theme</th>
                                         <th className="p-3 font-medium text-right">Actions</th>
@@ -719,6 +746,15 @@ const ReviewerSettingsPage: React.FC = () => {
                                                         type="text"
                                                         value={tier.label}
                                                         onChange={(e) => handleTierChange(index, 'label', e.target.value)}
+                                                        className="bg-gray-800 border border-gray-600 rounded px-2 py-1 w-full text-sm focus:outline-none focus:border-purple-500"
+                                                    />
+                                                </td>
+                                                <td className="p-3">
+                                                    <input
+                                                        type="text"
+                                                        value={tier.tier_name || ''}
+                                                        onChange={(e) => handleTierChange(index, 'tier_name', e.target.value)}
+                                                        placeholder="e.g. Gold Tier"
                                                         className="bg-gray-800 border border-gray-600 rounded px-2 py-1 w-full text-sm focus:outline-none focus:border-purple-500"
                                                     />
                                                 </td>
@@ -800,6 +836,16 @@ const ReviewerSettingsPage: React.FC = () => {
                                         value={newTierLabel}
                                         onChange={(e) => setNewTierLabel(e.target.value)}
                                         placeholder="e.g. Super Skip"
+                                        className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
+                                    />
+                                </div>
+                                <div className="flex-1 w-full">
+                                    <label className="block text-xs text-gray-500 mb-1">Tier Name</label>
+                                    <input
+                                        type="text"
+                                        value={newTierName}
+                                        onChange={(e) => setNewTierName(e.target.value)}
+                                        placeholder="e.g. Gold Tier"
                                         className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
                                     />
                                 </div>
@@ -998,18 +1044,69 @@ const ReviewerSettingsPage: React.FC = () => {
                                 </div>
                             </div>
 
-                            {/* PayPal (Coming Soon) */}
-                            <div className="bg-gray-700/30 p-4 rounded-lg flex items-center justify-between opacity-60">
+                            {/* PayPal */}
+                            <div className="bg-gray-700/50 p-4 rounded-lg flex items-center justify-between">
                                 <div className="flex items-center gap-4">
                                     <div className="bg-[#003087] p-2 rounded text-white font-bold">PayPal</div>
                                     <div>
                                         <h3 className="font-medium text-white">PayPal</h3>
-                                        <p className="text-xs text-gray-400">Coming soon.</p>
+                                        <p className="text-xs text-gray-400">Accept PayPal payments directly.</p>
                                     </div>
                                 </div>
-                                <button disabled className="bg-gray-600 text-gray-400 px-4 py-2 rounded text-sm font-medium cursor-not-allowed">
-                                    Connect
-                                </button>
+                                <div>
+                                    {reviewerProfile?.payment_configs?.find(c => c.provider === 'paypal' && c.is_enabled) ? (
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex items-center gap-2 text-green-400 bg-green-900/30 px-3 py-1 rounded-full border border-green-800">
+                                                <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                                                <span className="text-sm font-medium">Connected</span>
+                                            </div>
+                                            <button
+                                                onClick={async () => {
+                                                    if (window.confirm("Are you sure you want to disable PayPal?")) {
+                                                        try {
+                                                            await api.put('/paypal/config', {
+                                                                is_enabled: false,
+                                                                credentials: reviewerProfile?.payment_configs?.find(c => c.provider === 'paypal')?.credentials || {}
+                                                            });
+                                                            setMessage({ text: "PayPal disabled.", type: 'success' });
+                                                            const res = await api.get(`/reviewer/${user?.reviewer_profile?.id}/settings`);
+                                                            setReviewerProfile(res.data);
+                                                        } catch (err) {
+                                                            setMessage({ text: "Failed to disable PayPal.", type: 'error' });
+                                                        }
+                                                    }
+                                                }}
+                                                className="text-gray-400 hover:text-white text-sm underline"
+                                            >
+                                                Disconnect
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    const config = reviewerProfile?.payment_configs?.find(c => c.provider === 'paypal');
+                                                    setPayPalClientId(config?.credentials?.client_id || '');
+                                                    setPayPalSecret(config?.credentials?.client_secret || '');
+                                                    setPayPalMode(config?.credentials?.mode || 'sandbox');
+                                                    setIsPayPalModalOpen(true);
+                                                }}
+                                                className="text-blue-400 hover:text-blue-300 text-sm underline"
+                                            >
+                                                Edit
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            onClick={() => {
+                                                setPayPalClientId('');
+                                                setPayPalSecret('');
+                                                setPayPalMode('sandbox');
+                                                setIsPayPalModalOpen(true);
+                                            }}
+                                            className="bg-[#003087] hover:bg-[#002060] text-white px-4 py-2 rounded text-sm font-medium transition-colors"
+                                        >
+                                            Connect PayPal
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </section>
@@ -1043,6 +1140,89 @@ const ReviewerSettingsPage: React.FC = () => {
                         setCroppingType(null);
                     }}
                 />
+            )}
+
+            {/* PayPal Configuration Modal */}
+            {isPayPalModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+                    <div className="bg-gray-800 rounded-xl p-6 w-full max-w-md border border-gray-700 shadow-2xl">
+                        <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                            <div className="bg-[#003087] p-1.5 rounded text-white text-xs font-bold">P</div>
+                            Connect PayPal
+                        </h2>
+                        <p className="text-sm text-gray-400 mb-6">
+                            Enter your PayPal REST API credentials. You can find these in the <a href="https://developer.paypal.com/dashboard/" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">PayPal Developer Dashboard</a>.
+                        </p>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1">Client ID</label>
+                                <input
+                                    type="text"
+                                    value={payPalClientId}
+                                    onChange={(e) => setPayPalClientId(e.target.value)}
+                                    className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                    placeholder="Enter Client ID"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1">Client Secret</label>
+                                <input
+                                    type="password"
+                                    value={payPalSecret}
+                                    onChange={(e) => setPayPalSecret(e.target.value)}
+                                    className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                    placeholder="Enter Client Secret"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1">Mode</label>
+                                <select
+                                    value={payPalMode}
+                                    onChange={(e) => setPayPalMode(e.target.value)}
+                                    className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                >
+                                    <option value="sandbox">Sandbox (Testing)</option>
+                                    <option value="live">Live (Production)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3 mt-8">
+                            <button
+                                onClick={() => setIsPayPalModalOpen(false)}
+                                className="px-4 py-2 rounded text-gray-400 hover:text-white transition-colors text-sm"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    try {
+                                        await api.put('/paypal/config', {
+                                            is_enabled: true,
+                                            credentials: {
+                                                client_id: payPalClientId,
+                                                client_secret: payPalSecret,
+                                                mode: payPalMode
+                                            }
+                                        });
+                                        setMessage({ text: "PayPal connected successfully!", type: 'success' });
+                                        setIsPayPalModalOpen(false);
+                                        // Refresh profile
+                                        const res = await api.get(`/reviewer/${user?.reviewer_profile?.id}/settings`);
+                                        setReviewerProfile(res.data);
+                                    } catch (err) {
+                                        console.error(err);
+                                        setMessage({ text: "Failed to save PayPal credentials.", type: 'error' });
+                                    }
+                                }}
+                                className="bg-[#003087] hover:bg-[#002060] text-white px-6 py-2 rounded text-sm font-bold transition-colors shadow-lg"
+                            >
+                                Connect Account
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div >
     );

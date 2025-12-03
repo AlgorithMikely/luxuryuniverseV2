@@ -11,12 +11,15 @@ import CheckoutModal from "./CheckoutModal";
 import { useAuthStore } from "../stores/authStore";
 import SubmissionSlot from "./SubmissionSlot";
 import { useSubmissionSlots } from "../hooks/useSubmissionSlots";
+import { useSubmission } from "../hooks/useSubmission";
 
 interface SmartZoneProps {
     reviewer: ReviewerProfile;
 }
 
 const SmartZone: React.FC<SmartZoneProps> = ({ reviewer }) => {
+    const { user } = useAuthStore();
+
     const {
         slot1, setSlot1,
         slot2, setSlot2,
@@ -26,13 +29,12 @@ const SmartZone: React.FC<SmartZoneProps> = ({ reviewer }) => {
         handlePaste,
         loadFromDrawer,
         updateSlot
-    } = useSubmissionSlots();
+    } = useSubmissionSlots({ defaultArtistName: user?.artist_name });
 
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [priorityValue, setPriorityValue] = useState(0); // Coin/Tier value
     const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
     const [isDisclaimerChecked, setIsDisclaimerChecked] = useState(false);
-    const { user } = useAuthStore();
 
     // Determine allowed submissions based on tier
     const selectedTier = reviewer.configuration?.priority_tiers?.find(t => t.value === priorityValue);
@@ -43,112 +45,62 @@ const SmartZone: React.FC<SmartZoneProps> = ({ reviewer }) => {
         // Clear slots if they are no longer allowed
         if (allowedSubmissions < 2 && slot2) setSlot2(null);
         if (allowedSubmissions < 3 && slot3) setSlot3(null);
+        else if (slot3?.is_history) setSlot3(null);
     }, [allowedSubmissions, slot2, slot3]);
 
     const [duplicateInfo, setDuplicateInfo] = useState<any | null>(null);
     const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
-
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [checkoutAmount, setCheckoutAmount] = useState<number | null>(null);
     const navigate = useNavigate();
 
-    const handleSubmit = async (force = false, reuseHash: string | null = null) => {
-        // Validate
-        if (!slot1) {
-            toast.error("Slot 1 is empty!");
-            return;
-        }
-
-        // Check if Guest
-        if (!user) {
-            setIsCheckoutOpen(true);
-            return;
-        }
-
-        setIsSubmitting(true);
-
-        // Prepare FormData
-        const formData = new FormData();
-        const items: SmartSubmissionItem[] = [];
-
-        // Process Slot 1
-        items.push({ ...slot1, priority_value: priorityValue });
-        if (slot1.file && !reuseHash) {
-            formData.append('files', slot1.file);
-        }
-
-        // Process Slot 2
-        if (allowedSubmissions >= 2 && slot2) {
-            items.push({ ...slot2, priority_value: priorityValue });
-            if (slot2.file && !reuseHash) {
-                formData.append('files', slot2.file);
-            }
-        }
-
-        // Process Slot 3
-        if (allowedSubmissions >= 3 && slot3) {
-            items.push({ ...slot3, priority_value: priorityValue });
-            if (slot3.file && !reuseHash) {
-                formData.append('files', slot3.file);
-            }
-        }
-
-        // Add metadata as JSON string
-        const payload = {
-            submissions: items,
-            is_priority: isVIP
-        };
-
-        formData.append('submissions_json', JSON.stringify(payload));
-        if (force) formData.append('force_upload', 'true');
-        if (reuseHash) formData.append('reuse_hash', reuseHash);
-
-        try {
-            await api.post(`/reviewer/${reviewer.id}/submit`, formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                },
-            });
-            toast.success("Submitted successfully!");
+    const { submit, isSubmitting } = useSubmission({
+        reviewer,
+        onSuccess: () => {
             setSlot1(null);
             setSlot2(null);
             setSlot3(null);
             setPriorityValue(0);
             setDuplicateInfo(null);
             setIsDuplicateModalOpen(false);
-
-            // Redirect to Hub if logged in
-            if (user) {
-                navigate('/hub');
+            if (user) navigate('/hub');
+        },
+        onOpenCheckout: (shortfall) => {
+            if (shortfall !== undefined) {
+                setCheckoutAmount(shortfall / 100);
+            } else {
+                setCheckoutAmount(null);
             }
-        } catch (e: any) {
-            console.error(e);
-            if (e.response?.status === 409) {
-                try {
-                    const info = JSON.parse(e.response.data.detail);
+            setIsCheckoutOpen(true);
+        },
+        onOpenDuplicateModal: (info) => {
+            setDuplicateInfo(info);
+            setIsDuplicateModalOpen(true);
+        },
+        onHistoryDuplicate: (info) => {
+            let cleared = false;
+            if (slot1?.is_history && slot1.track_url === info.track_url) { setSlot1(null); cleared = true; }
+            if (slot2?.is_history && slot2.track_url === info.track_url) { setSlot2(null); cleared = true; }
+            if (slot3?.is_history && slot3.track_url === info.track_url) { setSlot3(null); cleared = true; }
 
-                    // Check if the duplicate is a history load from ANY slot
-                    const isHistoryDuplicate =
-                        (slot1?.is_history && slot1.track_url === info.track_url) ||
-                        (slot2?.is_history && slot2.track_url === info.track_url) ||
-                        (slot3?.is_history && slot3.track_url === info.track_url);
-
-                    if (isHistoryDuplicate && info.is_active) {
-                        toast.error("This track is already active in the queue.");
-                        return;
-                    }
-
-                    setDuplicateInfo(info);
-                    setIsDuplicateModalOpen(true);
-                    return;
-                } catch (err) {
-                    console.error("Failed to parse duplicate info", err);
+            if (!cleared) {
+                const historySlots = [slot1, slot2, slot3].filter(s => s?.is_history);
+                if (historySlots.length === 1) {
+                    if (slot1?.is_history) setSlot1(null);
+                    else if (slot2?.is_history) setSlot2(null);
+                    else if (slot3?.is_history) setSlot3(null);
                 }
             }
-            const msg = e.response?.data?.detail || "Submission failed.";
-            toast.error(msg);
-        } finally {
-            setIsSubmitting(false);
         }
+    });
+
+    const handleSubmit = async (force = false, reuseHash: string | null = null) => {
+        await submit(
+            { slot1, slot2, slot3 },
+            priorityValue,
+            allowedSubmissions,
+            force,
+            reuseHash
+        );
     };
 
     const handleCheckoutSuccess = () => {
@@ -167,7 +119,7 @@ const SmartZone: React.FC<SmartZoneProps> = ({ reviewer }) => {
                     </h2>
 
                     {/* Slot 1 */}
-                    <SubmissionSlot
+                    < SubmissionSlot
                         slotNum={1}
                         item={slot1}
                         onClear={() => setSlot1(null)}
@@ -226,10 +178,10 @@ const SmartZone: React.FC<SmartZoneProps> = ({ reviewer }) => {
                             </motion.div>
                         )}
                     </AnimatePresence>
-                </div>
+                </div >
 
                 {/* Right Column: Controls */}
-                <div className="lg:col-span-5 space-y-6">
+                < div className="lg:col-span-5 space-y-6" >
                     <div className="bg-gray-800/50 backdrop-blur-xl border border-white/10 rounded-3xl p-6 shadow-2xl lg:sticky lg:top-24">
                         <h3 className="text-xl font-bold mb-6 text-white">Select Priority</h3>
 
@@ -283,8 +235,8 @@ const SmartZone: React.FC<SmartZoneProps> = ({ reviewer }) => {
                             </button>
                         </div>
                     </div>
-                </div>
-            </div>
+                </div >
+            </div >
 
             <RecentTracksDrawer
                 isOpen={isDrawerOpen}
@@ -298,13 +250,16 @@ const SmartZone: React.FC<SmartZoneProps> = ({ reviewer }) => {
             <CheckoutModal
                 isOpen={isCheckoutOpen}
                 onClose={() => setIsCheckoutOpen(false)}
-                amount={priorityValue}
+                amount={checkoutAmount !== null ? checkoutAmount : priorityValue}
                 reviewerId={reviewer.id}
                 metadata={{
-                    type: 'priority_request',
+                    type: user ? 'wallet_topup' : 'priority_request',
                     tier: selectedTier?.label || 'Custom',
                     artist: slot1?.artist,
-                    genre: slot1?.genre
+                    genre: slot1?.genre,
+                    track_url: slot1?.track_url || (slot1?.file ? "File Upload" : undefined),
+                    track_title: slot1?.track_title,
+                    email: (user as any)?.email
                 }}
                 onSuccess={handleCheckoutSuccess}
             />
@@ -360,7 +315,7 @@ const SmartZone: React.FC<SmartZoneProps> = ({ reviewer }) => {
                     </motion.div>
                 )}
             </AnimatePresence>
-        </div>
+        </div >
     );
 };
 

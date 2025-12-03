@@ -11,6 +11,7 @@ import UserHubPage from "./pages/UserHubPage";
 import WalletHistoryPage from "./pages/WalletHistoryPage";
 import AdminPage from "./pages/AdminPage";
 import ReviewerSettingsPage from "./pages/ReviewerSettingsPage";
+import UserSettingsPage from "./pages/UserSettingsPage";
 import EconomyLogPage from "./pages/EconomyLogPage";
 import ArchivedSessionPage from './pages/ArchivedSessionPage';
 import SubmissionPage from "./pages/SubmissionPage";
@@ -70,6 +71,7 @@ function App() {
               <Route path="/reviewer/:reviewerId" element={<ReviewerDashboard />} />
               <Route path="/reviewer/bookmarks" element={<BookmarksPage />} />
               <Route path="/settings/reviewer" element={<ReviewerSettingsPage />} />
+              <Route path="/settings" element={<UserSettingsPage />} />
               <Route path="/hub" element={<UserHubPage />} />
               <Route path="/wallet/history" element={<WalletHistoryPage />} />
               <Route path="/session/:sessionId" element={<ArchivedSessionPage />} />

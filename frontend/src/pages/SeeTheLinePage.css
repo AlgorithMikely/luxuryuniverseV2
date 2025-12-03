@@ -314,12 +314,17 @@ body,
     color: var(--text-gray);
 }
 
+/* Upsell Banner */
 .qc-user {
     color: var(--neon-blue);
 }
 
 .qc-right {
     padding-left: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-direction: row;
 }
 
 .icon-vip {
