@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import api from '../services/api';
 import { ReviewerProfile, PriorityTier, EconomyConfig, DiscordChannel } from '../types';
-import { Upload, RotateCcw, Plus, Trash2 } from 'lucide-react';
+import { Upload, RotateCcw, Plus, Trash2, ImageOff } from 'lucide-react';
 import ImageCropper from '../components/ImageCropper';
 
 const ReviewerSettingsPage: React.FC = () => {
@@ -15,11 +15,24 @@ const ReviewerSettingsPage: React.FC = () => {
     const [discordChannelId, setDiscordChannelId] = useState('');
     const [seeTheLineChannelId, setSeeTheLineChannelId] = useState('');
     const [discordChannels, setDiscordChannels] = useState<DiscordChannel[]>([]);
-    const [freeLineLimit, setFreeLineLimit] = useState<number | ''>('');
+    const [visibleFreeLimit, setVisibleFreeLimit] = useState<number | ''>('');
     const [maxFreeSubmissionsSession, setMaxFreeSubmissionsSession] = useState<number | ''>('');
+
+    // Base Values State
+    const [likesBaseTarget, setLikesBaseTarget] = useState<number | ''>('');
+    const [sharesBaseTarget, setSharesBaseTarget] = useState<number | ''>('');
+    const [giftsBaseTarget, setGiftsBaseTarget] = useState<number | ''>('');
+    const [commentsBaseTarget, setCommentsBaseTarget] = useState<number | ''>('');
+
     const [communityGoalCooldown, setCommunityGoalCooldown] = useState<number | ''>('');
     const [bio, setBio] = useState('');
     const [bannerUrl, setBannerUrl] = useState('');
+    const [bannerLoadError, setBannerLoadError] = useState(false);
+
+    useEffect(() => {
+        setBannerLoadError(false);
+    }, [bannerUrl]);
+
     const [avatarUrl, setAvatarUrl] = useState('');
     const [themeColor, setThemeColor] = useState('purple');
     const [tiers, setTiers] = useState<PriorityTier[]>([]);
@@ -142,8 +155,17 @@ const ReviewerSettingsPage: React.FC = () => {
                 setTiktokHandle(profile.tiktok_handle || '');
                 setDiscordChannelId(profile.discord_channel_id || '');
                 setSeeTheLineChannelId(profile.see_the_line_channel_id || '');
-                setFreeLineLimit(profile.configuration?.free_line_limit ?? '');
+                setSeeTheLineChannelId(profile.see_the_line_channel_id || '');
+                setVisibleFreeLimit(profile.configuration?.visible_free_limit ?? 20);
                 setMaxFreeSubmissionsSession(profile.configuration?.max_free_submissions_session ?? '');
+
+                // Load Giveaway Settings
+                const settings = profile.configuration?.giveaway_settings || {};
+                setLikesBaseTarget(settings['LIKES']?.base_target ?? 10000);
+                setSharesBaseTarget(settings['SHARES']?.base_target ?? 250);
+                setGiftsBaseTarget(settings['GIFTS']?.base_target ?? 1000);
+                setCommentsBaseTarget(settings['COMMENTS']?.base_target ?? 500);
+
                 setCommunityGoalCooldown(profile.community_goal_cooldown_minutes ?? 5);
 
                 // Fetch available Discord channels
@@ -225,8 +247,15 @@ const ReviewerSettingsPage: React.FC = () => {
                 economy_configs: economyConfigs.map(c => ({ event_name: c.event_name, coin_amount: c.coin_amount })),
                 configuration: {
                     ...reviewerProfile.configuration,
-                    free_line_limit: freeLineLimit === '' ? null : Number(freeLineLimit),
+                    visible_free_limit: visibleFreeLimit === '' ? 20 : Number(visibleFreeLimit),
                     max_free_submissions_session: maxFreeSubmissionsSession === '' ? null : Number(maxFreeSubmissionsSession),
+                    giveaway_settings: {
+                        ...reviewerProfile.configuration?.giveaway_settings,
+                        'LIKES': { base_target: likesBaseTarget === '' ? 10000 : Number(likesBaseTarget), description: "Reach {target} Likes for a Free Skip!" },
+                        'SHARES': { base_target: sharesBaseTarget === '' ? 250 : Number(sharesBaseTarget), description: "Reach {target} Shares for a Free Skip!" },
+                        'GIFTS': { base_target: giftsBaseTarget === '' ? 1000 : Number(giftsBaseTarget), description: "Drop {target} Diamonds for a Free Skip!" },
+                        'COMMENTS': { base_target: commentsBaseTarget === '' ? 500 : Number(commentsBaseTarget), description: "Chat {target} times for a Free Skip!" },
+                    },
                     line_show_skips: lineShowSkips,
                     banner_url: bannerUrl,
                     theme_color: themeColor,
@@ -511,16 +540,16 @@ const ReviewerSettingsPage: React.FC = () => {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-gray-700">
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Max Active Free Submissions (Queue Cap)</label>
+                                <label className="block text-sm font-medium text-gray-400 mb-2">Visible Free Submissions</label>
                                 <input
                                     type="number"
                                     min="0"
-                                    value={freeLineLimit}
-                                    onChange={(e) => setFreeLineLimit(e.target.value === '' ? '' : parseInt(e.target.value))}
+                                    value={visibleFreeLimit}
+                                    onChange={(e) => setVisibleFreeLimit(e.target.value === '' ? '' : parseInt(e.target.value))}
                                     className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-purple-500"
-                                    placeholder="No limit"
+                                    placeholder="20"
                                 />
-                                <p className="text-xs text-gray-500 mt-1">Limit how many free submissions can be in the queue at once.</p>
+                                <p className="text-xs text-gray-500 mt-1">Number of free submissions to show on the public line page.</p>
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-400 mb-2">Max Free Submissions Per Session</label>
@@ -534,8 +563,62 @@ const ReviewerSettingsPage: React.FC = () => {
                                 />
                                 <p className="text-xs text-gray-500 mt-1">Limit the total number of free submissions allowed per live session.</p>
                             </div>
+                        </div>
+                    </section>
+
+                    {/* Free Skip Goal Settings */}
+                    <section className="bg-gray-800 rounded-xl p-6 shadow-lg">
+                        <h2 className="text-xl font-semibold mb-4 text-purple-400">Free Skip Goal Settings</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+
+                            {/* Base Values */}
                             <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2">Community Goal Cooldown (Minutes)</label>
+                                <label className="block text-sm font-medium text-gray-400 mb-2">Likes Goal Base Target</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={likesBaseTarget}
+                                    onChange={(e) => setLikesBaseTarget(e.target.value === '' ? '' : parseInt(e.target.value))}
+                                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-purple-500"
+                                    placeholder="10000"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-400 mb-2">Shares Goal Base Target</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={sharesBaseTarget}
+                                    onChange={(e) => setSharesBaseTarget(e.target.value === '' ? '' : parseInt(e.target.value))}
+                                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-purple-500"
+                                    placeholder="250"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-400 mb-2">Gifts Goal Base Target (Diamonds)</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={giftsBaseTarget}
+                                    onChange={(e) => setGiftsBaseTarget(e.target.value === '' ? '' : parseInt(e.target.value))}
+                                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-purple-500"
+                                    placeholder="1000"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-400 mb-2">Comments Goal Base Target</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={commentsBaseTarget}
+                                    onChange={(e) => setCommentsBaseTarget(e.target.value === '' ? '' : parseInt(e.target.value))}
+                                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-purple-500"
+                                    placeholder="500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-400 mb-2">Free Skip Cooldown (Minutes)</label>
                                 <input
                                     type="number"
                                     min="1"
@@ -544,7 +627,7 @@ const ReviewerSettingsPage: React.FC = () => {
                                     className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-purple-500"
                                     placeholder="5"
                                 />
-                                <p className="text-xs text-gray-500 mt-1">Duration of cooldown after a community goal is reached.</p>
+                                <p className="text-xs text-gray-500 mt-1">Duration of cooldown after a free skip goal is reached.</p>
                             </div>
                         </div>
                     </section>
@@ -588,12 +671,14 @@ const ReviewerSettingsPage: React.FC = () => {
                                 </div>
                                 <div className="flex gap-2">
                                     <button
+                                        type="button"
                                         onClick={() => avatarInputRef.current?.click()}
                                         className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded text-sm font-medium transition-colors border border-gray-600"
                                     >
                                         Upload
                                     </button>
                                     <button
+                                        type="button"
                                         onClick={async () => {
                                             try {
                                                 const { data } = await api.post(`/reviewer/${reviewerProfile?.id}/sync-avatar`);
@@ -626,19 +711,24 @@ const ReviewerSettingsPage: React.FC = () => {
                                 <div>
                                     <label className="block text-sm font-medium text-gray-400 mb-2">Banner Image</label>
                                     <div className="flex flex-col gap-3">
-                                        {/* Banner Preview */}
                                         {bannerUrl && (
-                                            <div className="relative w-full h-32 rounded-lg overflow-hidden border border-gray-600 group">
-                                                <img
-                                                    src={bannerUrl}
-                                                    alt="Banner Preview"
-                                                    className="w-full h-full object-cover"
-                                                    onError={(e) => {
-                                                        (e.target as HTMLImageElement).src = "https://via.placeholder.com/1920x300?text=Invalid+Banner+URL";
-                                                    }}
-                                                />
+                                            <div className="relative w-full h-auto rounded-lg overflow-hidden border border-gray-600 group" style={{ aspectRatio: '4 / 1' }}>
+                                                {!bannerLoadError ? (
+                                                    <img
+                                                        src={bannerUrl}
+                                                        alt="Banner Preview"
+                                                        className="w-full h-full object-cover"
+                                                        onError={() => setBannerLoadError(true)}
+                                                    />
+                                                ) : (
+                                                    <div className="w-full h-full bg-gray-800 flex flex-col items-center justify-center text-gray-400">
+                                                        <ImageOff size={32} className="mb-2 opacity-50" />
+                                                        <span className="text-sm">Invalid Banner URL</span>
+                                                    </div>
+                                                )}
                                                 <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                                     <button
+                                                        type="button"
                                                         onClick={() => setBannerUrl('')}
                                                         className="text-white bg-red-600/80 p-2 rounded-full hover:bg-red-600 transition-colors"
                                                         title="Remove Banner"
@@ -665,6 +755,7 @@ const ReviewerSettingsPage: React.FC = () => {
                                                 onChange={(e) => handleImageSelect(e, 'banner')}
                                             />
                                             <button
+                                                type="button"
                                                 onClick={() => bannerInputRef.current?.click()}
                                                 className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded border border-gray-600 flex items-center gap-2 whitespace-nowrap"
                                                 title="Upload Banner"
@@ -674,7 +765,7 @@ const ReviewerSettingsPage: React.FC = () => {
                                             </button>
                                         </div>
                                     </div>
-                                    <p className="text-xs text-gray-500 mt-1">Recommended size: 1920x300px</p>
+                                    <p className="text-xs text-gray-500 mt-1">Recommended size: 1920x480px (4:1 ratio)</p>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-400 mb-2">Theme Color</label>
@@ -688,7 +779,6 @@ const ReviewerSettingsPage: React.FC = () => {
                                                 style={{ backgroundColor: `var(--color-${color}-500, ${color})` }}
                                                 title={color}
                                             >
-                                                {/* Fallback for inline style if CSS vars aren't set globally yet */}
                                                 <span className={`block w-full h-full rounded-full bg-${color}-500`}></span>
                                             </button>
                                         ))}
@@ -698,8 +788,6 @@ const ReviewerSettingsPage: React.FC = () => {
                             </div>
                         </div>
                     </section>
-
-
 
                     {/* Priority Tiers Configuration */}
                     <section className="bg-gray-800 rounded-xl p-6 shadow-lg">
@@ -912,21 +1000,31 @@ const ReviewerSettingsPage: React.FC = () => {
                             Configure how many luxury coins users earn for different TikTok interactions.
                         </p>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {economyConfigs.map((config, index) => (
-                                <div key={config.event_name}>
-                                    <label className="block text-sm font-medium text-gray-400 mb-2 capitalize">{config.event_name}</label>
-                                    <input
-                                        type="number"
-                                        value={config.coin_amount}
-                                        onChange={(e) => {
-                                            const newConfigs = [...economyConfigs];
-                                            newConfigs[index] = { ...config, coin_amount: parseInt(e.target.value) || 0 };
-                                            setEconomyConfigs(newConfigs);
-                                        }}
-                                        className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-purple-500"
-                                    />
-                                </div>
-                            ))}
+                            {economyConfigs
+                                .filter(config => !['follow', 'join'].includes(config.event_name.toLowerCase()))
+                                .map((config) => (
+                                    <div key={config.event_name}>
+                                        <label className="block text-sm font-medium text-gray-400 mb-2 capitalize">
+                                            {config.event_name}
+                                            <span className="text-xs text-gray-500 ml-1">
+                                                (Coins per {config.event_name === 'share' ? '100' : '300'})
+                                            </span>
+                                        </label>
+                                        <input
+                                            type="number"
+                                            value={config.coin_amount}
+                                            onChange={(e) => {
+                                                const newConfigs = economyConfigs.map(c =>
+                                                    c.event_name === config.event_name
+                                                        ? { ...c, coin_amount: parseInt(e.target.value) || 0 }
+                                                        : c
+                                                );
+                                                setEconomyConfigs(newConfigs);
+                                            }}
+                                            className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-purple-500"
+                                        />
+                                    </div>
+                                ))}
                         </div>
                     </section>
 
@@ -955,6 +1053,7 @@ const ReviewerSettingsPage: React.FC = () => {
                                                 <span className="text-sm font-medium">Connected</span>
                                             </div>
                                             <button
+                                                type="button"
                                                 onClick={async () => {
                                                     if (window.confirm("Are you sure you want to disconnect Spotify?")) {
                                                         try {
@@ -973,6 +1072,7 @@ const ReviewerSettingsPage: React.FC = () => {
                                         </div>
                                     ) : (
                                         <button
+                                            type="button"
                                             onClick={async () => {
                                                 try {
                                                     const returnUrl = encodeURIComponent(window.location.href);
@@ -1008,6 +1108,7 @@ const ReviewerSettingsPage: React.FC = () => {
                                                 <span className="text-sm font-medium">Connected</span>
                                             </div>
                                             <button
+                                                type="button"
                                                 onClick={async () => {
                                                     if (window.confirm("Are you sure you want to disconnect Stripe?")) {
                                                         try {
@@ -1028,6 +1129,7 @@ const ReviewerSettingsPage: React.FC = () => {
                                         </div>
                                     ) : (
                                         <button
+                                            type="button"
                                             onClick={async () => {
                                                 try {
                                                     const res = await api.post('/stripe/connect');
@@ -1061,6 +1163,7 @@ const ReviewerSettingsPage: React.FC = () => {
                                                 <span className="text-sm font-medium">Connected</span>
                                             </div>
                                             <button
+                                                type="button"
                                                 onClick={async () => {
                                                     if (window.confirm("Are you sure you want to disable PayPal?")) {
                                                         try {
@@ -1081,6 +1184,7 @@ const ReviewerSettingsPage: React.FC = () => {
                                                 Disconnect
                                             </button>
                                             <button
+                                                type="button"
                                                 onClick={() => {
                                                     const config = reviewerProfile?.payment_configs?.find(c => c.provider === 'paypal');
                                                     setPayPalClientId(config?.credentials?.client_id || '');
@@ -1095,6 +1199,7 @@ const ReviewerSettingsPage: React.FC = () => {
                                         </div>
                                     ) : (
                                         <button
+                                            type="button"
                                             onClick={() => {
                                                 setPayPalClientId('');
                                                 setPayPalSecret('');
@@ -1133,7 +1238,7 @@ const ReviewerSettingsPage: React.FC = () => {
             {croppingImage && (
                 <ImageCropper
                     imageSrc={croppingImage}
-                    aspectRatio={croppingType === 'avatar' ? 1 : 16 / 9}
+                    aspectRatio={croppingType === 'avatar' ? 1 : 4 / 1}
                     onCropComplete={handleCropComplete}
                     onCancel={() => {
                         setCroppingImage(null);

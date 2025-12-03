@@ -109,8 +109,11 @@ async def create_payment_intent(
     stripe_account_id = config.credentials["stripe_account_id"]
 
     # Validate Guest Requirements
-    if not current_user and not data.email:
-        raise HTTPException(status_code=400, detail="Email is required for guest payments")
+    if not current_user:
+        if payment_type == "wallet_topup":
+             raise HTTPException(status_code=401, detail="Authentication required for wallet top-up")
+        if not data.email:
+            raise HTTPException(status_code=400, detail="Email is required for guest payments")
 
     try:
         # Create PaymentIntent on the connected account

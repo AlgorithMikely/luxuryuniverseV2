@@ -7,7 +7,7 @@ import { X, Check } from 'lucide-react';
 interface ImageCropperProps {
     imageSrc: string;
     aspectRatio: number; // 1 for avatar, 16/9 for banner?
-    onCropComplete: (croppedBlob: Blob) => void;
+    onCropComplete: (croppedBlob: Blob) => Promise<void> | void;
     onCancel: () => void;
     isLoading?: boolean;
 }
@@ -36,7 +36,7 @@ const ImageCropper: React.FC<ImageCropperProps> = ({ imageSrc, aspectRatio, onCr
             try {
                 const croppedImage = await getCroppedImg(imageSrc, croppedAreaPixels);
                 if (croppedImage) {
-                    onCropComplete(croppedImage);
+                    await onCropComplete(croppedImage);
                 }
             } catch (e) {
                 console.error(e);
@@ -96,6 +96,7 @@ const ImageCropper: React.FC<ImageCropperProps> = ({ imageSrc, aspectRatio, onCr
 
                     <div className="flex justify-end space-x-3 pt-2">
                         <button
+                            type="button"
                             onClick={onCancel}
                             disabled={showLoading}
                             className="px-4 py-2 rounded-lg font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -103,6 +104,7 @@ const ImageCropper: React.FC<ImageCropperProps> = ({ imageSrc, aspectRatio, onCr
                             Cancel
                         </button>
                         <button
+                            type="button"
                             onClick={handleSave}
                             disabled={showLoading}
                             className="px-6 py-2 rounded-lg font-bold bg-purple-600 text-white hover:bg-purple-500 transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"

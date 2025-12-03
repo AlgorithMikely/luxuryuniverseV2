@@ -18,40 +18,7 @@ async def get_spotlight(db: AsyncSession = Depends(get_db)):
     # Query for submissions that are explicitly spotlighted
     # We join with User to get submitter details
     # We join with Reviewer to get reviewer details
-    query = (
-        select(Submission, User, Reviewer)
-        .join(User, Submission.user_id == User.id)
-        .join(Reviewer, Submission.reviewer_id == Reviewer.id)
-        .where(Submission.spotlighted == True)
-        .order_by(desc(Submission.submitted_at))
-        .limit(50)
-    )
-    
-    result = await db.execute(query)
-    rows = result.all()
-    
-    spotlight_items = []
-    for submission, user, reviewer in rows:
-        # Get reviewer username via relationship or direct query if needed, 
-        # but since we joined Reviewer, we can access reviewer.user if eager loaded or we need another join.
-        # Actually Reviewer model has a 'user' relationship. 
-        # To avoid N+1, we should probably join Reviewer's User too, or just use the reviewer's ID/handle for now.
-        # Let's try to get the reviewer's username. The Reviewer model has a property `username` but that requires the user relationship to be loaded.
-        # Let's do a join to get the reviewer's user object as well.
-        pass
-
-    # Refined query with 4-way join to get reviewer username efficiently
-    query = (
-        select(Submission, User, Reviewer, User.username.label("reviewer_username"))
-        .join(User, Submission.user_id == User.id)
-        .join(Reviewer, Submission.reviewer_id == Reviewer.id)
-        .join(User, Reviewer.user_id == User.id, isouter=True) # Join User again for Reviewer? No, SQLAlchemy might get confused with two User joins.
-        # Let's keep it simple first. We can use reviewer.tiktok_handle or just fetch the user.
-    )
-    
-    # Simpler approach: Just join Submission -> User (Submitter) and Submission -> Reviewer.
-    # We can fetch reviewer username in a separate step or just use tiktok_handle if available.
-    # Or better: alias the User table.
+    # We also join with Reviewer's User to get reviewer username
     
     from sqlalchemy.orm import aliased
     Submitter = aliased(User)
@@ -64,26 +31,93 @@ async def get_spotlight(db: AsyncSession = Depends(get_db)):
         .join(ReviewerUser, Reviewer.user_id == ReviewerUser.id)
         .where(Submission.spotlighted == True)
         .order_by(desc(Submission.submitted_at))
-        .limit(50)
     )
     
     result = await db.execute(query)
     rows = result.all()
     
-    spotlight_items = []
+    # Aggregation Logic
+    spotlight_map = {}
+    
+    # Helper to normalize URLs
+    def normalize_url(url):
+        if not url:
+            return ""
+        try:
+            # Strip query parameters for Spotify and YouTube
+            if "spotify.com" in url or "youtube.com" in url or "youtu.be" in url:
+                return url.split('?')[0]
+        except:
+            pass
+        return url
+
     for submission, submitter, reviewer, reviewer_user in rows:
-        spotlight_items.append({
-            "id": submission.id,
-            "track_title": submission.track_title,
-            "artist": submission.artist,
-            "genre": submission.genre,
-            "review_score": float(submission.review_score) if submission.review_score else None,
-            "submitter_username": submitter.username,
-            "submitter_avatar": submitter.avatar,
-            "submitter_discord_id": submitter.discord_id,
-            "submitted_at": submission.submitted_at.isoformat() if submission.submitted_at else None,
-            "reviewer_name": reviewer.tiktok_handle if reviewer.tiktok_handle else reviewer_user.username,
-            "reviewer_id": reviewer.id
-        })
+        # Strategy:
+        # 1. Use file_hash if available (exact file match)
+        # 2. Use normalized URL if available (exact link match)
+        # 3. Fallback to (Submitter, Title) to catch re-submissions of the same song by the same user
+        #    (This handles cases where Artist is missing in one version, or file changed slightly)
+        
+        key = None
+        
+        if submission.file_hash:
+            key = f"hash:{submission.file_hash}"
+        elif submission.track_url:
+            norm_url = normalize_url(submission.track_url)
+            if norm_url.startswith("/api/uploads"):
+                 key = f"url:{submission.track_url}"
+            else:
+                 key = f"url:{norm_url}"
+        
+        # Fallback: Group by User + Title
+        # The user specifically requested: "when somebody re-submits the same submission that it doesn't duplicate"
+        # This implies same submitter, same title.
+        
+        clean_title = submission.track_title.strip().lower() if submission.track_title else ""
+        
+        # If we have a title, check if we already have a group for this User+Title
+        # We can't just generate a key, we need to check if an existing key in the map matches this User+Title.
+        # But for simplicity, let's just make the key based on User+Title if we haven't matched Hash/URL.
+        # Wait, if we use User+Title as the key, it will split if Hash/URL was used for the first one.
+        # Ideally we want to merge into the SAME group.
+        
+        # Actually, let's make (Submitter, Title) the PRIMARY key if available.
+        # If I upload File A (Hash A) "My Song", and File B (Hash B) "My Song".
+        # They have different hashes.
+        # If I group by Hash, they are separate.
+        # If I group by (User, Title), they are merged.
+        # The user WANTS them merged.
+        
+        if clean_title:
+             key = f"user:{submitter.id}|title:{clean_title}"
+        elif not key:
+             key = f"id:{submission.id}"
+
+        if key not in spotlight_map:
+            spotlight_map[key] = {
+                "id": submission.id, # Use the most recent submission ID as representative
+                "track_title": submission.track_title,
+                "artist": submission.artist,
+                "genre": submission.genre,
+                "review_score": float(submission.review_score) if submission.review_score else None,
+                "submitter_username": submitter.username,
+                "submitter_avatar": submitter.avatar,
+                "submitter_discord_id": submitter.discord_id,
+                "submitted_at": submission.submitted_at.isoformat() if submission.submitted_at else None,
+                "reviewers": []
+            }
+            
+        # Add reviewer if not already present
+        reviewer_name = reviewer.tiktok_handle if reviewer.tiktok_handle else reviewer_user.username
+        
+        # Check if this reviewer is already in the list for this song
+        if not any(r["id"] == reviewer.id for r in spotlight_map[key]["reviewers"]):
+            spotlight_map[key]["reviewers"].append({
+                "id": reviewer.id,
+                "name": reviewer_name
+            })
+            
+    # Convert map to list
+    spotlight_items = list(spotlight_map.values())
         
     return spotlight_items

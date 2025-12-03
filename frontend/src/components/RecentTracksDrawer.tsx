@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
+import ReactDOM from "react-dom";
 import { X, Clock, Play, Pause, AlertCircle, Loader2, Search } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "../services/api";
@@ -159,7 +160,7 @@ const RecentTracksDrawer: React.FC<RecentTracksDrawerProps> = ({ isOpen, onClose
     return null;
   };
 
-  return (
+  return ReactDOM.createPortal(
     <AnimatePresence>
       {isOpen && (
         <>
@@ -169,7 +170,7 @@ const RecentTracksDrawer: React.FC<RecentTracksDrawerProps> = ({ isOpen, onClose
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/20 backdrop-blur-[1px] z-30"
+            className="fixed inset-0 bg-black/20 backdrop-blur-[1px] z-[60]"
           />
 
           {/* Right Side Drawer */}
@@ -178,7 +179,7 @@ const RecentTracksDrawer: React.FC<RecentTracksDrawerProps> = ({ isOpen, onClose
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="fixed top-16 right-0 bottom-0 w-80 md:w-96 bg-gray-900 border-l border-white/10 shadow-2xl z-40 flex flex-col"
+            className="fixed top-16 right-0 bottom-0 w-80 md:w-96 bg-gray-900 border-l border-white/10 shadow-2xl z-[70] flex flex-col"
           >
             <div className="p-4 border-b border-white/10 flex flex-col gap-4 bg-gray-900/95 backdrop-blur">
               <div className="flex justify-between items-center">
@@ -314,7 +315,8 @@ const RecentTracksDrawer: React.FC<RecentTracksDrawerProps> = ({ isOpen, onClose
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 };
 

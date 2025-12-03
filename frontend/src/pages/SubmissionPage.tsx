@@ -75,7 +75,7 @@ const SubmissionPage = () => {
         >
           {/* Banner Image */}
           {reviewer.configuration?.banner_url && (
-            <div className="w-full h-32 md:h-[190px] rounded-xl overflow-hidden mb-6 shadow-2xl border border-gray-700/50 relative">
+            <div className="w-full h-auto rounded-xl overflow-hidden shadow-2xl border border-gray-700/50 relative" style={{ aspectRatio: '4 / 1' }}>
               <img
                 src={reviewer.configuration.banner_url}
                 alt="Profile Banner"
@@ -89,7 +89,7 @@ const SubmissionPage = () => {
           )}
 
           {/* Reviewer Info */}
-          <div className="flex flex-col items-center justify-center mb-6">
+          <div className="flex flex-col items-center justify-center mb-6 -mt-12 relative z-10">
             <div className="relative mb-4">
               <img
                 src={

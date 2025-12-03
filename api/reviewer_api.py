@@ -159,16 +159,16 @@ async def submit_smart(
     # Check if tiers are open in active session
     active_session = await queue_service.get_active_session_by_reviewer(db, reviewer_id)
 
-    # Check Free Line Limit
-    free_line_limit = config.get("free_line_limit")
-    if free_line_limit is not None:
-        new_free_count = sum(1 for item in payload.submissions if item.priority_value == 0)
-        if new_free_count > 0:
-            pending_queue = await queue_service.get_pending_queue(db, reviewer_id)
-            existing_free_count = sum(1 for s in pending_queue if s.priority_value == 0)
-            
-            if existing_free_count + new_free_count > free_line_limit:
-                raise HTTPException(status_code=400, detail=f"Free line limit reached. Max {free_line_limit} active free submissions allowed.")
+    # Check Free Line Limit (REMOVED - Queue Cap is no longer enforced)
+    # free_line_limit = config.get("free_line_limit")
+    # if free_line_limit is not None:
+    #     new_free_count = sum(1 for item in payload.submissions if item.priority_value == 0)
+    #     if new_free_count > 0:
+    #         pending_queue = await queue_service.get_pending_queue(db, reviewer_id)
+    #         existing_free_count = sum(1 for s in pending_queue if s.priority_value == 0)
+    #         
+    #         if existing_free_count + new_free_count > free_line_limit:
+    #             raise HTTPException(status_code=400, detail=f"Free line limit reached. Max {free_line_limit} active free submissions allowed.")
 
     # Check Max Free Submissions Per Session
     max_free_session = config.get("max_free_submissions_session")
@@ -304,17 +304,34 @@ async def submit_smart(
 
                 # Check for duplicates
                 if not force_upload:
-                    stmt = select(models.Submission).filter(
+                    stmt = select(models.Submission).options(joinedload(models.Submission.session)).filter(
                         models.Submission.file_hash == file_hash,
-                        models.Submission.user_id == current_user.id
+                        models.Submission.user_id == current_user.id,
+                        models.Submission.reviewer_id == reviewer_id
                     ).order_by(desc(models.Submission.submitted_at))
                     result = await db.execute(stmt)
                     existing = result.scalars().first()
                     
                     if existing:
                         # Check if currently active
+                        # FIXED: Only consider it active if the session is ALSO active (or if it has no session, which shouldn't happen for queue items usually)
                         is_active = existing.status in ['pending', 'playing']
                         
+                        import logging
+                        logging.warning(f"DEBUG DUPLICATE CHECK (FILE): ID={existing.id}, Status={existing.status}, Session={existing.session}, SessionActive={existing.session.is_active if existing.session else 'None'}")
+
+                        if is_active:
+                            # Check 1: Explicit Session Inactivity
+                            if existing.session and not existing.session.is_active:
+                                logging.warning("DEBUG: Ignoring duplicate because linked session is inactive.")
+                                is_active = False
+                            
+                            # Check 2: Timestamp (Ghost from previous session)
+                            # If existing has no session (legacy/bug) AND is older than current active session
+                            elif not existing.session and active_session and existing.submitted_at < active_session.created_at:
+                                logging.warning("DEBUG: Ignoring duplicate because it is older than current active session.")
+                                is_active = False
+
                         if is_active:
                             # Construct duplicate info
                             duplicate_info = {
@@ -366,15 +383,31 @@ async def submit_smart(
             # Link Submission (not blob)
             if not force_upload:
                 # Check for duplicate URL for this user
-                stmt = select(models.Submission).filter(
+                stmt = select(models.Submission).options(joinedload(models.Submission.session)).filter(
                     models.Submission.user_id == current_user.id,
-                    models.Submission.track_url == item.track_url
+                    models.Submission.track_url == item.track_url,
+                    models.Submission.reviewer_id == reviewer_id
                 ).order_by(desc(models.Submission.submitted_at))
                 result = await db.execute(stmt)
                 existing = result.scalars().first()
 
                 if existing:
                     is_active = existing.status in ['pending', 'playing']
+                    
+                    import logging
+                    logging.warning(f"DEBUG DUPLICATE CHECK (LINK): ID={existing.id}, Status={existing.status}, Session={existing.session}, SessionActive={existing.session.is_active if existing.session else 'None'}")
+
+                    # FIXED: Check session activity
+                    if is_active:
+                        # Check 1: Explicit Session Inactivity
+                        if existing.session and not existing.session.is_active:
+                            logging.warning("DEBUG: Ignoring duplicate because linked session is inactive.")
+                            is_active = False
+                        
+                        # Check 2: Timestamp (Ghost from previous session)
+                        elif not existing.session and active_session and existing.submitted_at < active_session.created_at:
+                            logging.warning("DEBUG: Ignoring duplicate because it is older than current active session.")
+                            is_active = False
                     
                     if is_active:
                         duplicate_info = {
@@ -404,8 +437,9 @@ async def submit_smart(
              check_hash = final_file_hash or (reused_submission.file_hash if reused_submission else None)
              check_url = final_track_url
              
-             stmt = select(models.Submission).filter(
+             stmt = select(models.Submission).options(joinedload(models.Submission.session)).filter(
                 models.Submission.user_id == current_user.id,
+                models.Submission.reviewer_id == reviewer_id,
                 models.Submission.status.in_(['pending', 'playing'])
              )
              
@@ -416,8 +450,17 @@ async def submit_smart(
                  
              result = await db.execute(stmt)
              active_dup = result.scalars().first()
+             
              if active_dup and not force_upload:
-                  raise HTTPException(status_code=400, detail="This track is already in the queue.")
+                  # FIXED: Check session activity
+                  is_active_dup = True
+                  if active_dup.session and not active_dup.session.is_active:
+                      is_active_dup = False
+                  elif not active_dup.session and active_session and active_dup.submitted_at < active_session.created_at:
+                      is_active_dup = False
+                  
+                  if is_active_dup:
+                      raise HTTPException(status_code=400, detail="This track is already in the queue.")
 
         # Log the hash being saved
         import logging
@@ -430,7 +473,7 @@ async def submit_smart(
             track_url=final_track_url,
             track_title=item.track_title or "Untitled",
             archived_url=None,
-            session_id=None,
+            session_id=active_session.id if active_session else None,
             batch_id=batch_id,
             sequence_order=item.sequence_order,
             hook_start_time=item.hook_start_time,

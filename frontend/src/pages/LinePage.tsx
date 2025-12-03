@@ -254,51 +254,79 @@ const QueueSection: React.FC<QueueSectionProps> = React.memo(({
                     </div>
                 )}
 
-                {priority_queue.map((item) => {
+                {priority_queue.map((item, index) => {
                     const tierColor = getTierColor(item.amount, pricing_tiers);
                     const isWinner = item.is_community_winner;
 
+                    // Determine if we need a divider
+                    const prevItem = index > 0 ? priority_queue[index - 1] : null;
+                    const showDivider = !prevItem || prevItem.amount !== item.amount;
+                    const tierName = showDivider ? pricing_tiers.find(t => t.value === item.amount)?.tier_name : null;
+
                     return (
-                        <div
-                            key={item.pos}
-                            className={`queue-card vip-card ${item.style === 'FIRE' ? 'style-fire' : ''}`}
-                            style={{
-                                borderColor: `${tierColor}80`, // 50% opacity border
-                                background: `linear-gradient(90deg, ${tierColor}10 0%, ${tierColor}05 100%)` // Subtle gradient background
-                            }}
-                        >
-                            <div className="qc-left">
-                                <span className="qc-rank" style={{ color: tierColor }}>#{item.pos}</span>
-                                <div className="qc-art">
-                                    {item.cover_art_url ? (
-                                        <img src={item.cover_art_url} alt="Art" style={{ borderColor: `${tierColor}40` }} />
-                                    ) : (
-                                        <div className="qc-art-placeholder" style={{ background: generateGradient(item.track_title || '') }}>
-                                            <Music size={16} color="white" />
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="qc-info">
-                                    <div className="qc-title-row">
-                                        <span className="qc-title">{item.track_title}</span>
-                                    </div>
-                                    <div className="qc-meta-row">
-                                        <span className="qc-artist">{item.artist}</span>
-                                        <span className="qc-dot">•</span>
-                                        <span className="qc-user">@{item.user}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="qc-right">
-                                {isWinner && (
-                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 flex items-center gap-1">
-                                        🏆 WINNER
+                        <React.Fragment key={item.pos}>
+                            {showDivider && tierName && (
+                                <div className="flex items-center gap-3 my-4 px-2">
+                                    <div
+                                        className="h-px flex-1"
+                                        style={{ background: `linear-gradient(90deg, transparent, ${tierColor}80, transparent)` }}
+                                    ></div>
+                                    <span
+                                        className="text-xs font-bold uppercase tracking-wider px-2 py-1 rounded"
+                                        style={{
+                                            color: tierColor,
+                                            backgroundColor: `${tierColor}20`,
+                                            border: `1px solid ${tierColor}40`
+                                        }}
+                                    >
+                                        {tierName}
                                     </span>
-                                )}
-                                {item.type === 'PAID_PRIORITY' && <Zap size={16} style={{ color: tierColor }} />}
-                                {item.type === 'HOT_SEAT' && <span className="icon-fire">🔥</span>}
+                                    <div
+                                        className="h-px flex-1"
+                                        style={{ background: `linear-gradient(90deg, transparent, ${tierColor}80, transparent)` }}
+                                    ></div>
+                                </div>
+                            )}
+                            <div
+                                className={`queue-card vip-card ${item.style === 'FIRE' ? 'style-fire' : ''}`}
+                                style={{
+                                    borderColor: `${tierColor}80`, // 50% opacity border
+                                    background: `linear-gradient(90deg, ${tierColor}10 0%, ${tierColor}05 100%)` // Subtle gradient background
+                                }}
+                            >
+                                <div className="qc-left">
+                                    <span className="qc-rank" style={{ color: tierColor }}>#{item.pos}</span>
+                                    <div className="qc-art">
+                                        {item.cover_art_url ? (
+                                            <img src={item.cover_art_url} alt="Art" style={{ borderColor: `${tierColor}40` }} />
+                                        ) : (
+                                            <div className="qc-art-placeholder" style={{ background: generateGradient(item.track_title || '') }}>
+                                                <Music size={16} color="white" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="qc-info">
+                                        <div className="qc-title-row">
+                                            <span className="qc-title">{item.track_title}</span>
+                                        </div>
+                                        <div className="qc-meta-row">
+                                            <span className="qc-artist">{item.artist}</span>
+                                            <span className="qc-dot">•</span>
+                                            <span className="qc-user">@{item.user}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="qc-right">
+                                    {isWinner && (
+                                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 flex items-center gap-1">
+                                            🏆 WINNER
+                                        </span>
+                                    )}
+                                    {item.type === 'PAID_PRIORITY' && <Zap size={16} style={{ color: tierColor }} />}
+                                    {item.type === 'HOT_SEAT' && <span className="icon-fire">🔥</span>}
+                                </div>
                             </div>
-                        </div>
+                        </React.Fragment>
                     );
                 })}
             </div>

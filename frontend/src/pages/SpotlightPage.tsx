@@ -11,8 +11,7 @@ interface SpotlightItem {
     submitter_avatar: string | null;
     submitter_discord_id: string | null;
     submitted_at: string | null;
-    reviewer_name: string;
-    reviewer_id: number;
+    reviewers: { id: number; name: string }[];
 }
 
 const SpotlightPage = () => {
@@ -117,8 +116,15 @@ const SpotlightPage = () => {
                                                 <span>{new Date(item.submitted_at).toLocaleDateString()}</span>
                                             )}
                                         </div>
-                                        <div className="flex justify-between items-center">
-                                            <span>Spotlighted by <span className="text-purple-400 font-bold">{item.reviewer_name}</span></span>
+                                        <div className="flex flex-col gap-1 mt-2">
+                                            <span className="text-xs uppercase tracking-wider text-gray-500">Spotlighted by</span>
+                                            <div className="flex flex-wrap gap-2">
+                                                {item.reviewers.map(reviewer => (
+                                                    <span key={reviewer.id} className="text-purple-400 font-bold bg-purple-900/30 px-2 py-0.5 rounded text-xs border border-purple-500/20">
+                                                        {reviewer.name}
+                                                    </span>
+                                                ))}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

@@ -3,6 +3,7 @@ from sqlalchemy import select, func, case, and_
 from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 from services import queue_service, user_service, giveaway_service
+import security
 from security import get_current_user
 from typing import List, Optional
 import logging
@@ -77,20 +78,20 @@ async def find_user_submissions_in_queue(db: AsyncSession, user_discord_id: str,
 async def get_line_view(
     reviewer_identifier: str,
     db: AsyncSession = Depends(get_db),
-    # current_user: schemas.TokenData = Depends(get_current_user) # BYPASS AUTH
+    current_user: Optional[models.User] = Depends(security.get_current_user_optional)
 ):
     """
     Public (but restricted) view of the queue line with nightclub aesthetic data structure.
     """
-    # 1. Check Access
-    # is_authorized = await user_service.is_user_authorized_for_line(db, current_user.discord_id)
-    # if not is_authorized:
-    #      raise HTTPException(status_code=403, detail="You must be a member of the authorized Discord server to view this page.")
+    # 1. Check Access (Optional)
+    # If we wanted to enforce server membership, we'd check it here if current_user is set.
     
-    # Mock user for public view
-    class MockUser:
-        discord_id = "0"
-    current_user = MockUser()
+    # Mock user for public view if not logged in
+    if not current_user:
+        class MockUser:
+            discord_id = "0"
+            id = 0
+        current_user = MockUser()
 
     # 2. Resolve Reviewer
     reviewer = None
@@ -115,7 +116,9 @@ async def get_line_view(
             config = {}
 
     show_skips = config.get('line_show_skips', True)
-    free_limit = config.get('free_line_limit', 20)  # Default to 20 if not set
+    show_skips = config.get('line_show_skips', True)
+    # Use visible_free_limit for display truncation, defaulting to 20
+    visible_limit = config.get('visible_free_limit', 20) 
     priority_tiers_data = config.get('priority_tiers', [])
     
     # Filter tiers based on active session
@@ -129,6 +132,7 @@ async def get_line_view(
     # 5. Separate Queue into Priority and Free
     priority_queue_items = []
     free_queue_items = []
+    user_submissions_list = []
     
     # Helper to check for public links
     def is_public_link(url: str) -> bool:
@@ -137,18 +141,32 @@ async def get_line_view(
         whitelist = ['spotify.com', 'youtube.com', 'youtu.be', 'soundcloud.com']
         return any(domain in url.lower() for domain in whitelist)
 
+    display_pos = 0
     for idx, sub in enumerate(full_state.queue, start=1):
         if sub.spotlighted:
             continue
+        display_pos += 1
             
         # Determine if track_url should be exposed
         safe_track_url = sub.track_url if is_public_link(sub.track_url) else None
+
+        # Check if this submission belongs to the current user
+        if current_user.id and sub.user.id == current_user.id:
+             # Calculate wait time (simple approximation: 3 mins per song ahead)
+             wait_time = (idx - 1) * 3 
+             user_submissions_list.append({
+                "position": display_pos,
+                "priority_value": sub.priority_value,
+                "track_title": sub.track_title,
+                "est_wait_minutes": wait_time,
+                "submission_id": sub.id
+             })
 
         if sub.priority_value > 0:
             # Priority Item
             style = "GOLD" if sub.priority_value >= 50 else "FIRE" # Simple logic for now
             priority_queue_items.append(schemas.PriorityQueueItem(
-                pos=idx, # Use global position or relative? Let's use global for now
+                pos=display_pos, # Use global position or relative? Let's use global for now
                 submission_id=sub.id,
                 user=sub.user.username,
                 type="PAID_PRIORITY",
@@ -162,7 +180,7 @@ async def get_line_view(
         else:
             # Free Item
             free_queue_items.append(schemas.FreeQueueItem(
-                pos=idx,
+                pos=display_pos,
                 submission_id=sub.id,
                 user=sub.user.username,
                 track_title=sub.track_title,
@@ -173,13 +191,13 @@ async def get_line_view(
     # 6. Get Total Waiting Count (Free)
     total_free_waiting = len(free_queue_items)
     
-    # 7. Apply Free Limit
-    if free_limit and isinstance(free_limit, int) and free_limit > 0:
-        free_queue_items = free_queue_items[:free_limit]
+    # 7. Apply Visible Limit
+    if visible_limit and isinstance(visible_limit, int) and visible_limit > 0:
+        free_queue_items = free_queue_items[:visible_limit]
         
     # 8. Construct FreeQueue Object
     free_queue = schemas.FreeQueue(
-        display_limit=free_limit or 20,
+        display_limit=visible_limit or 20,
         total_waiting=total_free_waiting,
         items=free_queue_items
     )
@@ -223,27 +241,20 @@ async def get_line_view(
             track_title=full_state.current_track.track_title,
             artist=full_state.current_track.artist,
             cover_art_url=cover_art,
-            user=full_state.current_track.user,
-            mission_bar=mission_bar
+            user=full_state.current_track.user
         )
-    
-    # 13. Find User Context
-    user_submissions = await find_user_submissions_in_queue(db, current_user.discord_id, reviewer.id)
-    user_status = None
-    
-    if user_submissions:
-        primary_sub = user_submissions[0]
-        est_wait = await calculate_estimated_wait_time(db, reviewer.id, primary_sub['position'])
-        
-        for sub in user_submissions:
-            sub['est_wait_minutes'] = await calculate_estimated_wait_time(db, reviewer.id, sub['position'])
 
+    user_status = None
+    if user_submissions_list:
+        # The first one found in the zipper merged list is effectively the one playing soonest
+        primary_sub = user_submissions_list[0] 
+        
         user_status = {
             "is_in_queue": True,
             "position": primary_sub['position'],
-            "est_wait_minutes": est_wait,
+            "est_wait_minutes": primary_sub['est_wait_minutes'],
             "submission_id": primary_sub['submission_id'],
-            "submissions": user_submissions
+            "submissions": user_submissions_list
         }
     else:
         user_status = {

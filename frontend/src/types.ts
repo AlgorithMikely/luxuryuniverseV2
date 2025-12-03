@@ -11,7 +11,8 @@ export interface PriorityTier {
 export interface ReviewerConfiguration {
   priority_tiers: PriorityTier[];
   free_line_limit?: number;
-  line_show_skips?: boolean; // Added this
+  visible_free_limit?: number; // Added this
+  line_show_skips?: boolean;
   banner_url?: string;
   theme_color?: string;
   social_link_url?: string;
@@ -19,6 +20,13 @@ export interface ReviewerConfiguration {
   social_platform?: string;
   social_handle?: string;
   max_free_submissions_session?: number;
+  giveaway_settings?: {
+    [key: string]: {
+      base_target: number;
+      description?: string;
+      ticket_weight?: number;
+    };
+  };
 }
 
 export interface PaymentConfig {

@@ -117,8 +117,8 @@ const ReviewHub: React.FC<ReviewHubProps> = ({ reviewerId }) => {
   }
 
   const isPlayed = currentTrack.status === 'played';
-  const isBookmarked = bookmarks.some(b => b.id === currentTrack.id);
-  const isSpotlighted = spotlight.some(s => s.id === currentTrack.id);
+  const isBookmarked = bookmarks.some(b => b.id === currentTrack.id) || currentTrack.bookmarked;
+  const isSpotlighted = spotlight.some(s => s.id === currentTrack.id) || currentTrack.spotlighted;
 
   const getButtonText = () => {
     if (isPlayed) return 'Update Review';

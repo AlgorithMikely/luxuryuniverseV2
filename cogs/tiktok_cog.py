@@ -870,8 +870,7 @@ class TikTokCog(commands.Cog):
                 
                 # Points & Coins
                 # Award points for EACH share in the batch
-                await self.giveaway_service.add_points(user_id, user_handle, 50 * share_count)
-                await self.giveaway_service.add_luxury_coins(user_id, user_handle, 10 * share_count)
+                # REMOVED: Invalid calls to self.giveaway_service. Logic is handled below in DB session block.
 
                 self.buffers[tiktok_handle].user_chat_activity[user_id]['shares_sent'] += share_count
                 
@@ -1135,7 +1134,7 @@ class TikTokCog(commands.Cog):
         user_handle = tiktok_account.handle_name
 
         # 1. Check if the host has coin rewards enabled (Check Reviewer existence)
-        stmt = select(models.Reviewer).where(models.Reviewer.tiktok_handle == host_handle)
+        stmt = select(models.Reviewer).options(selectinload(models.Reviewer.economy_configs)).where(models.Reviewer.tiktok_handle == host_handle)
         result = await session.execute(stmt)
         reviewer = result.scalar_one_or_none()
         
@@ -1143,10 +1142,18 @@ class TikTokCog(commands.Cog):
             return
 
         # 2. Determine the coin value and tracking dictionary
+        # Fetch configured coin amount from DB, default to 1 if not set
+        configured_amount = 1
+        if reviewer.economy_configs:
+            for config in reviewer.economy_configs:
+                if config.event_name.upper() == interaction_type:
+                    configured_amount = config.coin_amount
+                    break
+
         rules = {
-            'LIKE': {'threshold': 300, 'coins': 1, 'tracker': self.like_counts},
-            'COMMENT': {'threshold': 300, 'coins': 1, 'tracker': self.comment_counts},
-            'SHARE': {'threshold': 100, 'coins': 1, 'tracker': self.share_counts}
+            'LIKE': {'threshold': 300, 'coins': configured_amount, 'tracker': self.like_counts},
+            'COMMENT': {'threshold': 300, 'coins': configured_amount, 'tracker': self.comment_counts},
+            'SHARE': {'threshold': 100, 'coins': configured_amount, 'tracker': self.share_counts}
         }
 
         if interaction_type not in rules:
