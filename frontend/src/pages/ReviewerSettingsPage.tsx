@@ -1207,7 +1207,7 @@ const ReviewerSettingsPage: React.FC = () => {
                                                             await api.post('/stripe/disconnect');
                                                             setMessage({ text: "Stripe disconnected successfully.", type: 'success' });
                                                             // Refresh profile to update UI
-                                                            const response = await api.get<ReviewerProfile>(`/reviewer/${user.reviewer_profile!.id}/settings`);
+                                                            const response = await api.get<ReviewerProfile>(`/reviewer/${targetReviewerId}/settings`);
                                                             setReviewerProfile(response.data);
                                                         } catch (err) {
                                                             setMessage({ text: "Failed to disconnect Stripe.", type: 'error' });
@@ -1264,7 +1264,8 @@ const ReviewerSettingsPage: React.FC = () => {
                                                                 credentials: reviewerProfile?.payment_configs?.find(c => c.provider === 'paypal')?.credentials || {}
                                                             });
                                                             setMessage({ text: "PayPal disabled.", type: 'success' });
-                                                            const res = await api.get(`/reviewer/${user?.reviewer_profile?.id}/settings`);
+                                                            setMessage({ text: "PayPal disabled.", type: 'success' });
+                                                            const res = await api.get(`/reviewer/${targetReviewerId}/settings`);
                                                             setReviewerProfile(res.data);
                                                         } catch (err) {
                                                             setMessage({ text: "Failed to disable PayPal.", type: 'error' });
@@ -1406,7 +1407,7 @@ const ReviewerSettingsPage: React.FC = () => {
                                         setMessage({ text: "PayPal connected successfully!", type: 'success' });
                                         setIsPayPalModalOpen(false);
                                         // Refresh profile
-                                        const res = await api.get(`/reviewer/${user?.reviewer_profile?.id}/settings`);
+                                        const res = await api.get(`/reviewer/${targetReviewerId}/settings`);
                                         setReviewerProfile(res.data);
                                     } catch (err) {
                                         console.error(err);
