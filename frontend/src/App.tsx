@@ -77,6 +77,7 @@ function App() {
               <Route path="/session/:sessionId" element={<ArchivedSessionPage />} />
               <Route path="/admin" element={<ProtectedRoute adminOnly={true}><AdminPage /></ProtectedRoute>} />
               <Route path="/admin/economy" element={<ProtectedRoute adminOnly={true}><EconomyLogPage /></ProtectedRoute>} />
+              <Route path="/admin/reviewer/:reviewerId/settings" element={<ProtectedRoute adminOnly={true}><ReviewerSettingsPage /></ProtectedRoute>} />
             </Route>
 
             <Route path="/" element={<LoginPage />} />

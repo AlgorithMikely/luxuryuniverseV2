@@ -49,8 +49,17 @@ async def emit_giveaway_winner(reviewer_id: int, winner_data: dict):
     logging.info(f"Emitting 'giveaway_winner' to room {room} with data: {winner_data}")
     await sio.emit("giveaway_winner", winner_data, room=room)
 
+
+
 async def emit_reviewer_settings_update(reviewer_id: int, settings_data: dict):
     """Emits a reviewer settings update to the specified reviewer's room."""
     room = f"reviewer_room_{reviewer_id}"
     logging.info(f"Emitting 'reviewer_settings_updated' to room {room}")
     await sio.emit("reviewer_settings_updated", settings_data, room=room)
+
+async def emit_global_reviewer_update(reviewer_id: int, is_live: bool):
+    """Emits a global update about a reviewer's live status."""
+    room = "global_room"
+    data = {"reviewer_id": reviewer_id, "is_live": is_live}
+    logging.info(f"Emitting 'global_reviewer_update' to room {room} with data: {data}")
+    await sio.emit("global_reviewer_update", data, room=room)

@@ -1189,3 +1189,32 @@ async def process_gift_interaction(db: AsyncSession, reviewer_id: int, tiktok_us
         
     # If they are already at this priority or higher, just give them coins.
     return 'COINS'
+
+async def apply_free_skip(db: AsyncSession, reviewer_id: int, user_id: int) -> bool:
+    """
+    Applies a free skip (priority upgrade) to the user's pending submission.
+    Typically upgrades to priority value 3 (Fast Pass).
+    Returns True if applied, False if no pending submission found.
+    """
+    # 1. Find pending submission
+    stmt = select(models.Submission).filter(
+        models.Submission.reviewer_id == reviewer_id,
+        models.Submission.user_id == user_id,
+        models.Submission.status == 'pending'
+    )
+    result = await db.execute(stmt)
+    submission = result.scalars().first()
+    
+    if not submission:
+        return False
+        
+    # 2. Apply Upgrade
+    # Default "Free Skip" value is usually the lowest paid tier, e.g., 3.
+    # We could fetch this from config, but for now hardcoding to 3 is safe as per "Fast Pass".
+    FREE_SKIP_VALUE = 3
+    
+    if submission.priority_value < FREE_SKIP_VALUE:
+        await update_priority(db, submission.id, FREE_SKIP_VALUE)
+        return True
+        
+    return False

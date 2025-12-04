@@ -94,6 +94,7 @@ export interface ReviewerProfile {
   avatar_r2_uri?: string;
   bio?: string;
   community_goal_cooldown_minutes?: number;
+  is_live?: boolean;
 }
 // --- Submissions & Queue ---
 export interface Submission {

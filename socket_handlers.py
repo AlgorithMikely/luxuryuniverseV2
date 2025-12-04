@@ -82,3 +82,12 @@ async def join_reviewer_room(sid, reviewer_id):
 @sio.on("ping")
 async def ping(sid):
     await sio.emit("pong", {"message": "pong"}, room=sid)
+
+@sio.on("join_global_room")
+async def join_global_room(sid):
+    """
+    Allows a client to join the global room to receive app-wide updates.
+    """
+    room = "global_room"
+    await sio.enter_room(sid, room)
+    logging.info(f"Client {sid} joined room {room}")

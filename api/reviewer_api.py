@@ -59,7 +59,19 @@ async def get_all_reviewers(db: AsyncSession = Depends(get_db)):
         )
     )
     reviewers = result.scalars().all()
-    return [await media_service.enrich_reviewer_profile(r) for r in reviewers]
+    
+    # Get active live sessions to populate is_live
+    stmt_live = select(models.LiveSession.user_id).where(models.LiveSession.status == 'LIVE')
+    result_live = await db.execute(stmt_live)
+    live_user_ids = set(result_live.scalars().all())
+
+    enriched_reviewers = []
+    for r in reviewers:
+        profile = await media_service.enrich_reviewer_profile(r)
+        profile.is_live = r.user_id in live_user_ids
+        enriched_reviewers.append(profile)
+        
+    return enriched_reviewers
 
 
 

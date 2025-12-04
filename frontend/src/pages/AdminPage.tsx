@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { UserProfile, DiscordChannel, TikTokAccount } from '../types';
 import { useAuthStore } from '../stores/authStore';
@@ -12,6 +12,7 @@ interface DiscordUser {
 }
 
 const AdminPage = () => {
+  const navigate = useNavigate();
   const [reviewers, setReviewers] = useState<UserProfile[]>([]);
   const [discordUsers, setDiscordUsers] = useState<DiscordUser[]>([]);
   const [availableChannels, setAvailableChannels] = useState<DiscordChannel[]>([]);
@@ -353,6 +354,14 @@ const AdminPage = () => {
                     >
                       Remove Reviewer
                     </button>
+                    {user.reviewer_profile && (
+                      <button
+                        onClick={() => navigate(`/admin/reviewer/${user.reviewer_profile!.id}/settings`)}
+                        className="btn bg-blue-600 p-2 rounded ml-2 hover:bg-blue-700"
+                      >
+                        Settings
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import api from '../services/api';
 import { ReviewerProfile, PriorityTier, EconomyConfig, DiscordChannel } from '../types';
@@ -9,7 +9,12 @@ import ImageCropper from '../components/ImageCropper';
 const ReviewerSettingsPage: React.FC = () => {
     const { user, checkAuth } = useAuthStore();
     const navigate = useNavigate();
+    const { reviewerId } = useParams<{ reviewerId: string }>();
     const [reviewerProfile, setReviewerProfile] = useState<ReviewerProfile | null>(null);
+
+    // Determine if we are in admin mode editing another user
+    const isAdminMode = !!reviewerId;
+    const targetReviewerId = reviewerId ? parseInt(reviewerId) : user?.reviewer_profile?.id;
 
     const [tiktokHandle, setTiktokHandle] = useState('');
     const [discordChannelId, setDiscordChannelId] = useState('');
@@ -133,7 +138,7 @@ const ReviewerSettingsPage: React.FC = () => {
 
     useEffect(() => {
         const loadData = async () => {
-            if (!user?.reviewer_profile) return;
+            if (!targetReviewerId) return;
 
             // Check for Stripe Connect return
             const params = new URLSearchParams(window.location.search);
@@ -150,7 +155,7 @@ const ReviewerSettingsPage: React.FC = () => {
 
             try {
                 // Fetch full settings to ensure we get the config with defaults
-                const response = await api.get<ReviewerProfile>(`/reviewer/${user.reviewer_profile.id}/settings`);
+                const response = await api.get<ReviewerProfile>(`/reviewer/${targetReviewerId}/settings`);
                 const profile = response.data;
 
                 setReviewerProfile(profile);
@@ -172,7 +177,7 @@ const ReviewerSettingsPage: React.FC = () => {
 
                 // Fetch available Discord channels
                 try {
-                    const channelsRes = await api.get<DiscordChannel[]>(`/reviewer/${user.reviewer_profile.id}/discord/channels`);
+                    const channelsRes = await api.get<DiscordChannel[]>(`/reviewer/${targetReviewerId}/discord/channels`);
                     setDiscordChannels(channelsRes.data);
                 } catch (err) {
                     console.error("Failed to fetch Discord channels", err);
@@ -267,10 +272,10 @@ const ReviewerSettingsPage: React.FC = () => {
             }
         };
 
-        if (user) {
+        if (user || targetReviewerId) {
             loadData();
         }
-    }, [user]);
+    }, [user, targetReviewerId]);
 
     // Auto-generate link and text based on platform and handle
     useEffect(() => {
@@ -322,7 +327,9 @@ const ReviewerSettingsPage: React.FC = () => {
 
             await api.patch(`/reviewer/${reviewerProfile.id}/settings`, updateData);
             setMessage({ text: "Settings saved successfully!", type: 'success' });
-            await checkAuth(); // Refresh global user state
+            if (!isAdminMode) {
+                await checkAuth(); // Refresh global user state only if editing own profile
+            }
         } catch (err) {
             console.error("Failed to save settings", err);
             setMessage({ text: "Failed to save settings.", type: 'error' });
@@ -450,11 +457,25 @@ const ReviewerSettingsPage: React.FC = () => {
     };
 
     if (isLoading) return <div className="p-10 text-center text-white">Loading settings...</div>;
-    if (!user?.reviewer_profile) return <div className="p-10 text-center text-white">You must be a reviewer to access this page.</div>;
+    // if (!user?.reviewer_profile && !isAdminMode) return <div className="p-10 text-center text-white">You must be a reviewer to access this page.</div>;
 
     return (
         <div className="min-h-screen bg-gray-900 text-white p-6 md:p-12">
             <div className="max-w-4xl mx-auto">
+                {isAdminMode && (
+                    <div className="bg-yellow-900/50 border border-yellow-600 text-yellow-200 p-4 rounded-lg mb-6 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <span className="font-bold">ADMIN MODE:</span>
+                            <span>You are editing settings for {reviewerProfile?.user?.username || 'another user'}.</span>
+                        </div>
+                        <button
+                            onClick={() => navigate('/admin')}
+                            className="bg-yellow-800 hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm transition-colors"
+                        >
+                            Return to Admin
+                        </button>
+                    </div>
+                )}
                 <h1 className="text-3xl font-bold mb-8 border-b border-gray-800 pb-4">Reviewer Settings</h1>
 
                 {message && (
@@ -756,7 +777,7 @@ const ReviewerSettingsPage: React.FC = () => {
                                                 setReviewerProfile(data);
                                                 setAvatarUrl(''); // Clear custom avatar to use synced one
                                                 setMessage({ text: "Avatar synced successfully!", type: 'success' });
-                                                await checkAuth();
+                                                if (!isAdminMode) await checkAuth();
                                             } catch (err) {
                                                 setMessage({ text: "Failed to sync avatar.", type: 'error' });
                                             }

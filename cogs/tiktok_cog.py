@@ -598,7 +598,11 @@ class TikTokCog(commands.Cog):
                         )
                         session.add(new_session)
                         await session.commit()
+                        await session.commit()
                         logger.info(f"Created new LiveSession for reviewer @{client.unique_id}")
+                        
+                        # Emit global update
+                        await broadcast_service.emit_global_reviewer_update(reviewer.id, True)
             except Exception as e:
                 logger.error(f"Error creating LiveSession on connect: {e}", exc_info=True)
 
@@ -623,7 +627,11 @@ class TikTokCog(commands.Cog):
                             .values(status='ENDED', end_time=func.now())
                         )
                         await session.commit()
+                        await session.commit()
                         logger.info(f"Ended LiveSession for reviewer @{client.unique_id}")
+                        
+                        # Emit global update
+                        await broadcast_service.emit_global_reviewer_update(reviewer.id, False)
             except Exception as e:
                 logger.error(f"Error ending LiveSession on disconnect: {e}", exc_info=True)
 
@@ -653,7 +661,11 @@ class TikTokCog(commands.Cog):
                             .values(status='ENDED', end_time=func.now())
                         )
                         await session.commit()
+                        await session.commit()
                         logger.info(f"Ended LiveSession for reviewer @{client.unique_id} (LiveEndEvent)")
+                        
+                        # Emit global update
+                        await broadcast_service.emit_global_reviewer_update(reviewer.id, False)
             except Exception as e:
                 logger.error(f"Error ending LiveSession on live end: {e}", exc_info=True)
             
@@ -1284,117 +1296,156 @@ class TikTokCog(commands.Cog):
         return True, response_message
 
     async def _background_connect(self, interaction: Optional[discord.Interaction], unique_id: str, persistent: bool):
-        """A background task to handle the TikTok connection lifecycle."""
+        """
+        A background task to handle the TikTok connection lifecycle.
+        Implements infinite retry loop with exponential backoff for persistent connections.
+        """
         disconnect_event = asyncio.Event()
-        max_retries = 3
-        session_id = None
-        
         unique_id = unique_id.replace('@', '').lower()
         
-        try:
-            for attempt in range(max_retries):
-                try:
-                    async with AsyncSessionLocal() as session:
-                        # Get active session
-                        stmt = select(models.ReviewSession).join(models.Reviewer).where(
-                            models.Reviewer.tiktok_handle == unique_id,
-                            models.ReviewSession.is_active == True
-                        ).order_by(desc(models.ReviewSession.created_at)).limit(1)
-                        result = await session.execute(stmt)
-                        active_session = result.scalar_one_or_none()
-                        
-                        if active_session:
-                            session_id = active_session.id
-                            logger.info(f"Attempting to connect to @{unique_id} using active session {session_id}")
-                        else:
-                            logger.info(f"Attempting to connect to @{unique_id} without an active session.")
-                        
-                        # Populate reviewer map if not present
-                        if unique_id not in self.reviewer_map:
-                            stmt_rev = select(models.Reviewer).where(models.Reviewer.tiktok_handle == unique_id)
-                            res_rev = await session.execute(stmt_rev)
-                            rev = res_rev.scalar_one_or_none()
-                            if rev:
-                                self.reviewer_map[unique_id] = rev.id
+        # Backoff settings
+        initial_backoff = 5
+        max_backoff = 300 # 5 minutes
+        current_backoff = initial_backoff
+        
+        # Polling interval for offline users
+        offline_poll_interval = 60 
 
-                    # Prepare client arguments
-                    client_kwargs = {}
-                    tiktok_session_id = os.getenv("TIKTOK_SESSION_ID")
-                    if tiktok_session_id:
-                        client_kwargs["cookies"] = {"sessionid": tiktok_session_id}
-                        logger.info(f"Using configured TIKTOK_SESSION_ID for connection to @{unique_id}")
-
-                    # Configure Sign API Key globally via WebDefaults
-                    from config import settings
-                    if settings.TIKTOK_SIGN_API_KEY:
-                        from TikTokLive.client.web.web_settings import WebDefaults
-                        WebDefaults.tiktok_sign_api_key = settings.TIKTOK_SIGN_API_KEY
-                        logger.info(f"Configured WebDefaults.tiktok_sign_api_key for connection to @{unique_id}")
-
-                    logger.info(f"Creating TikTokLiveClient for @{unique_id}...")
-                    client = TikTokLiveClient(unique_id=f"@{unique_id}", **client_kwargs)
-                    logger.info(f"TikTokLiveClient created for @{unique_id}. Setting up listeners...")
+        while True: # Infinite loop for persistent connections
+            session_id = None
+            try:
+                async with AsyncSessionLocal() as session:
+                    # Get active session
+                    stmt = select(models.ReviewSession).join(models.Reviewer).where(
+                        models.Reviewer.tiktok_handle == unique_id,
+                        models.ReviewSession.is_active == True
+                    ).order_by(desc(models.ReviewSession.created_at)).limit(1)
+                    result = await session.execute(stmt)
+                    active_session = result.scalar_one_or_none()
                     
-                    self._setup_listeners(client, disconnect_event, session_id)
-                    logger.info(f"Listeners setup for @{unique_id}. Initializing buffer...")
-
-                    self.live_clients[unique_id] = client
-                    
-                    # Initialize Buffer and Flush Task if Reviewer
-                    if unique_id in self.reviewer_map:
-                        self.buffers[unique_id] = StreamBuffer()
-                        self.flush_tasks[unique_id] = asyncio.create_task(self.flush_loop(unique_id, self.reviewer_map[unique_id]))
-                        logger.info(f"Initialized StreamBuffer and Flush Task for reviewer @{unique_id}")
-
-                    if persistent:
-                        self.persistent_connections.add(unique_id)
-
-                    logger.info(f"Starting client for @{unique_id}...")
-                    await client.start()
-                    logger.info(f"Client started for @{unique_id}. Waiting for disconnect event...")
-
-                    # Wait until the disconnect event is set
-                    await disconnect_event.wait()
-                    logger.info(f"Disconnect event set for @{unique_id}. Exiting background task.")
-                except UserOfflineError:
-                    logger.info(f"Connection attempt failed for @{unique_id} because the user is offline.")
-                    if interaction:
-                        await interaction.followup.send(f"❌ **User Offline:** Could not connect to @{unique_id}.", ephemeral=True)
-                    break
-
-                except SignAPIError as e:
-                    logger.warning(f"Sign API Error connecting to @{unique_id}: {e}")
-                    if attempt < max_retries - 1:
-                        logger.info(f"Retrying connection to @{unique_id} in 5 seconds (SignAPIError)...")
-                        await asyncio.sleep(5)
-                        continue
-
-                    if interaction:
-                        await interaction.followup.send(f"❌ **Sign API Error:** Could not connect to @{unique_id}. Please try again later.", ephemeral=True)
-                    break
-
-                except UserNotFoundError:
-                    logger.warning(f"User @{unique_id} not found (UserNotFoundError). Likely offline or banned.")
-                    if attempt < max_retries - 1:
-                        logger.info(f"Retrying connection to @{unique_id} in 30 seconds (UserNotFound)...")
-                        await asyncio.sleep(30)
-                        continue
-                    break
-
-                except Exception as e:
-                    logger.error(f"Error connecting to @{unique_id}: {e}", exc_info=True)
-                    if attempt < max_retries - 1:
-                        logger.info(f"Retrying connection to @{unique_id} in 5 seconds...")
-                        await asyncio.sleep(5)
+                    if active_session:
+                        session_id = active_session.id
+                        logger.info(f"Attempting to connect to @{unique_id} using active session {session_id}")
                     else:
-                        logger.error(f"Failed to connect to @{unique_id} after {max_retries} attempts.")
-                        if interaction:
-                            await interaction.followup.send(f"❌ **Connection Failed:** Could not connect to @{unique_id} after multiple attempts.", ephemeral=True)
-        finally:
-            if unique_id in self.live_clients:
-                del self.live_clients[unique_id]
-            if persistent and unique_id in self.persistent_connections:
-                self.persistent_connections.remove(unique_id)
+                        logger.info(f"Attempting to connect to @{unique_id} without an active session.")
+                    
+                    # Populate reviewer map if not present
+                    if unique_id not in self.reviewer_map:
+                        stmt_rev = select(models.Reviewer).where(models.Reviewer.tiktok_handle == unique_id)
+                        res_rev = await session.execute(stmt_rev)
+                        rev = res_rev.scalar_one_or_none()
+                        if rev:
+                            self.reviewer_map[unique_id] = rev.id
+
+                # Prepare client arguments
+                client_kwargs = {}
+                tiktok_session_id = os.getenv("TIKTOK_SESSION_ID")
+                if tiktok_session_id:
+                    client_kwargs["cookies"] = {"sessionid": tiktok_session_id}
+                    logger.info(f"Using configured TIKTOK_SESSION_ID for connection to @{unique_id}")
+
+                # Configure Sign API Key globally via WebDefaults
+                from config import settings
+                if settings.TIKTOK_SIGN_API_KEY:
+                    from TikTokLive.client.web.web_settings import WebDefaults
+                    WebDefaults.tiktok_sign_api_key = settings.TIKTOK_SIGN_API_KEY
+                    logger.info(f"Configured WebDefaults.tiktok_sign_api_key for connection to @{unique_id}")
+
+                logger.info(f"Creating TikTokLiveClient for @{unique_id}...")
+                client = TikTokLiveClient(unique_id=f"@{unique_id}", **client_kwargs)
+                logger.info(f"TikTokLiveClient created for @{unique_id}. Setting up listeners...")
+                
+                # Reset disconnect event for new connection attempt
+                disconnect_event.clear()
+                self._setup_listeners(client, disconnect_event, session_id)
+                logger.info(f"Listeners setup for @{unique_id}. Initializing buffer...")
+
+                self.live_clients[unique_id] = client
+                
+                # Initialize Buffer and Flush Task if Reviewer
+                if unique_id in self.reviewer_map:
+                    self.buffers[unique_id] = StreamBuffer()
+                    # Cancel existing flush task if any (shouldn't happen if cleaned up correctly)
+                    if unique_id in self.flush_tasks:
+                        self.flush_tasks[unique_id].cancel()
+                    self.flush_tasks[unique_id] = asyncio.create_task(self.flush_loop(unique_id, self.reviewer_map[unique_id]))
+                    logger.info(f"Initialized StreamBuffer and Flush Task for reviewer @{unique_id}")
+
+                if persistent:
+                    self.persistent_connections.add(unique_id)
+
+                logger.info(f"Starting client for @{unique_id}...")
+                await client.start()
+                logger.info(f"Client started for @{unique_id}. Waiting for disconnect event...")
+
+                # Reset backoff on successful connection start
+                current_backoff = initial_backoff
+
+                # Wait until the disconnect event is set
+                await disconnect_event.wait()
+                logger.info(f"Disconnect event set for @{unique_id}. Connection closed.")
+                
+                # If we are here, it means we disconnected. 
+                # If persistent, we loop again.
+                if not persistent:
+                    break
+
+            except UserOfflineError:
+                logger.info(f"User @{unique_id} is offline. Retrying in {offline_poll_interval} seconds...")
+                if interaction and not persistent: # Only reply if manual one-off
+                    await interaction.followup.send(f"❌ **User Offline:** Could not connect to @{unique_id}.", ephemeral=True)
+                    break
+                
+                # Wait for poll interval
+                await asyncio.sleep(offline_poll_interval)
+                continue # Retry immediately after sleep
+
+            except SignAPIError as e:
+                logger.warning(f"Sign API Error connecting to @{unique_id}: {e}")
+                if interaction and not persistent:
+                     await interaction.followup.send(f"❌ **Sign API Error:** Could not connect to @{unique_id}. Please try again later.", ephemeral=True)
+                     break
+                
+                # Exponential Backoff
+                logger.info(f"Retrying connection to @{unique_id} in {current_backoff} seconds (SignAPIError)...")
+                await asyncio.sleep(current_backoff)
+                current_backoff = min(current_backoff * 2, max_backoff)
+                continue
+
+            except UserNotFoundError:
+                logger.warning(f"User @{unique_id} not found (UserNotFoundError). Likely offline or banned.")
+                if interaction and not persistent:
+                     await interaction.followup.send(f"❌ **User Not Found:** @{unique_id} not found.", ephemeral=True)
+                     break
+                
+                # Treat as offline but with potentially longer wait? 
+                # Actually, UserNotFound often means offline for some libraries.
+                # Let's use same polling interval but maybe slightly different log.
+                logger.info(f"Retrying connection to @{unique_id} in {offline_poll_interval} seconds (UserNotFound)...")
+                await asyncio.sleep(offline_poll_interval)
+                continue
+
+            except Exception as e:
+                logger.error(f"Error connecting to @{unique_id}: {e}", exc_info=True)
+                if interaction and not persistent:
+                    await interaction.followup.send(f"❌ **Connection Failed:** Could not connect to @{unique_id}.", ephemeral=True)
+                    break
+                
+                # Generic Error Backoff
+                logger.info(f"Retrying connection to @{unique_id} in {current_backoff} seconds (Generic Error)...")
+                await asyncio.sleep(current_backoff)
+                current_backoff = min(current_backoff * 2, max_backoff)
+                continue
+            
+            finally:
+                # Cleanup client resources for this attempt
+                if unique_id in self.live_clients:
+                    del self.live_clients[unique_id]
+                
+                # Note: We do NOT remove from persistent_connections here if persistent=True
+                # because we want to keep retrying.
+                if not persistent and unique_id in self.persistent_connections:
+                    self.persistent_connections.remove(unique_id)
 
     @app_commands.command(name="tiktok_status", description="Check the status of TikTok Live connections")
     async def tiktok_status(self, interaction: discord.Interaction):

@@ -183,6 +183,10 @@ class GamificationCog(commands.Cog):
                     user = ua.user
                     achievement = ua.achievement
 
+                    if not user:
+                        logger.warning(f"UserAchievement {ua.id} has no associated user. Skipping.")
+                        continue
+
                     if not user.discord_id or not achievement.discord_role_id:
                         # Cannot sync yet
                         continue
