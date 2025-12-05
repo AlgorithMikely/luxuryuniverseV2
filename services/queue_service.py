@@ -1000,6 +1000,7 @@ async def get_active_session_by_reviewer(db: AsyncSession, reviewer_id: int) -> 
             models.ReviewSession.reviewer_id == reviewer_id,
             models.ReviewSession.is_active == True
         )
+        .order_by(models.ReviewSession.id.desc())
     )
     return result.scalars().first()
 

@@ -126,6 +126,8 @@ async def get_line_view(
     if active_session and active_session.open_queue_tiers:
         open_tiers = set(active_session.open_queue_tiers)
         priority_tiers_data = [t for t in priority_tiers_data if t.get('value') in open_tiers]
+        # FIX: Ensure frontend receives the opened tiers list on the reviewer object
+        reviewer.open_queue_tiers = active_session.open_queue_tiers
         
     priority_tiers = [schemas.PriorityTier(**t) for t in priority_tiers_data]
     

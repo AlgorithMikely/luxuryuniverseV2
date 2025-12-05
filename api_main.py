@@ -41,6 +41,12 @@ def create_app():
     from api import queue_line_api
     app.include_router(queue_line_api.router, prefix="/api")
 
+    from api import notification_api
+    app.include_router(notification_api.router, prefix="/api")
+
+    from api import search_api
+    app.include_router(search_api.router, prefix="/api")
+
     # Serve uploads (local file storage for Smart-Zone)
     from fastapi.staticfiles import StaticFiles
     import os

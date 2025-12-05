@@ -25,6 +25,7 @@ import ChatPage from './pages/ChatPage';
 import LinePage from './pages/LinePage';
 import { Toaster } from "react-hot-toast";
 import { ErrorBoundary } from "react-error-boundary";
+import LegalPages from "./pages/LegalPages";
 
 // Inject the store to avoid circular dependency
 injectStore(useAuthStore);
@@ -54,11 +55,13 @@ function App() {
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
             {/* Overlay Route - Public & Transparent */}
             <Route path="/overlay/:reviewerId" element={<Overlay />} />
-            {/* Chat Popout Route - Public */}
-            <Route path="/chat/:reviewerId" element={<ChatPage />} />
+            {/* Chat Popout Route - Public */}            <Route path="/chat/:reviewerId" element={<ChatPage />} />
+
 
             {/* Public Routes */}
             <Route element={<MainLayout />}>
+              <Route path="/terms" element={<LegalPages />} />
+              <Route path="/privacy" element={<LegalPages />} />
               <Route path="/spotlight" element={<SpotlightPage />} />
               <Route path="/submit/:identifier" element={<SubmissionPage />} />
             </Route>

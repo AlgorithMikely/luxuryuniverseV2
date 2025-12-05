@@ -21,9 +21,20 @@ interface LedgerEntry {
     user?: {
         username: string;
         avatar?: string;
+        discord_id?: string;
     };
     meta_data?: any;
 }
+
+const getAvatarUrl = (user: NonNullable<LedgerEntry['user']>) => {
+    if (!user.avatar) return null;
+    if (user.avatar.startsWith('http')) return user.avatar;
+    if (user.discord_id) {
+        const ext = user.avatar.startsWith('a_') ? 'gif' : 'png';
+        return `https://cdn.discordapp.com/avatars/${user.discord_id}/${user.avatar}.${ext}`;
+    }
+    return null;
+};
 
 const WalletPanel: React.FC<WalletPanelProps> = ({ reviewerId }) => {
     const [wallet, setWallet] = useState<WalletData | null>(null);
@@ -118,8 +129,8 @@ const WalletPanel: React.FC<WalletPanelProps> = ({ reviewerId }) => {
                                         {entry.user ? (
                                             <div className="flex items-center gap-2">
                                                 <div className="w-6 h-6 rounded-full bg-gray-600 overflow-hidden">
-                                                    {entry.user.avatar ? (
-                                                        <img src={entry.user.avatar} alt="" className="w-full h-full object-cover" />
+                                                    {getAvatarUrl(entry.user) ? (
+                                                        <img src={getAvatarUrl(entry.user)!} alt="" className="w-full h-full object-cover" />
                                                     ) : (
                                                         <div className="w-full h-full flex items-center justify-center text-xs font-bold">
                                                             {entry.user.username[0]}

@@ -64,11 +64,20 @@ const SessionManager: React.FC<SessionManagerProps> = ({ reviewerId }) => {
     fetchSettings();
   }, [reviewerId]);
 
+  const generateDefaultSessionName = () => {
+    const now = new Date();
+    return now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' +
+      now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  };
+
   useEffect(() => {
     if (isDropdownOpen) {
       fetchSettings();
+      if (!activeSession && !newSessionName) {
+        setNewSessionName(generateDefaultSessionName());
+      }
     }
-  }, [isDropdownOpen]);
+  }, [isDropdownOpen, activeSession]);
 
   // Listen for real-time updates to settings/session
   const { socket } = useQueueStore();
@@ -214,34 +223,33 @@ const SessionManager: React.FC<SessionManagerProps> = ({ reviewerId }) => {
           {/* Left: Session Selector Trigger */}
           <button
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 transition-colors text-left group"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 transition-colors text-left group shrink-0"
           >
             <div className={`p-1.5 rounded-md ${activeSession ? 'bg-green-500/20 text-green-400' : 'bg-gray-700 text-gray-400'}`}>
               <Radio className="w-4 h-4" />
             </div>
-            <div>
-              <div className="text-xs text-white/40 font-medium uppercase tracking-wider">Current Session</div>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs text-white/40 font-medium uppercase tracking-wider whitespace-nowrap">Current Session</div>
               <div className="text-sm font-bold text-white flex items-center gap-2">
-                {activeSession ? activeSession.name : 'No Active Session'}
-                {isDropdownOpen ? <ChevronUp className="w-3 h-3 text-white/40" /> : <ChevronDown className="w-3 h-3 text-white/40" />}
+                <span>{activeSession ? activeSession.name : 'No Active Session'}</span>
+                {isDropdownOpen ? <ChevronUp className="w-3 h-3 text-white/40 shrink-0" /> : <ChevronDown className="w-3 h-3 text-white/40 shrink-0" />}
               </div>
             </div>
           </button>
 
           {/* Center: Queue Gates (Compact) */}
           {activeSession && (
-            <div className="flex-1 flex items-center justify-center gap-1.5 px-4 overflow-x-auto no-scrollbar mask-gradient">
+            <div className="flex-1 flex items-center justify-center gap-1.5 px-4 overflow-x-auto no-scrollbar mask-gradient min-w-0">
               {tiers.map((tier) => {
                 const isOpen = activeSession.open_queue_tiers?.includes(tier.value);
                 const styles = getTierStyles(tier.color);
-                // Extract simplified label (e.g. "$5" instead of "$5 Tier") if possible, or use full label
                 const shortLabel = tier.label.replace(' Tier', '').replace('+', '');
 
                 return (
                   <button
                     key={tier.value}
                     onClick={() => toggleGate(tier.value)}
-                    className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all border whitespace-nowrap ${isOpen
+                    className={`h-8 w-14 px-1 rounded-lg text-xs font-bold transition-colors duration-200 border whitespace-nowrap flex items-center justify-center ${isOpen
                       ? `bg-transparent ${styles.border} ${styles.text} ${styles.shadow}`
                       : 'bg-white/5 border-transparent text-white/30 hover:bg-white/10 hover:text-white/60'
                       }`}
@@ -324,22 +332,8 @@ const SessionManager: React.FC<SessionManagerProps> = ({ reviewerId }) => {
             <div className="p-4 space-y-6">
               {error && <div className="text-red-400 text-sm bg-red-500/10 p-3 rounded-lg border border-red-500/20">{error}</div>}
 
-              {/* Active Session Controls */}
-              {activeSession ? (
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center text-xs font-bold text-white/40 uppercase tracking-wider">
-                    <span>Queue Gates Mobile/Extended</span>
-                  </div>
-                  {/* Keep duplicate in dropdown for mobile or detailed view if needed, or remove? User asked to move. 
-                      I will replace with a simple message or removal. 
-                      actually, let's keep it but simplified or remove entirely if it fits in top bar. 
-                      Given the user's request "move ... into main bar", I will remove it from here to declutter. 
-                  */}
-                  <p className="text-xs text-white/30 italic">Queue gates are now in the top bar.</p>
-                </div>
-
-              ) : (
-                /* Create New Session */
+              {/* Create New Session (Only if no active session) */}
+              {!activeSession && (
                 <div className="space-y-3">
                   <label className="text-xs font-bold text-white/40 uppercase tracking-wider">Start New Session</label>
                   <form onSubmit={handleCreateSession} className="flex gap-2">

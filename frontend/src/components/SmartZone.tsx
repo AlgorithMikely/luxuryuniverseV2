@@ -32,9 +32,39 @@ const SmartZone: React.FC<SmartZoneProps> = ({ reviewer }) => {
     } = useSubmissionSlots({ defaultArtistName: user?.artist_name });
 
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-    const [priorityValue, setPriorityValue] = useState(0); // Coin/Tier value
+    // Helper to determine initial allowed tier
+    const getInitialPriority = () => {
+        const tiers = reviewer.configuration?.priority_tiers || [];
+        const openTiers = reviewer.open_queue_tiers;
+
+        // If no restriction or 0 is allowed, start at 0
+        if (!openTiers || openTiers.includes(0)) return 0;
+
+        // Otherwise find lowest allowed tier
+        const allowed = tiers
+            .filter(t => openTiers.includes(t.value))
+            .sort((a, b) => a.value - b.value);
+
+        return allowed.length > 0 ? allowed[0].value : 0;
+    };
+
+    const [priorityValue, setPriorityValue] = useState(getInitialPriority); // Coin/Tier value
     const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
     const [isDisclaimerChecked, setIsDisclaimerChecked] = useState(false);
+
+    // Update if reviewer settings change dynamically
+    useEffect(() => {
+        const tiers = reviewer.configuration?.priority_tiers || [];
+        const openTiers = reviewer.open_queue_tiers;
+
+        // If current value is no longer allowed, shift to nearest allowed
+        if (openTiers && !openTiers.includes(priorityValue)) {
+            const allowed = tiers
+                .filter(t => openTiers.includes(t.value))
+                .sort((a, b) => a.value - b.value);
+            if (allowed.length > 0) setPriorityValue(allowed[0].value);
+        }
+    }, [reviewer.open_queue_tiers, reviewer.configuration?.priority_tiers]);
 
     // Determine allowed submissions based on tier
     const selectedTier = reviewer.configuration?.priority_tiers?.find(t => t.value === priorityValue);
@@ -59,7 +89,7 @@ const SmartZone: React.FC<SmartZoneProps> = ({ reviewer }) => {
             setSlot1(null);
             setSlot2(null);
             setSlot3(null);
-            setPriorityValue(0);
+            setPriorityValue(getInitialPriority()); // Reset to allowed default
             setDuplicateInfo(null);
             setIsDuplicateModalOpen(false);
             if (user) navigate('/hub');
@@ -212,6 +242,15 @@ const SmartZone: React.FC<SmartZoneProps> = ({ reviewer }) => {
                                 <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl text-center">
                                     <p className="text-sm text-blue-300">
                                         Free submissions are welcome! Please follow me on Instagram to support the stream: <a href={reviewer.configuration?.social_link_url || `https://instagram.com/${reviewer.tiktok_handle}`} target="_blank" rel="noopener noreferrer" className="underline font-bold hover:text-white">{reviewer.configuration?.social_link_text || `@${reviewer.tiktok_handle}`}</a>
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Free Submissions Closed Message */}
+                            {(!reviewer.open_queue_tiers || !reviewer.open_queue_tiers.includes(0)) && (
+                                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-center">
+                                    <p className="text-sm text-red-300 font-bold">
+                                        Free submissions are closed.
                                     </p>
                                 </div>
                             )}

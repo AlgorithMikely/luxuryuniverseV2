@@ -3,6 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
 import api from "../services/api";
 import { useSocket } from "../context/SocketContext";
+import SearchBar from "./SearchBar";
+import NotificationBell from "./NotificationBell";
 
 const Navbar = () => {
   // Fix: Ensure type safety for user properties
@@ -109,6 +111,11 @@ const Navbar = () => {
             </span>
           </Link>
 
+          {/* Search Bar */}
+          <div className="hidden md:block flex-1 max-w-xl mx-4">
+            <SearchBar />
+          </div>
+
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-6">
             <Link to="/spotlight" className="text-gray-300 hover:text-white font-medium transition-colors">
@@ -212,6 +219,9 @@ const Navbar = () => {
             <Link to="/hub" className="text-gray-300 hover:text-white font-medium transition-colors">
               Hub
             </Link>
+
+            {/* Notification Bell */}
+            <NotificationBell />
 
             {/* Profile Dropdown */}
             <div className="relative" ref={dropdownRef}>

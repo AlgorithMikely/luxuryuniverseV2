@@ -368,6 +368,21 @@ class UserAchievement(Base):
 
 
 
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    title = Column(String, nullable=False)
+    message = Column(String, nullable=False)
+    type = Column(String, default="info", nullable=False) # info, success, warning, error
+    link = Column(String, nullable=True)
+    is_read = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User")
+
+
 class GlobalConfig(Base):
     __tablename__ = "global_configs"
     key = Column(String, primary_key=True, index=True)

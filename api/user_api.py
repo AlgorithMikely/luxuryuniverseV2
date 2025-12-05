@@ -400,3 +400,67 @@ async def get_submitter_stats(
         genres=sorted(list(genres_set)),
         submissions=recent_submissions
     )
+
+@router.get("/me/export")
+async def export_my_data(
+    db: AsyncSession = Depends(get_db),
+    user: models.User = Depends(security.get_current_active_user)
+):
+    """
+    Export all data associated with the user in JSON format.
+    """
+    # Eager load relationships for full export
+    result = await db.execute(
+        select(models.User)
+        .where(models.User.id == user.id)
+        # In a real scenario, use selectinload to fetch relationships
+    )
+    
+    # Simple dictionary dump for now
+    user_data = {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "discord_id": user.discord_id,
+        "joined_at": str(user.xp), # Placeholder for date if stored
+        "stats": {
+            "xp": user.xp,
+            "credits": user.credit_balance,
+            "lifetime_likes": user.lifetime_live_likes
+        },
+        "settings": {
+            "artist_name": user.artist_name,
+            "instagram": user.instagram_handle
+            # Add more fields as needed
+        }
+        # Ideally would fetch submissions and transactions here too
+    }
+    return user_data
+
+@router.delete("/me")
+async def delete_my_account(
+    db: AsyncSession = Depends(get_db),
+    user: models.User = Depends(security.get_current_active_user)
+):
+    """
+    "Delete" the user account by anonymizing PII.
+    We do not hard delete to preserve transaction ledger integrity.
+    """
+    user.username = f"Deleted User {user.id}"
+    user.email = None
+    user.discord_id = None
+    user.tiktok_username = None
+    user.artist_name = None
+    user.instagram_handle = None
+    user.twitter_handle = None
+    user.youtube_channel = None
+    user.soundcloud_url = None
+    user.apple_music_url = None
+    user.avatar = None
+    
+    # Clear tokens
+    user.spotify_access_token = None
+    user.spotify_refresh_token = None
+    
+    await db.commit()
+    return {"status": "account_deleted", "message": "Your account has been anonymized."}

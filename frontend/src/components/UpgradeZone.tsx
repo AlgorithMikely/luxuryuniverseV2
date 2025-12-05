@@ -94,15 +94,16 @@ const UpgradeZone: React.FC<UpgradeZoneProps> = ({ reviewer, existingSubmissions
         if (!reviewer.configuration?.priority_tiers) return maxExistingPriority;
 
         // Filter tiers that support enough slots
-        const capableTiers = reviewer.configuration.priority_tiers.filter(t =>
+        let capableTiers = reviewer.configuration.priority_tiers.filter(t =>
             (t.submissions_count || 1) >= minRequiredSlots
         );
 
-        if (capableTiers.length === 0) return maxExistingPriority;
+        // Filter by open tiers if restriction exists
+        if (reviewer.open_queue_tiers) {
+            capableTiers = capableTiers.filter(t => reviewer.open_queue_tiers!.includes(t.value));
+        }
 
-        // From capable tiers, find one that is >= maxExistingPriority
-        // If all are lower (unlikely if we are upgrading), just take the highest capable one?
-        // Or if we are just setting initial state, we want the *cheapest* capable tier that is valid.
+        if (capableTiers.length === 0) return maxExistingPriority;
 
         // Let's sort by value
         capableTiers.sort((a, b) => a.value - b.value);
@@ -128,20 +129,21 @@ const UpgradeZone: React.FC<UpgradeZoneProps> = ({ reviewer, existingSubmissions
     // Base value for upgrade calculation
     const baseValue = maxExistingPriority;
 
-    // Available tiers for slider: must support current number of filled slots?
-    // Or we let the user select a tier, and if it doesn't support enough slots, we might have to warn or clear?
-    // The previous logic cleared slots. Let's keep that but ensure we don't offer tiers that are "too small" if we can help it,
-    // OR just let the effect handle it.
-    // Better UX: Only show tiers that support the *currently filled* slots? 
-    // No, that prevents downgrading/clearing. 
-    // Let's show all tiers >= baseValue.
     const availableTiers = reviewer.configuration?.priority_tiers?.filter(t => t.value >= baseValue) || [];
 
     useEffect(() => {
         // Clear slots if they are no longer allowed
         if (allowedSubmissions < 2 && slot2) setSlot2(null);
         if (allowedSubmissions < 3 && slot3) setSlot3(null);
-    }, [allowedSubmissions, slot2, slot3]);
+
+        // If current value is no longer in open tiers, force update to valid one
+        const openTiers = reviewer.open_queue_tiers;
+        if (openTiers && !openTiers.includes(priorityValue)) {
+            // Re-run init logic basically
+            const valid = getInitialPriority();
+            if (valid !== priorityValue) setPriorityValue(valid);
+        }
+    }, [allowedSubmissions, slot2, slot3, reviewer.open_queue_tiers]);
 
     const [checkoutAmount, setCheckoutAmount] = useState<number | null>(null);
 
@@ -176,6 +178,12 @@ const UpgradeZone: React.FC<UpgradeZoneProps> = ({ reviewer, existingSubmissions
 
         if (cost <= 0 && priorityValue === baseValue && existingSubmissions.length > 0) {
             toast.error("Please select a higher tier to upgrade.");
+            return;
+        }
+
+        // Validate if tier is open
+        if (reviewer.open_queue_tiers && !reviewer.open_queue_tiers.includes(priorityValue)) {
+            toast.error("This tier is currently closed.");
             return;
         }
 
@@ -383,9 +391,27 @@ const UpgradeZone: React.FC<UpgradeZoneProps> = ({ reviewer, existingSubmissions
                             </div>
                         )}
 
+                        {/* Free Submissions Closed Message */}
+                        {(!reviewer.open_queue_tiers || !reviewer.open_queue_tiers.includes(0)) && (
+                            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-center">
+                                <p className="text-sm text-red-300 font-bold">
+                                    Free submissions are closed.
+                                </p>
+                            </div>
+                        )}
+
                         <button
                             onClick={processUpgrade}
-                            disabled={isSubmitting || (existingSubmissions.length > 0 ? upgradeCost <= 0 : !slot1) || !isDisclaimerChecked}
+                            disabled={isSubmitting || (
+                                // Logic:
+                                // 1. Existing submission? Cost > 0 OR disabled
+                                // 2. New submission? !slot1
+                                // 3. Disclaimer unchecked
+                                // 4. SELECTED TIER IS CLOSED
+                                (existingSubmissions.length > 0 ? upgradeCost <= 0 : !slot1) ||
+                                !isDisclaimerChecked ||
+                                (reviewer.open_queue_tiers && !reviewer.open_queue_tiers.includes(priorityValue))
+                            )}
                             className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all
                                 ${(isSubmitting || (existingSubmissions.length > 0 ? upgradeCost <= 0 : !slot1) || !isDisclaimerChecked) ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:scale-[1.02]'}
                             `}

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import api from '../services/api';
 import toast from 'react-hot-toast';
-import { Save, User, Music, Share2 } from 'lucide-react';
+import { Save, User, Music, Share2, AlertTriangle, Download, Trash2 } from 'lucide-react';
 
 const UserSettingsPage = () => {
     const { user, checkAuth } = useAuthStore();
@@ -50,6 +50,44 @@ const UserSettingsPage = () => {
             toast.error("Failed to update settings.");
         } finally {
             setIsLoading(false);
+        }
+    };
+
+
+    const handleExportData = async () => {
+        try {
+            const { data } = await api.get('/user/me/export');
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `user_data_${user?.id}.json`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            toast.success("Data export started");
+        } catch (error) {
+            console.error("Export failed", error);
+            toast.error("Failed to export data");
+        }
+    };
+
+    const handleDeleteAccount = async () => {
+        if (window.confirm("ARE YOU SURE? This action cannot be undone. Your account will be anonymized and you will lose access.")) {
+            try {
+                await api.delete('/user/me');
+                toast.success("Account deleted.");
+                // We need to access store directly or use the hook's logout but we can't call hook conditionally easily if we were outside component
+                // internal function is fine
+                // But wait, logout from useAuthStore is available? No, I need to destruct it.
+                // I only destructured { user, checkAuth } in line 8.
+                // I need to add logout there or use store directly.
+                // I'll use store directly for safety if not destructured.
+                useAuthStore.getState().logout();
+                window.location.href = '/login';
+            } catch (error) {
+                console.error("Delete failed", error);
+                toast.error("Failed to delete account");
+            }
         }
     };
 
@@ -204,6 +242,37 @@ const UserSettingsPage = () => {
                             <Save className="w-5 h-5" />
                             {isLoading ? 'Saving...' : 'Save Changes'}
                         </button>
+                    </div>
+
+                    {/* Danger Zone */}
+                    <div className="bg-red-500/10 rounded-xl p-6 border border-red-500/30">
+                        <div className="flex items-center gap-3 mb-6">
+                            <AlertTriangle className="w-6 h-6 text-red-500" />
+                            <h2 className="text-xl font-semibold text-red-500">Danger Zone</h2>
+                        </div>
+
+                        <div className="flex flex-col md:flex-row gap-4">
+                            <button
+                                type="button"
+                                onClick={handleExportData}
+                                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gray-800 hover:bg-gray-700 text-white font-medium rounded-lg border border-gray-600 transition-colors"
+                            >
+                                <Download className="w-4 h-4" />
+                                Export My Data
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={handleDeleteAccount}
+                                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-900 text-white font-medium rounded-lg transition-colors border border-red-500"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                                Delete Account
+                            </button>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-4 text-center">
+                            Deleting your account is permanent. Your data will be anonymized.
+                        </p>
                     </div>
 
                 </form>
