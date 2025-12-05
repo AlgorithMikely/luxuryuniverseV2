@@ -11,8 +11,9 @@ import UserHubPage from "./pages/UserHubPage";
 import WalletHistoryPage from "./pages/WalletHistoryPage";
 import AdminPage from "./pages/AdminPage";
 import ReviewerSettingsPage from "./pages/ReviewerSettingsPage";
+import AdminMetricsPage from "./pages/AdminMetricsPage";
 import UserSettingsPage from "./pages/UserSettingsPage";
-import EconomyLogPage from "./pages/EconomyLogPage";
+import TransactionLedgerPage from "./pages/TransactionLedgerPage";
 import ArchivedSessionPage from './pages/ArchivedSessionPage';
 import SubmissionPage from "./pages/SubmissionPage";
 import SpotlightPage from "./pages/SpotlightPage";
@@ -76,8 +77,9 @@ function App() {
               <Route path="/wallet/history" element={<WalletHistoryPage />} />
               <Route path="/session/:sessionId" element={<ArchivedSessionPage />} />
               <Route path="/admin" element={<ProtectedRoute adminOnly={true}><AdminPage /></ProtectedRoute>} />
-              <Route path="/admin/economy" element={<ProtectedRoute adminOnly={true}><EconomyLogPage /></ProtectedRoute>} />
+              <Route path="/admin/economy" element={<ProtectedRoute adminOnly={true}><TransactionLedgerPage /></ProtectedRoute>} />
               <Route path="/admin/reviewer/:reviewerId/settings" element={<ProtectedRoute adminOnly={true}><ReviewerSettingsPage /></ProtectedRoute>} />
+              <Route path="/admin/metrics" element={<ProtectedRoute adminOnly={true}><AdminMetricsPage /></ProtectedRoute>} />
             </Route>
 
             <Route path="/" element={<LoginPage />} />

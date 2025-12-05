@@ -11,7 +11,9 @@ export interface PriorityTier {
 export interface ReviewerConfiguration {
   priority_tiers: PriorityTier[];
   free_line_limit?: number;
-  visible_free_limit?: number; // Added this
+  visible_free_limit?: number;
+  free_skip_priority_value?: number;
+  free_skip_color?: string; // Added this
   line_show_skips?: boolean;
   banner_url?: string;
   banner_r2_uri?: string;
@@ -74,6 +76,7 @@ export interface User {
   average_review_score?: number;
   total_submissions_graded?: number;
   is_line_authorized?: boolean;
+  credit_balance?: number;
 }
 
 export interface UserProfile extends User { }
@@ -94,6 +97,7 @@ export interface ReviewerProfile {
   avatar_r2_uri?: string;
   bio?: string;
   community_goal_cooldown_minutes?: number;
+  skip_price_credits?: number;
   is_live?: boolean;
 }
 // --- Submissions & Queue ---
@@ -127,6 +131,7 @@ export interface Submission {
   hook_start_time?: number;
   hook_end_time?: number;
   is_community_winner?: boolean;
+  cover_art_url?: string;
 }
 
 export interface Session {
@@ -185,6 +190,8 @@ export interface SmartSubmissionItem {
   priority_value: number;
   sequence_order: number;
   preview_url?: string;
+  cover_art_url?: string;
   is_history?: boolean;
+  id?: number;
+  note?: string;
 }
-

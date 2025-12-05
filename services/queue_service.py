@@ -14,7 +14,7 @@ import uuid
 
 AVERAGE_REVIEW_TIME_MINUTES = 4
 
-async def create_submission(db: AsyncSession, reviewer_id: int, user_id: int, track_url: str, track_title: str, archived_url: str, session_id: Optional[int] = None, batch_id: Optional[str] = None, sequence_order: int = 1, hook_start_time: Optional[int] = None, hook_end_time: Optional[int] = None, priority_value: int = 0, artist: Optional[str] = None, genre: Optional[str] = None, file_hash: Optional[str] = None) -> models.Submission:
+async def create_submission(db: AsyncSession, reviewer_id: int, user_id: int, track_url: str, track_title: str, archived_url: str, session_id: Optional[int] = None, batch_id: Optional[str] = None, sequence_order: int = 1, hook_start_time: Optional[int] = None, hook_end_time: Optional[int] = None, priority_value: int = 0, artist: Optional[str] = None, genre: Optional[str] = None, file_hash: Optional[str] = None, cover_art_url: Optional[str] = None, note: Optional[str] = None) -> models.Submission:
     # Check for existing flags (Spotlight/Bookmark) from previous submissions
     # We check by file_hash (if available) or track_url
     existing_flags_stmt = select(models.Submission).filter(
@@ -58,7 +58,9 @@ async def create_submission(db: AsyncSession, reviewer_id: int, user_id: int, tr
         is_priority=priority_value > 0,
         file_hash=file_hash,
         bookmarked=is_bookmarked,
-        spotlighted=is_spotlighted
+        spotlighted=is_spotlighted,
+        cover_art_url=cover_art_url,
+        notes=note
     )
     db.add(new_submission)
 
@@ -1209,12 +1211,41 @@ async def apply_free_skip(db: AsyncSession, reviewer_id: int, user_id: int) -> b
         return False
         
     # 2. Apply Upgrade
-    # Default "Free Skip" value is usually the lowest paid tier, e.g., 3.
-    # We could fetch this from config, but for now hardcoding to 3 is safe as per "Fast Pass".
-    FREE_SKIP_VALUE = 3
+    # Fetch reviewer config to find the lowest paid tier or use configured override
+    reviewer = await db.get(models.Reviewer, reviewer_id)
+    free_skip_value = 3 # Default fallback
     
-    if submission.priority_value < FREE_SKIP_VALUE:
-        await update_priority(db, submission.id, FREE_SKIP_VALUE)
+    if reviewer and reviewer.configuration:
+        # Check for manual override first
+        configured_value = reviewer.configuration.get("free_skip_priority_value")
+        if configured_value and isinstance(configured_value, int) and configured_value > 0:
+            free_skip_value = configured_value
+        else:
+            # Fallback to lowest paid tier
+            tiers = reviewer.configuration.get("priority_tiers", [])
+            # Filter for paid tiers (value > 0) and find the minimum
+            paid_tiers = [t for t in tiers if t.get("value", 0) > 0]
+            if paid_tiers:
+                free_skip_value = min(t["value"] for t in paid_tiers)
+            
+    if submission.priority_value < free_skip_value:
+        await update_priority(db, submission.id, free_skip_value)
+        
+        # Mark as winner in notes for frontend display
+        # We append the tag if it's not already there
+        winner_tag = "[Free Skip Winner]"
+        current_notes = submission.notes or ""
+        if winner_tag not in current_notes:
+            if current_notes:
+                submission.notes = f"{current_notes} {winner_tag}"
+            else:
+                submission.notes = winner_tag
+            # We need to commit this change since update_priority might not handle notes
+            # But update_priority commits, so we should do this before or after?
+            # update_priority commits. So we need to commit again or do it all in one go.
+            # Ideally update_priority should handle it, but we can just commit here.
+            await db.commit()
+            
         return True
         
     return False

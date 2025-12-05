@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str = "password"
     POSTGRES_DB: str = "universe_bot"
     SQLALCHEMY_DATABASE_URI: Optional[str] = None
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 10
 
     @model_validator(mode='after')
     def assemble_db_connection(self) -> 'Settings':

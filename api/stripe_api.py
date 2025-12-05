@@ -195,16 +195,12 @@ async def process_successful_payment(payment_intent):
                     user = await user_service.create_guest_user(db, email)
                     
                     # 2. Credit Wallet (Invisible Coin Purchase)
-                    coins = amount_cents # 1 cent = 1 coin
-                    await economy_service.add_coins(db, reviewer_id, user.id, coins, "Auto-purchase for submission", metadata={"source": "stripe_intent", "intent_id": payment_intent["id"]})
+                    credits = amount_cents # 1 cent = 1 credit
+                    await economy_service.purchase_credits(db, user.id, credits, amount_cents / 100.0, "stripe_guest", payment_intent["id"])
                     
                     # 3. Debit Wallet (Submission Payment)
-                    # We need to deduct the coins we just added.
-                    # The submission creation logic usually handles deduction if we go through a service, 
-                    # but here we might need to do it manually or call a service that deducts.
-                    # Let's assume we deduct manually to match the spec "Buying... and immediately spending".
-                    
-                    await economy_service.deduct_coins(db, reviewer_id, user.id, coins, "Submission to Reviewer")
+                    # We need to deduct the credits we just added.
+                    await economy_service.process_skip_transaction(db, user.id, reviewer_id, credits, "Submission to Reviewer")
                     
                     # 4. Finalize Submission
                     # Create the submission
@@ -242,7 +238,7 @@ async def process_successful_payment(payment_intent):
             # Get reviewer_id from metadata, default to 1 if not present (fallback)
             reviewer_id = int(metadata.get("reviewer_id", 1))
             
-            await economy_service.add_coins(db, reviewer_id, user_id, coins, "wallet_topup")
+            await economy_service.purchase_credits(db, user_id, coins, amount_cents / 100.0, "stripe", payment_intent["id"])
 
 @router.post("/verify-payment")
 async def verify_payment(

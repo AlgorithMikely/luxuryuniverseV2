@@ -13,6 +13,7 @@ interface TopUpModalProps {
     onClose: () => void;
     onSuccess: () => void;
     reviewerId?: number;
+    requiredAmount?: number; // Amount needed in credits (cents)
 }
 
 const CheckoutForm = ({ amount, onSuccess, reviewerId }: { amount: number, onSuccess: () => void, reviewerId?: number }) => {
@@ -85,11 +86,17 @@ const CheckoutForm = ({ amount, onSuccess, reviewerId }: { amount: number, onSuc
     );
 };
 
-const TopUpModal: React.FC<TopUpModalProps> = ({ isOpen, onClose, onSuccess, reviewerId }) => {
+const TopUpModal: React.FC<TopUpModalProps> = ({ isOpen, onClose, onSuccess, reviewerId, requiredAmount }) => {
     const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
     const [clientSecret, setClientSecret] = useState<string | null>(null);
     const [dynamicStripePromise, setDynamicStripePromise] = useState<Promise<any> | null>(null);
-    const amounts = [5, 10, 20, 50, 100];
+    const packages = [
+        { name: 'Starter', price: 6, credits: 500 },
+        { name: 'Standard', price: 10, credits: 1000 },
+        { name: 'Artist', price: 25, credits: 2600 },
+        { name: 'Pro', price: 50, credits: 5200 },
+        { name: 'Label', price: 100, credits: 11000 },
+    ];
 
     useEffect(() => {
         if (selectedAmount) {
@@ -145,16 +152,27 @@ const TopUpModal: React.FC<TopUpModalProps> = ({ isOpen, onClose, onSuccess, rev
                 <div className="p-6">
                     {!selectedAmount ? (
                         <div className="grid grid-cols-2 gap-4">
-                            {amounts.map((amount) => (
-                                <button
-                                    key={amount}
-                                    onClick={() => setSelectedAmount(amount)}
-                                    className="flex flex-col items-center justify-center p-4 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-purple-500 rounded-xl transition-all group"
-                                >
-                                    <span className="text-2xl font-bold text-white group-hover:text-purple-400">${amount}</span>
-                                    <span className="text-sm text-gray-400">{amount * 100} Coins</span>
-                                </button>
-                            ))}
+                            {packages.map((pkg) => {
+                                const isInsufficient = requiredAmount ? pkg.credits < requiredAmount : false;
+                                return (
+                                    <button
+                                        key={pkg.price}
+                                        onClick={() => !isInsufficient && setSelectedAmount(pkg.price)}
+                                        disabled={isInsufficient}
+                                        className={`flex flex-col items-center justify-center p-4 rounded-xl transition-all group border
+                                            ${isInsufficient
+                                                ? 'bg-gray-900/50 border-gray-800 opacity-50 cursor-not-allowed'
+                                                : 'bg-gray-800 hover:bg-gray-700 border-gray-700 hover:border-purple-500'
+                                            }
+                                        `}
+                                    >
+                                        <span className={`text-xs font-bold uppercase mb-1 ${isInsufficient ? 'text-gray-600' : 'text-purple-400'}`}>{pkg.name}</span>
+                                        <span className={`text-2xl font-bold ${isInsufficient ? 'text-gray-600' : 'text-white group-hover:text-purple-400'}`}>${pkg.price}</span>
+                                        <span className={`text-sm ${isInsufficient ? 'text-gray-600' : 'text-gray-400'}`}>{pkg.credits} Credits</span>
+                                        {isInsufficient && <span className="text-xs text-red-500 mt-1">Insufficient</span>}
+                                    </button>
+                                );
+                            })}
                         </div>
                     ) : (
                         <div>

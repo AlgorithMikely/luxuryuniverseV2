@@ -139,10 +139,10 @@ export const useSubmission = ({ reviewer, onSuccess, onOpenCheckout, onOpenDupli
     const upgrade = async (
         submissionId: number,
         priorityValue: number,
-        slots: { slot2: SmartSubmissionItem | null, slot3: SmartSubmissionItem | null },
+        slots: { slot1: SmartSubmissionItem | null, slot2: SmartSubmissionItem | null, slot3: SmartSubmissionItem | null },
         allowedSubmissions: number
     ) => {
-        const { slot2, slot3 } = slots;
+        const { slot1, slot2, slot3 } = slots;
         setIsSubmitting(true);
 
         try {
@@ -158,7 +158,9 @@ export const useSubmission = ({ reviewer, onSuccess, onOpenCheckout, onOpenDupli
 
             const payload = {
                 target_priority_value: priorityValue,
-                new_submissions: newSubmissions
+                new_submissions: newSubmissions,
+                note: slot1?.note,
+                genre: slot1?.genre
             };
 
             await api.post(`/queue/line/${reviewer.id}/submission/${submissionId}/upgrade`, payload);

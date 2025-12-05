@@ -18,7 +18,12 @@ if "sqlite" in DATABASE_URL and ":memory:" in DATABASE_URL:
         poolclass=StaticPool,
     )
 else:
-    engine = create_async_engine(DATABASE_URL)
+    engine = create_async_engine(
+        DATABASE_URL,
+        pool_size=settings.DB_POOL_SIZE,
+        max_overflow=settings.DB_MAX_OVERFLOW,
+        pool_pre_ping=True
+    )
 
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,

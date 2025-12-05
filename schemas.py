@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 from typing import List, Optional
 import datetime
 
@@ -98,6 +98,28 @@ class Achievement(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    @model_validator(mode='before')
+    @classmethod
+    def flatten_achievement(cls, v):
+        # If v is a SQLAlchemy model (UserAchievement) with a .achievement relationship
+        if hasattr(v, 'achievement') and v.achievement:
+            # We need to return a dict with fields from both v and v.achievement
+            return {
+                "id": v.id,
+                "unlocked_at": v.unlocked_at,
+                "slug": v.achievement.slug,
+                "display_name": v.achievement.display_name,
+                "description": v.achievement.description,
+                "category": v.achievement.category,
+                "threshold_value": v.achievement.threshold_value,
+                "tier": v.achievement.tier,
+                "is_hidden": v.achievement.is_hidden,
+                "icon_url": v.achievement.icon_url,
+                "role_color": v.achievement.role_color,
+                "role_icon": v.achievement.role_icon,
+            }
+        return v
+
 
 class UserBase(BaseModel):
     discord_id: Optional[str] = None
@@ -134,6 +156,7 @@ class User(UserBase):
 
     model_config = ConfigDict(from_attributes=True)
     tiktok_username: Optional[str] = None
+    credit_balance: int = 0
 
 class UserPublic(BaseModel):
     """
@@ -230,6 +253,7 @@ class Submission(BaseModel):
     spotlighted: bool = False
     is_community_winner: Optional[bool] = False
     priority_value: int = 0
+    is_priority: bool = False
 
     # New fields
     start_time: Optional[str] = None
@@ -243,8 +267,11 @@ class Submission(BaseModel):
     hook_start_time: Optional[int] = None
     hook_end_time: Optional[int] = None
     submitted_at: Optional[datetime.datetime] = None
+    cover_art_url: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
 
 class SubmissionPublic(Submission):
     """
@@ -279,201 +306,9 @@ class SmartSubmissionItem(BaseModel):
     hook_end_time: Optional[int] = None
     priority_value: int = 0 # Individual priority if needed, but usually batch uses the same
     sequence_order: int = 1
-
-class SmartSubmissionCreate(BaseModel):
-    submissions: List[SmartSubmissionItem]
-    is_priority: bool = False
-    total_cost: int = 0 # For verification
-
-class RecentTrack(BaseModel):
-    id: int
-    track_title: str
-    artist_name: Optional[str] = None # Derived from user.username usually, but distinct logic might use submission user
     cover_art_url: Optional[str] = None
-    file_url: str # track_url
-    hook_start_time: Optional[int] = None
-    created_at: datetime.datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-class QueueStats(BaseModel):
-    length: int
-    avg_wait_time: int # in minutes
-    status: str
-
-class QueueStatusUpdate(BaseModel):
-    status: str
-
-class ReviewSessionBase(BaseModel):
-    name: str
-
-class ReviewSessionCreate(ReviewSessionBase):
-    open_queue_tiers: Optional[List[int]] = None
-
-class ReviewSessionUpdate(BaseModel):
-    name: Optional[str] = None
-    status: Optional[str] = None
-    open_queue_tiers: Optional[List[int]] = None
-
-class ReviewSession(ReviewSessionBase):
-    id: int
-    reviewer_id: int
-    is_active: bool
-    open_queue_tiers: List[int] = [0, 5, 10, 15, 20, 25, 50]
-    submissions: List[Submission] = []
-    model_config = ConfigDict(from_attributes=True)
-
-class GiveawayState(BaseModel):
-    is_active: bool
-    progress: int
-    target: int
-    winner: Optional[UserPublic] = None
-    cooldown_end: Optional[datetime.datetime] = None
-    description: Optional[str] = None
-
-class FullQueueState(BaseModel):
-    queue: List[Submission]
-    history: List[Submission]
-    bookmarks: List[Submission]
-    spotlight: List[Submission]
-    current_track: Optional[Submission] = None
-    is_live: bool = False
-    giveaway_state: Optional[GiveawayState] = None
-
-class FreeQueueData(BaseModel):
-    display_limit: int
-    total_waiting: int
-    items: List[Submission]
-
-class QueueData(BaseModel):
-    priority_queue: List[Submission]
-    free_queue: FreeQueueData
-
-class UserContext(BaseModel):
-    reason: str
-    meta_data: Optional[dict] = None
-    timestamp: datetime.datetime
-    
-    # Optional nested models if we want full details
-    user: Optional[UserPublic] = None
-    
-    model_config = ConfigDict(from_attributes=True)
-
-class PaymentIntentCreate(BaseModel):
-    amount: int
-    currency: str = "usd"
-    email: Optional[str] = None
-    tier: Optional[str] = None
-    track_url: Optional[str] = None
-    track_title: Optional[str] = None
-
-class PaymentIntentResponse(BaseModel):
-    client_secret: str
-
-class TikTokAccount(BaseModel):
-    id: int
-    handle_name: str
-    points: int = 0
-    monitored: bool = False
-    user_id: Optional[int] = None
-    
-    avg_concurrent_viewers: int = 0
-    max_concurrent_viewers: int = 0
-    avg_total_viewers: int = 0
-    max_total_viewers: int = 0
-
-    model_config = ConfigDict(from_attributes=True)
-
-class SubmitterStats(BaseModel):
-    user: UserPublic
-    average_review_score: float
-    average_poll_result: float
-    genres: List[str]
-    submissions: List[SubmissionPublic]
-
-class MissionBar(BaseModel):
-    status: str
-    type: str
-    target: int
-    current: int
-    percent: int
-
-class PriorityQueueItem(BaseModel):
-    pos: int
-    user: str
-    type: str  # PAID_PRIORITY, HOT_SEAT
-    amount: int
-    style: str  # GOLD, FIRE
-    track_title: Optional[str] = None
-    artist: Optional[str] = None
-    cover_art_url: Optional[str] = None
-    track_url: Optional[str] = None
-
-class FreeQueueItem(BaseModel):
-    pos: int
-    user: str
-    track_title: Optional[str] = None
-    artist: Optional[str] = None
-    cover_art_url: Optional[str] = None
-    track_url: Optional[str] = None
-
-class FreeQueue(BaseModel):
-    display_limit: int
-    total_waiting: int
-    items: List[FreeQueueItem]
-
-class NowPlayingInfo(BaseModel):
-    track_title: Optional[str] = None
-    artist: Optional[str] = None
-    cover_art_url: Optional[str] = None
-    user: UserPublic
-    mission_bar: Optional[MissionBar] = None
-
-class LineViewState(BaseModel):
-    session_id: Optional[str] = None
-
-    # New Smart-Zone fields
-    batch_id: Optional[str] = None
-    sequence_order: int = 1
-    hook_start_time: Optional[int] = None
-    hook_end_time: Optional[int] = None
-    submitted_at: Optional[datetime.datetime] = None
-
-    model_config = ConfigDict(from_attributes=True)
-
-class SubmissionPublic(Submission):
-    """
-    Public submission data with sanitized user info.
-    """
-    user: UserPublic
-
-class SubmissionWithReviewer(Submission):
-    reviewer: Optional[ReviewerProfile] = None
-
-class SubmissionUpdate(BaseModel):
-    track_title: Optional[str] = None
-    artist: Optional[str] = None
-    start_time: Optional[str] = None
-    end_time: Optional[str] = None
-    genre: Optional[str] = None
-    tags: Optional[List[str]] = None
-    # Fields for user profile update
-    tiktok_handle: Optional[str] = None
-    instagram_handle: Optional[str] = None # If we add this
-    twitter_handle: Optional[str] = None # If we add this
-
-    hook_start_time: Optional[int] = None
-    hook_end_time: Optional[int] = None
-
-class SmartSubmissionItem(BaseModel):
-    track_url: str
-    track_title: Optional[str] = None
-    artist: Optional[str] = None
-    genre: Optional[str] = None
-    hook_start_time: Optional[int] = None
-    hook_end_time: Optional[int] = None
-    priority_value: int = 0 # Individual priority if needed, but usually batch uses the same
-    sequence_order: int = 1
+    id: Optional[int] = None
+    note: Optional[str] = None
 
 class SmartSubmissionCreate(BaseModel):
     submissions: List[SmartSubmissionItem]
@@ -642,3 +477,45 @@ class LineViewState(BaseModel):
     giveaway_state: Optional[GiveawayState] = None
     community_goals: List[GiveawayState] = []
     reviewer: Optional[ReviewerProfile] = None
+
+class ReviewerWallet(BaseModel):
+    id: int
+    reviewer_id: int
+    balance_usd: float
+    total_earnings_usd: float
+    updated_at: datetime.datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class TransactionLedger(BaseModel):
+    id: int
+    user_id: Optional[int]
+    reviewer_id: Optional[int]
+    action: str
+    credits_spent: int
+    usd_earned: float
+    exchange_rate_snapshot: Optional[float]
+    timestamp: datetime.datetime
+    meta_data: Optional[dict]
+    
+    user: Optional[UserPublic] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+class LedgerSearchQuery(BaseModel):
+    page: int = 1
+    limit: int = 50
+    start_date: Optional[datetime.datetime] = None
+    end_date: Optional[datetime.datetime] = None
+    action_types: Optional[List[str]] = None
+    min_amount_usd: Optional[float] = None
+    max_amount_usd: Optional[float] = None
+    user_id: Optional[int] = None
+    reviewer_id: Optional[int] = None
+    search_term: Optional[str] = None # For searching username, request_id, reference_id
+
+class LedgerSearchResult(BaseModel):
+    total: int
+    page: int
+    limit: int
+    items: List[TransactionLedger]

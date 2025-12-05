@@ -8,7 +8,7 @@ import schemas
 import logging
 
 @sio.on("connect")
-async def connect(sid, environ, auth):
+async def connect(sid, environ, auth=None):
     # Allow public connection if explicitly requested
     if auth and auth.get("is_public"):
         logging.info(f"Public client connected: {sid}")

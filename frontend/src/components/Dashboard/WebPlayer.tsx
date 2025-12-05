@@ -3,8 +3,10 @@ import { useQueueStore } from '../../stores/queueStore';
 import { useSpotifyStore } from '../../stores/spotifyStore';
 import { useAuthStore } from '../../stores/authStore';
 import WaveSurfer from 'wavesurfer.js';
-import { Play, Pause, Volume2, VolumeX, Music, AlertCircle, LogIn } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Music, AlertCircle, LogIn, ExternalLink } from 'lucide-react';
 import api from '../../services/api';
+import EQVisualizer from './EQVisualizer';
+import { Activity } from 'lucide-react';
 
 // --- Helper functions ---
 const isSpotifyUrl = (url?: string): url is string => !!url && url.includes('open.spotify.com');
@@ -119,6 +121,9 @@ const WebPlayer: React.FC = () => {
 
     const waveformRef = useRef<HTMLDivElement>(null);
     const wavesurfer = useRef<WaveSurfer | null>(null);
+    const filtersRef = useRef<BiquadFilterNode[]>([]);
+    const analyserRef = useRef<AnalyserNode | null>(null);
+    const [analyser, setAnalyser] = useState<AnalyserNode | null>(null); // State to trigger re-render for EQVisualizer
 
     const [isPlaying, setIsPlaying] = useState(false);
     const [volume, setVolume] = useState(0.5);
@@ -128,8 +133,104 @@ const WebPlayer: React.FC = () => {
     const [spotifyError, setSpotifyError] = useState<string | null>(null);
     const [localSpotifyProgress, setLocalSpotifyProgress] = useState(0);
     const [prefetchedTrack, setPrefetchedTrack] = useState<any>(null);
-
     const [isWaveSurferReady, setIsWaveSurferReady] = useState(false);
+    const [showEQ, setShowEQ] = useState(false);
+
+    // Refs for cleaning up captured audio
+    const captureStreamRef = useRef<MediaStream | null>(null);
+    const captureContextRef = useRef<AudioContext | null>(null);
+    // Ref for file-based playback context (to resume on user interaction)
+    const fileAudioContextRef = useRef<AudioContext | null>(null);
+
+
+    // Cleanup captured audio when track changes
+    useEffect(() => {
+        if (captureStreamRef.current) {
+            captureStreamRef.current.getTracks().forEach(t => t.stop());
+            captureStreamRef.current = null;
+        }
+        if (captureContextRef.current) {
+            captureContextRef.current.close();
+            captureContextRef.current = null;
+        }
+        // Also ensure EQ visualizer is reset if it was using the capture
+        if (analyser && captureContextRef.current) {
+            setAnalyser(null);
+            filtersRef.current = [];
+        }
+    }, [currentTrack?.id, currentTrack?.track_url]);
+
+    // --- Audio Engine (EQ) Logic ---
+    const initFilters = (ws: WaveSurfer) => {
+        // Try to get AudioContext from options (where we passed it) or backend
+        // @ts-ignore
+        const ac = ws.options?.audioContext || ws.backend?.ac || (ws as any).audioContext;
+
+        if (!ac) {
+            console.error("EQ: Could not find AudioContext in WaveSurfer instance", ws);
+            return;
+        }
+
+        // Create 5 bands matching EQVisualizer defaults
+        const frequencies = [60, 250, 1000, 4000, 12000];
+        const types: BiquadFilterType[] = ['lowshelf', 'peaking', 'peaking', 'peaking', 'highshelf'];
+
+        const newFilters = frequencies.map((freq, i) => {
+            const filter = ac.createBiquadFilter();
+            filter.type = types[i];
+            filter.frequency.value = freq;
+            filter.gain.value = 0;
+            filter.Q.value = 1.0;
+            return filter;
+        });
+
+        // Create Analyser
+        const analyserNode = ac.createAnalyser();
+        analyserNode.fftSize = 2048;
+        analyserNode.smoothingTimeConstant = 0.8;
+        analyserRef.current = analyserNode;
+        setAnalyser(analyserNode);
+
+        filtersRef.current = newFilters;
+
+        // Apply filters to WaveSurfer
+        // WaveSurfer v7 supports setFilters, but types might be missing it
+        const wsAny = ws as any;
+        if (wsAny.setFilters) {
+            // We pass the filters AND the analyser at the end so it visualizes the post-EQ signal
+            wsAny.setFilters([...newFilters, analyserNode]);
+        } else {
+            console.warn("WaveSurfer setFilters not available");
+        }
+    };
+
+    const handleEQChange = useCallback((bands: any[]) => {
+        const filters = filtersRef.current;
+        if (filters.length === 0) return;
+
+        bands.forEach((band, i) => {
+            if (filters[i]) {
+                const filter = filters[i];
+                // Smooth transitions
+                const now = filter.context.currentTime;
+
+                // Check and update type if needed (immediate change, no automation)
+                if (filter.type !== band.type) {
+                    filter.type = band.type;
+                }
+
+                filter.frequency.setTargetAtTime(band.freq, now, 0.02);
+
+                // Gain is ignored for bandpass/lowpass/highpass but safe to set
+                if (band.type !== 'bandpass' && band.type !== 'lowpass' && band.type !== 'highpass') {
+                    filter.gain.setTargetAtTime(band.gain, now, 0.02);
+                }
+
+                filter.Q.setTargetAtTime(band.q, now, 0.02);
+            }
+        });
+    }, []);
+
 
     // --- Spotify SDK Initialization ---
     useEffect(() => {
@@ -246,8 +347,13 @@ const WebPlayer: React.FC = () => {
 
     // --- WaveSurfer Logic ---
     const onPlayPause = useCallback(() => {
+        // Ensure AudioContext is running (crucial for behavior after page refresh)
+        if (fileAudioContextRef.current?.state === 'suspended') {
+            fileAudioContextRef.current.resume();
+        }
         wavesurfer.current?.playPause();
     }, []);
+
 
     const onVolumeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const newVolume = parseFloat(e.target.value);
@@ -281,6 +387,7 @@ const WebPlayer: React.FC = () => {
 
         setIsWaveSurferReady(false); // Reset ready state
         setIsPlaying(false); // Reset playing state
+        filtersRef.current = []; // Reset filters
 
         const trackUrl = currentTrack?.track_url;
         // Only initialize WaveSurfer for non-Spotify/YT/SC urls (i.e., direct files)
@@ -293,16 +400,62 @@ const WebPlayer: React.FC = () => {
         // Use the proxy endpoint to bypass CORS for Discord URLs
         const proxyUrl = `/api/proxy/audio?url=${encodeURIComponent(trackUrl)}`;
 
+        // --- Manual Audio Graph Setup ---
+        // 1. Create AudioContext
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        const ac = new AudioContext();
+        fileAudioContextRef.current = ac;
+
+
+        // 2. Create Audio Element with CORS
+        const audio = document.createElement('audio');
+        audio.crossOrigin = "anonymous";
+        audio.src = proxyUrl;
+
+        // 3. Create MediaElementSource
+        const source = ac.createMediaElementSource(audio);
+
+        // 4. Create Filters
+        const frequencies = [60, 250, 1000, 4000, 12000];
+        const types: BiquadFilterType[] = ['lowshelf', 'peaking', 'peaking', 'peaking', 'highshelf'];
+        const newFilters = frequencies.map((freq, i) => {
+            const filter = ac.createBiquadFilter();
+            filter.type = types[i];
+            filter.frequency.value = freq;
+            filter.gain.value = 0;
+            filter.Q.value = 1.0;
+            return filter;
+        });
+        filtersRef.current = newFilters;
+
+        // 5. Create Analyser
+        const analyserNode = ac.createAnalyser();
+        analyserNode.fftSize = 2048;
+        analyserNode.smoothingTimeConstant = 0.8;
+        analyserRef.current = analyserNode;
+        setAnalyser(analyserNode);
+
+        // 6. Connect Graph: Source -> Filters -> Analyser -> Destination
+        let currentNode: AudioNode = source;
+        newFilters.forEach(filter => {
+            currentNode.connect(filter);
+            currentNode = filter;
+        });
+        currentNode.connect(analyserNode);
+        analyserNode.connect(ac.destination);
+
+        // 7. Initialize WaveSurfer with the media element
         wavesurfer.current = WaveSurfer.create({
             container: waveformRef.current,
-            waveColor: 'rgba(255, 255, 255, 0.1)', // Very dim unplayed for contrast
-            progressColor: '#a855f7', // Vibrant Purple (purple-500)
-            cursorColor: '#ffffff', // Pure white cursor
-            barWidth: 4, // Wider bars for more color
-            barGap: 1, // Tighter gap for density
+            waveColor: 'rgba(255, 255, 255, 0.1)',
+            progressColor: '#a855f7',
+            cursorColor: '#ffffff',
+            barWidth: 4,
+            barGap: 1,
             barRadius: 4,
             height: 60,
-            url: proxyUrl // Load via proxy
+            media: audio, // Use our connected element
+            // We don't pass audioContext here to avoid WaveSurfer messing with our graph
         });
 
         wavesurfer.current.on('play', () => setIsPlaying(true));
@@ -319,6 +472,24 @@ const WebPlayer: React.FC = () => {
         wavesurfer.current.setVolume(isMuted ? 0 : volume);
 
         return () => {
+            // Cleanup manual audio graph
+            // Use local variables 'ac' and 'audio' from the effect scope
+            try {
+                if (ac && ac.state !== 'closed') {
+                    ac.close();
+                }
+                fileAudioContextRef.current = null;
+
+            } catch (e) {
+                console.error("Error closing AudioContext:", e);
+            }
+
+            if (audio) {
+                audio.pause();
+                audio.src = ''; // Detach source
+                audio.remove(); // Remove element
+            }
+
             if (wavesurfer.current) {
                 wavesurfer.current.destroy();
                 wavesurfer.current = null;
@@ -408,6 +579,109 @@ const WebPlayer: React.FC = () => {
         fetchSpotifyMetadata();
     }, [currentTrack?.track_url]);
 
+    // --- System Audio Capture Logic ---
+    const handleCaptureAudio = async () => {
+        try {
+            // Cleanup previous if exists
+            if (captureStreamRef.current) {
+                captureStreamRef.current.getTracks().forEach(t => t.stop());
+            }
+            if (captureContextRef.current) {
+                captureContextRef.current.close();
+            }
+
+            // Request display media (screen/tab capture) with audio
+            const stream = await navigator.mediaDevices.getDisplayMedia({
+                video: true, // Video is required to get the stream usually
+                audio: {
+                    // @ts-ignore - Experimental but powerful constraint
+                    suppressLocalAudioPlayback: true,
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: false
+                }
+            });
+
+            captureStreamRef.current = stream;
+
+            // We only care about the audio track
+            const audioTrack = stream.getAudioTracks()[0];
+            if (!audioTrack) {
+                alert("No audio track found! Did you check 'Share tab audio'?");
+                stream.getTracks().forEach(t => t.stop());
+                return;
+            }
+
+            // Create Audio Context if not exists
+            const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+            const ac = new AudioContext();
+            captureContextRef.current = ac;
+
+            // Create Source from Stream
+            const source = ac.createMediaStreamSource(stream);
+
+            // Create EQ Filters & Analyser
+            const frequencies = [60, 250, 1000, 4000, 12000];
+            const types: BiquadFilterType[] = ['lowshelf', 'peaking', 'peaking', 'peaking', 'highshelf'];
+
+            const newFilters = frequencies.map((freq, i) => {
+                const filter = ac.createBiquadFilter();
+                filter.type = types[i];
+                filter.frequency.value = freq;
+                filter.gain.value = 0;
+                filter.Q.value = 1.0;
+                return filter;
+            });
+
+            const analyserNode = ac.createAnalyser();
+            analyserNode.fftSize = 2048;
+            analyserNode.smoothingTimeConstant = 0.6;
+
+            // Connect Graph: Source -> Filters -> Analyser -> Destination
+            let currentNode: AudioNode = source;
+            newFilters.forEach(filter => {
+                currentNode.connect(filter);
+                currentNode = filter;
+            });
+            currentNode.connect(analyserNode);
+            analyserNode.connect(ac.destination);
+
+            // Update State
+            filtersRef.current = newFilters;
+            analyserRef.current = analyserNode;
+            setAnalyser(analyserNode); // Trigger visualizer
+            setShowEQ(true); // Open EQ
+
+            // Handle Stream End (User stops sharing)
+            audioTrack.onended = () => {
+                ac.close();
+                setAnalyser(null);
+                filtersRef.current = [];
+                captureContextRef.current = null;
+                captureStreamRef.current = null;
+            };
+
+            // Alert user
+            alert("Audio Captured! \n\nWe attempted to auto-mute the original tab. If you still hear an echo, please manually Mute the original tab (Right Click Tab -> Mute Site).");
+
+        } catch (err) {
+            console.error("Error capturing audio:", err);
+        }
+    };
+
+
+    // --- Pop-Out Logic ---
+    const handlePopOut = () => {
+        if (!currentTrack?.track_url) return;
+
+        let url = currentTrack.track_url;
+        // Optimization: Use embed URL for YouTube
+        const ytEmbed = getYoutubeEmbedUrl(url);
+        if (ytEmbed) url = ytEmbed + '?autoplay=1';
+
+        window.open(url, 'MusicPlayer', 'width=500,height=600,menubar=no,toolbar=no,location=no,status=no');
+    };
+
     const renderSpotifyPlayer = () => {
         if (spotifyError) {
             return (
@@ -474,33 +748,62 @@ const WebPlayer: React.FC = () => {
                 </div>
 
                 {/* Controls & Volume - Bottom Left */}
-                <div className="flex items-center gap-4 mt-4">
-                    <button
-                        onClick={handleSpotifyPlayPause}
-                        disabled={!deviceId}
-                        className={`w-10 h-10 flex items-center justify-center rounded-full transition-transform shadow-lg shadow-white/10 ${!deviceId ? 'bg-white/20 cursor-not-allowed text-white/50' : 'bg-white text-black hover:scale-105'
-                            }`}
-                    >
-                        {!deviceId ? (
-                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        ) : (
-                            isSpotifyPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />
-                        )}
-                    </button>
-
-                    <div className="flex items-center gap-2 group">
-                        <button onClick={toggleMute} className="text-white/60 hover:text-white transition-colors">
-                            {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                <div className="flex items-center justify-between mt-4">
+                    <div className="flex items-center gap-4">
+                        <button
+                            onClick={handleSpotifyPlayPause}
+                            disabled={!deviceId}
+                            className={`w-10 h-10 flex items-center justify-center rounded-full transition-transform shadow-lg shadow-white/10 ${!deviceId ? 'bg-white/20 cursor-not-allowed text-white/50' : 'bg-white text-black hover:scale-105'
+                                }`}
+                        >
+                            {!deviceId ? (
+                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            ) : (
+                                isSpotifyPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />
+                            )}
                         </button>
-                        <input
-                            type="range"
-                            min="0"
-                            max="1"
-                            step="0.05"
-                            value={isMuted ? 0 : volume}
-                            onChange={onSpotifyVolumeChange}
-                            className="w-16 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white opacity-50 group-hover:opacity-100 transition-opacity"
-                        />
+
+                        <div className="flex items-center gap-2 group">
+                            <button onClick={toggleMute} className="text-white/60 hover:text-white transition-colors">
+                                {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                            </button>
+                            <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.05"
+                                value={isMuted ? 0 : volume}
+                                onChange={onSpotifyVolumeChange}
+                                className="w-16 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white opacity-50 group-hover:opacity-100 transition-opacity"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Controls Right */}
+                    <div className="flex items-center gap-2">
+                        <button
+                            className="p-2 text-white/60 hover:text-white transition-colors"
+                            onClick={handlePopOut}
+                            title="Pop Out Player (Easier Capture)"
+                        >
+                            <ExternalLink size={18} />
+                        </button>
+                        <button
+                            className="p-2 text-white/60 hover:text-white transition-colors"
+                            onClick={handleCaptureAudio}
+                            title="Capture System Audio (Spotify/YouTube)"
+                        >
+                            <LogIn size={18} />
+                        </button>
+
+                        {/* EQ Toggle */}
+                        <button
+                            onClick={() => setShowEQ(!showEQ)}
+                            className={`p-2 rounded-lg transition-all ${showEQ ? 'bg-purple-900/50 text-purple-300' : 'bg-white/5 text-white/40 hover:text-white hover:bg-white/10'}`}
+                            title="Toggle EQ Visualizer"
+                        >
+                            <Activity size={18} />
+                        </button>
                     </div>
                 </div>
             </div>
@@ -510,8 +813,32 @@ const WebPlayer: React.FC = () => {
     const renderYoutubePlayer = () => {
         const embedUrl = getYoutubeEmbedUrl(currentTrack!.track_url);
         return embedUrl ? (
-            <div className="w-full h-full rounded-xl overflow-hidden shadow-2xl border border-white/10 bg-black">
+            <div className="w-full h-full rounded-xl overflow-hidden shadow-2xl border border-white/10 bg-black relative group">
                 <iframe src={embedUrl} title="YouTube video player" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen className="w-full h-full"></iframe>
+                {/* Overlay Toggle for Video Players */}
+                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                    <button
+                        onClick={handlePopOut}
+                        className="p-2 rounded-lg backdrop-blur-md bg-black/40 text-white/60 hover:text-white"
+                        title="Pop Out Player"
+                    >
+                        <ExternalLink size={18} />
+                    </button>
+                    <button
+                        onClick={handleCaptureAudio}
+                        className="p-2 rounded-lg backdrop-blur-md bg-black/40 text-white/60 hover:text-white"
+                        title="Capture Audio"
+                    >
+                        <LogIn size={18} />
+                    </button>
+                    <button
+                        onClick={() => setShowEQ(!showEQ)}
+                        className={`p-2 rounded-lg backdrop-blur-md transition-all ${showEQ ? 'bg-purple-900/80 text-purple-300' : 'bg-black/40 text-white/60 hover:text-white'}`}
+                        title="Toggle EQ Visualizer"
+                    >
+                        <Activity size={18} />
+                    </button>
+                </div>
             </div>
         ) : <div className="flex items-center justify-center h-full text-white/50">Invalid YouTube URL</div>;
     };
@@ -519,8 +846,32 @@ const WebPlayer: React.FC = () => {
     const renderSoundCloudPlayer = () => {
         const embedUrl = `https://w.soundcloud.com/player/?url=${encodeURIComponent(currentTrack!.track_url)}&color=%23ff5500&auto_play=false&hide_related=false&show_comments=true&show_user=true&show_reposts=false&show_teaser=true&visual=true`;
         return (
-            <div className="w-full h-full rounded-xl overflow-hidden shadow-2xl border border-white/10 bg-black">
+            <div className="w-full h-full rounded-xl overflow-hidden shadow-2xl border border-white/10 bg-black relative group">
                 <iframe width="100%" height="100%" scrolling="no" frameBorder="no" allow="autoplay" src={embedUrl}></iframe>
+                {/* Overlay Toggle for Soundcloud */}
+                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                    <button
+                        onClick={handlePopOut}
+                        className="p-2 rounded-lg backdrop-blur-md bg-black/40 text-white/60 hover:text-white"
+                        title="Pop Out Player"
+                    >
+                        <ExternalLink size={18} />
+                    </button>
+                    <button
+                        onClick={handleCaptureAudio}
+                        className="p-2 rounded-lg backdrop-blur-md bg-black/40 text-white/60 hover:text-white"
+                        title="Capture Audio"
+                    >
+                        <LogIn size={18} />
+                    </button>
+                    <button
+                        onClick={() => setShowEQ(!showEQ)}
+                        className={`p-2 rounded-lg backdrop-blur-md transition-all ${showEQ ? 'bg-purple-900/80 text-purple-300' : 'bg-black/40 text-white/60 hover:text-white'}`}
+                        title="Toggle EQ Visualizer"
+                    >
+                        <Activity size={18} />
+                    </button>
+                </div>
             </div>
         );
     };
@@ -538,44 +889,55 @@ const WebPlayer: React.FC = () => {
                 style={{ filter: 'drop-shadow(0 0 4px rgba(168, 85, 247, 0.6))' }} // Neon glow effect
             />
 
-            <div className="flex items-center gap-6">
-                <button
-                    onClick={onPlayPause}
-                    disabled={!isWaveSurferReady}
-                    className={`w-12 h-12 flex items-center justify-center rounded-full transition-transform shadow-lg ${!isWaveSurferReady
-                        ? 'bg-white/20 cursor-not-allowed text-white/50'
-                        : 'bg-white text-black hover:scale-105'
-                        }`}
-                >
-                    {!isWaveSurferReady ? (
-                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    ) : (
-                        isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-1" />
-                    )}
-                </button>
-
-                <div className="flex-1 flex items-center gap-3">
-                    <span className="text-xs text-white/60 font-mono w-10 text-right">{formatTime(currentTime)}</span>
-                    <div className="h-1 flex-1 bg-white/10 rounded-full overflow-hidden">
-                        <div className="h-full bg-purple-500 w-full origin-left transform scale-x-0 transition-transform" style={{ transform: `scaleX(${duration ? currentTime / duration : 0})` }} />
-                    </div>
-                    <span className="text-xs text-white/60 font-mono w-10">{formatTime(duration)}</span>
-                </div>
-
-                <div className="flex items-center gap-3 group">
-                    <button onClick={toggleMute} className="text-white/60 hover:text-white transition-colors">
-                        {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-6 flex-1">
+                    <button
+                        onClick={onPlayPause}
+                        disabled={!isWaveSurferReady}
+                        className={`w-12 h-12 flex items-center justify-center rounded-full transition-transform shadow-lg ${!isWaveSurferReady
+                            ? 'bg-white/20 cursor-not-allowed text-white/50'
+                            : 'bg-white text-black hover:scale-105'
+                            }`}
+                    >
+                        {!isWaveSurferReady ? (
+                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : (
+                            isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-1" />
+                        )}
                     </button>
-                    <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.05"
-                        value={isMuted ? 0 : volume}
-                        onChange={onVolumeChange}
-                        className="w-20 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white opacity-0 group-hover:opacity-100 transition-opacity"
-                    />
+
+                    <div className="flex-1 flex items-center gap-3">
+                        <span className="text-xs text-white/60 font-mono w-10 text-right">{formatTime(currentTime)}</span>
+                        <div className="h-1 flex-1 bg-white/10 rounded-full overflow-hidden">
+                            <div className="h-full bg-purple-500 w-full origin-left transform scale-x-0 transition-transform" style={{ transform: `scaleX(${duration ? currentTime / duration : 0})` }} />
+                        </div>
+                        <span className="text-xs text-white/60 font-mono w-10">{formatTime(duration)}</span>
+                    </div>
+
+                    <div className="flex items-center gap-3 group">
+                        <button onClick={toggleMute} className="text-white/60 hover:text-white transition-colors">
+                            {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                        </button>
+                        <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.05"
+                            value={isMuted ? 0 : volume}
+                            onChange={onVolumeChange}
+                            className="w-20 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white opacity-0 group-hover:opacity-100 transition-opacity"
+                        />
+                    </div>
                 </div>
+
+                {/* EQ Toggle */}
+                <button
+                    onClick={() => setShowEQ(!showEQ)}
+                    className={`ml-4 p-2 rounded-lg transition-all ${showEQ ? 'bg-purple-900/50 text-purple-300' : 'bg-white/5 text-white/40 hover:text-white hover:bg-white/10'}`}
+                    title="Toggle EQ Visualizer"
+                >
+                    <Activity size={20} />
+                </button>
             </div>
         </div>
     );
@@ -602,16 +964,32 @@ const WebPlayer: React.FC = () => {
         : "w-full relative p-2"; // Compact Audio mode
 
     return (
-        <div className="w-full bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden transition-all duration-500 hover:border-white/20">
-            {/* Main Player Container */}
-            <div className={containerClass}>
-                {/* Background Gradient Mesh - Only for Audio or if needed */}
-                <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 via-black to-blue-900/20 z-0 pointer-events-none" />
+        <div className="flex flex-col gap-2 transition-all duration-300">
+            <div className="w-full bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden transition-all duration-500 hover:border-white/20">
+                {/* Main Player Container */}
+                <div className={containerClass}>
+                    {/* Background Gradient Mesh - Only for Audio or if needed */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 via-black to-blue-900/20 z-0 pointer-events-none" />
 
-                {/* Content */}
-                <div className="relative z-10 w-full h-full">
-                    {renderContent()}
+                    {/* Content */}
+                    <div className="relative z-10 w-full h-full">
+                        {renderContent()}
+                    </div>
                 </div>
+            </div>
+
+            {/* EQ Visualizer Section (Expands Down) */}
+            <div className={`overflow-hidden transition-all duration-500 ease-in-out ${showEQ ? 'max-h-[300px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                <EQVisualizer
+                    className="w-full h-[250px]"
+                    onClose={() => setShowEQ(false)}
+                    onBandsChange={handleEQChange}
+                    analyser={analyser}
+                    onExport={(text) => {
+                        window.dispatchEvent(new CustomEvent('ADD_REVIEW_NOTE', { detail: text }));
+                    }}
+                />
+
             </div>
         </div>
     );

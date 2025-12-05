@@ -3,7 +3,8 @@ import { useSessionStore, Session } from '../../stores/sessionStore';
 import { useQueueStore } from '../../stores/queueStore';
 import api from '../../services/api';
 import { PriorityTier, ReviewerProfile } from '../../types';
-import { MessageSquare, ChevronDown, ChevronUp, Power, Plus, Settings, Radio } from 'lucide-react';
+import { MessageSquare, ChevronDown, ChevronUp, Power, Plus, Settings, Radio, Wallet } from 'lucide-react';
+import WalletModal from '../WalletModal';
 
 interface SessionManagerProps {
   reviewerId?: string;
@@ -15,6 +16,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ reviewerId }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isWalletOpen, setIsWalletOpen] = useState(false);
   const [tiers, setTiers] = useState<PriorityTier[]>([
     { value: 0, label: 'Free', color: 'gray' },
     { value: 5, label: '$5 Tier', color: 'green' },
@@ -108,7 +110,7 @@ const SessionManager: React.FC<SessionManagerProps> = ({ reviewerId }) => {
     setError(null);
     try {
       const url = reviewerId ? `/sessions?reviewer_id=${reviewerId}` : '/sessions';
-      await api.post(url, {
+      const response = await api.post(url, {
         name: newSessionName,
         open_queue_tiers: tiers.map(t => t.value)
       });
@@ -204,158 +206,195 @@ const SessionManager: React.FC<SessionManagerProps> = ({ reviewerId }) => {
   };
 
   return (
-    <div className="relative z-40" ref={dropdownRef}>
-      {/* Main Header Bar */}
-      <div className="bg-gray-800/80 backdrop-blur-md border border-white/10 rounded-xl p-2 flex items-center justify-between shadow-lg">
+    <>
+      <div className="relative z-40" ref={dropdownRef}>
+        {/* Main Header Bar */}
+        <div className="bg-gray-800/80 backdrop-blur-md border border-white/10 rounded-xl p-2 flex items-center justify-between shadow-lg">
 
-        {/* Left: Session Selector Trigger */}
-        <button
-          onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 transition-colors text-left group"
-        >
-          <div className={`p-1.5 rounded-md ${activeSession ? 'bg-green-500/20 text-green-400' : 'bg-gray-700 text-gray-400'}`}>
-            <Radio className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="text-xs text-white/40 font-medium uppercase tracking-wider">Current Session</div>
-            <div className="text-sm font-bold text-white flex items-center gap-2">
-              {activeSession ? activeSession.name : 'No Active Session'}
-              {isDropdownOpen ? <ChevronUp className="w-3 h-3 text-white/40" /> : <ChevronDown className="w-3 h-3 text-white/40" />}
+          {/* Left: Session Selector Trigger */}
+          <button
+            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 transition-colors text-left group"
+          >
+            <div className={`p-1.5 rounded-md ${activeSession ? 'bg-green-500/20 text-green-400' : 'bg-gray-700 text-gray-400'}`}>
+              <Radio className="w-4 h-4" />
             </div>
-          </div>
-        </button>
+            <div>
+              <div className="text-xs text-white/40 font-medium uppercase tracking-wider">Current Session</div>
+              <div className="text-sm font-bold text-white flex items-center gap-2">
+                {activeSession ? activeSession.name : 'No Active Session'}
+                {isDropdownOpen ? <ChevronUp className="w-3 h-3 text-white/40" /> : <ChevronDown className="w-3 h-3 text-white/40" />}
+              </div>
+            </div>
+          </button>
 
-        {/* Right: Actions & Status */}
-        <div className="flex items-center gap-2 pr-2">
-          {/* Live Status Badge */}
-          {isLive && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/20 animate-pulse mr-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
-              <span className="text-xs font-bold text-red-500 uppercase tracking-wider">Live</span>
+          {/* Center: Queue Gates (Compact) */}
+          {activeSession && (
+            <div className="flex-1 flex items-center justify-center gap-1.5 px-4 overflow-x-auto no-scrollbar mask-gradient">
+              {tiers.map((tier) => {
+                const isOpen = activeSession.open_queue_tiers?.includes(tier.value);
+                const styles = getTierStyles(tier.color);
+                // Extract simplified label (e.g. "$5" instead of "$5 Tier") if possible, or use full label
+                const shortLabel = tier.label.replace(' Tier', '').replace('+', '');
+
+                return (
+                  <button
+                    key={tier.value}
+                    onClick={() => toggleGate(tier.value)}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all border whitespace-nowrap ${isOpen
+                      ? `bg-transparent ${styles.border} ${styles.text} ${styles.shadow}`
+                      : 'bg-white/5 border-transparent text-white/30 hover:bg-white/10 hover:text-white/60'
+                      }`}
+                    title={`Toggle ${tier.label} Queue`}
+                  >
+                    {shortLabel}
+                  </button>
+                );
+
+              })}
             </div>
           )}
 
-          {/* Chat Toggle Button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (reviewerId) {
-                window.open(`/chat/${reviewerId}`, '_blank', 'width=400,height=600');
-              }
-            }}
-            className="p-2.5 rounded-lg transition-all flex items-center gap-2 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
-            title="Open Live Chat"
-          >
-            <MessageSquare className="w-4 h-4" />
-            <span className="text-sm font-medium hidden sm:block">Chat</span>
-          </button>
-        </div>
-      </div>
+          {/* Right: Actions & Status */}
 
-      {/* Dropdown Menu */}
-      {isDropdownOpen && (
-        <div className="absolute top-full left-0 mt-2 w-full md:w-96 bg-gray-900 border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-
-          {/* Header of Dropdown */}
-          <div className="p-4 border-b border-white/5 bg-white/5 flex justify-between items-center">
-            <h3 className="font-bold text-white flex items-center gap-2">
-              <Settings className="w-4 h-4 text-white/40" />
-              Session Manager
-            </h3>
-            {activeSession && (
-              <button
-                onClick={handleEndSession}
-                className="text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 px-2 py-1 rounded border border-red-500/20 transition-colors flex items-center gap-1"
-              >
-                <Power className="w-3 h-3" />
-                End Session
-              </button>
+          <div className="flex items-center gap-2 pr-2">
+            {/* Live Status Badge */}
+            {isLive && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/20 animate-pulse mr-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
+                <span className="text-xs font-bold text-red-500 uppercase tracking-wider">Live</span>
+              </div>
             )}
+
+            {/* Wallet Button */}
             <button
-              onClick={() => window.location.href = '/settings/reviewer'}
-              className="text-xs bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white px-2 py-1 rounded border border-white/10 transition-colors flex items-center gap-1 ml-2"
+              onClick={() => setIsWalletOpen(true)}
+              className="p-2.5 rounded-lg transition-all flex items-center gap-2 bg-white/5 text-white/60 hover:bg-white/10 hover:text-green-400"
+              title="Open Wallet"
             >
-              <Settings className="w-3 h-3" />
-              Config
+              <Wallet className="w-4 h-4" />
+              <span className="text-sm font-medium hidden sm:block">Wallet</span>
+            </button>
+
+            {/* Chat Toggle Button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (reviewerId) {
+                  window.open(`/chat/${reviewerId}`, '_blank', 'width=400,height=600');
+                }
+              }}
+              className="p-2.5 rounded-lg transition-all flex items-center gap-2 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
+              title="Open Live Chat"
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span className="text-sm font-medium hidden sm:block">Chat</span>
             </button>
           </div>
+        </div>
 
-          <div className="p-4 space-y-6">
-            {error && <div className="text-red-400 text-sm bg-red-500/10 p-3 rounded-lg border border-red-500/20">{error}</div>}
+        {/* Dropdown Menu */}
+        {isDropdownOpen && (
+          <div className="absolute top-full left-0 mt-2 w-full md:w-96 bg-gray-900 border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
 
-            {/* Active Session Controls */}
-            {activeSession ? (
-              <div className="space-y-3">
-                <label className="text-xs font-bold text-white/40 uppercase tracking-wider">Queue Gates</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {tiers.map((tier) => {
-                    const isOpen = activeSession.open_queue_tiers?.includes(tier.value);
-                    const styles = getTierStyles(tier.color);
-                    return (
-                      <button
-                        key={tier.value}
-                        onClick={() => toggleGate(tier.value)}
-                        className={`px-3 py-2 rounded-lg text-xs font-bold transition-all border flex items-center justify-between ${isOpen
-                          ? `bg-transparent ${styles.border} ${styles.text} ${styles.shadow}`
-                          : 'bg-white/5 border-transparent text-white/40 hover:bg-white/10 hover:text-white'
-                          }`}
-                      >
-                        <span>{tier.label}</span>
-                        <div className={`w-2 h-2 rounded-full ${isOpen ? 'bg-current' : 'bg-white/20'}`} />
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              /* Create New Session */
-              <div className="space-y-3">
-                <label className="text-xs font-bold text-white/40 uppercase tracking-wider">Start New Session</label>
-                <form onSubmit={handleCreateSession} className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newSessionName}
-                    onChange={(e) => setNewSessionName(e.target.value)}
-                    placeholder="Session Name (e.g. Friday Vibes)"
-                    className="bg-black/20 text-white text-sm p-2.5 rounded-lg border border-white/10 flex-grow focus:outline-none focus:border-blue-500/50"
-                  />
-                  <button
-                    type="submit"
-                    className="bg-blue-600 hover:bg-blue-500 text-white p-2.5 rounded-lg transition-colors"
-                    disabled={!newSessionName.trim()}
-                  >
-                    <Plus className="w-5 h-5" />
-                  </button>
-                </form>
-              </div>
-            )}
+            {/* Header of Dropdown */}
+            <div className="p-4 border-b border-white/5 bg-white/5 flex justify-between items-center">
+              <h3 className="font-bold text-white flex items-center gap-2">
+                <Settings className="w-4 h-4 text-white/40" />
+                Session Manager
+              </h3>
+              {activeSession && (
+                <button
+                  onClick={handleEndSession}
+                  className="text-xs bg-red-500/10 text-red-400 hover:bg-red-500/20 px-2 py-1 rounded border border-red-500/20 transition-colors flex items-center gap-1"
+                >
+                  <Power className="w-3 h-3" />
+                  End Session
+                </button>
+              )}
+              <button
+                onClick={() => window.location.href = '/settings/reviewer'}
+                className="text-xs bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white px-2 py-1 rounded border border-white/10 transition-colors flex items-center gap-1 ml-2"
+              >
+                <Settings className="w-3 h-3" />
+                Config
+              </button>
+            </div>
 
-            {/* Switch Session List */}
-            <div className="space-y-2 pt-4 border-t border-white/5">
-              <label className="text-xs font-bold text-white/40 uppercase tracking-wider">Switch Session</label>
-              <div className="max-h-40 overflow-y-auto space-y-1 pr-1 scrollbar-thin scrollbar-thumb-white/10">
-                {sessions.length === 0 && <div className="text-sm text-white/20 italic">No other sessions found.</div>}
-                {sessions.map(s => (
-                  <div key={s.id} className="flex justify-between items-center p-2 hover:bg-white/5 rounded-lg group transition-colors">
-                    <span className={`text-sm font-medium ${s.id === activeSession?.id ? 'text-green-400' : 'text-white/60 group-hover:text-white'}`}>
-                      {s.name}
-                    </span>
-                    {s.id !== activeSession?.id && (
-                      <button
-                        onClick={() => handleActivateSession(s.id)}
-                        className="text-xs bg-white/5 hover:bg-white/10 text-white/60 hover:text-white px-2 py-1 rounded transition-colors"
-                      >
-                        Activate
-                      </button>
-                    )}
+            <div className="p-4 space-y-6">
+              {error && <div className="text-red-400 text-sm bg-red-500/10 p-3 rounded-lg border border-red-500/20">{error}</div>}
+
+              {/* Active Session Controls */}
+              {activeSession ? (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center text-xs font-bold text-white/40 uppercase tracking-wider">
+                    <span>Queue Gates Mobile/Extended</span>
                   </div>
-                ))}
+                  {/* Keep duplicate in dropdown for mobile or detailed view if needed, or remove? User asked to move. 
+                      I will replace with a simple message or removal. 
+                      actually, let's keep it but simplified or remove entirely if it fits in top bar. 
+                      Given the user's request "move ... into main bar", I will remove it from here to declutter. 
+                  */}
+                  <p className="text-xs text-white/30 italic">Queue gates are now in the top bar.</p>
+                </div>
+
+              ) : (
+                /* Create New Session */
+                <div className="space-y-3">
+                  <label className="text-xs font-bold text-white/40 uppercase tracking-wider">Start New Session</label>
+                  <form onSubmit={handleCreateSession} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newSessionName}
+                      onChange={(e) => setNewSessionName(e.target.value)}
+                      placeholder="Session Name (e.g. Friday Vibes)"
+                      className="bg-black/20 text-white text-sm p-2.5 rounded-lg border border-white/10 flex-grow focus:outline-none focus:border-blue-500/50"
+                    />
+                    <button
+                      type="submit"
+                      className="bg-blue-600 hover:bg-blue-500 text-white p-2.5 rounded-lg transition-colors"
+                      disabled={!newSessionName.trim()}
+                    >
+                      <Plus className="w-5 h-5" />
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {/* Switch Session List */}
+              <div className="space-y-2 pt-4 border-t border-white/5">
+                <label className="text-xs font-bold text-white/40 uppercase tracking-wider">Switch Session</label>
+                <div className="max-h-40 overflow-y-auto space-y-1 pr-1 scrollbar-thin scrollbar-thumb-white/10">
+                  {sessions.length === 0 && <div className="text-sm text-white/20 italic">No other sessions found.</div>}
+                  {sessions.map(s => (
+                    <div key={s.id} className="flex justify-between items-center p-2 hover:bg-white/5 rounded-lg group transition-colors">
+                      <span className={`text-sm font-medium ${s.id === activeSession?.id ? 'text-green-400' : 'text-white/60 group-hover:text-white'}`}>
+                        {s.name}
+                      </span>
+                      {s.id !== activeSession?.id && (
+                        <button
+                          onClick={() => handleActivateSession(s.id)}
+                          className="text-xs bg-white/5 hover:bg-white/10 text-white/60 hover:text-white px-2 py-1 rounded transition-colors"
+                        >
+                          Activate
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div >
+
+      {/* Wallet Modal */}
+      < WalletModal
+        isOpen={isWalletOpen}
+        onClose={() => setIsWalletOpen(false)}
+        reviewerId={reviewerId || ''}
+      />
+    </>
   );
 };
 

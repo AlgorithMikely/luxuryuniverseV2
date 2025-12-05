@@ -224,9 +224,14 @@ const AdminPage = () => {
     <div className="container mx-auto p-4 text-white">
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">Admin - Manage Reviewers</h1>
-        <Link to="/admin/economy" className="btn bg-blue-600 px-4 py-2 rounded hover:bg-blue-700 transition-colors">
-          View Economy Logs
-        </Link>
+        <div className="flex gap-2">
+          <Link to="/admin/metrics" className="btn bg-green-600 px-4 py-2 rounded hover:bg-green-700 transition-colors">
+            View Metrics Dashboard
+          </Link>
+          <Link to="/admin/economy" className="btn bg-blue-600 px-4 py-2 rounded hover:bg-blue-700 transition-colors">
+            View Economy Logs
+          </Link>
+        </div>
       </div>
 
       {/* Global Settings */}
@@ -501,7 +506,7 @@ const PlatformFeesTable = () => {
     const fetchFees = async () => {
       try {
         const res = await api.get('/admin/platform-fees');
-        setFees(res.data);
+        setFees(res.data.items || []);
       } catch (err) {
         console.error("Failed to fetch fees", err);
       }

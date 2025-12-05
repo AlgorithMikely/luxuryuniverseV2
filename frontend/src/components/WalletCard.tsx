@@ -28,7 +28,7 @@ const WalletCard: React.FC<WalletCardProps> = ({ balance, xp, level, reviewerId 
       <div className="flex justify-between items-start relative z-10">
         <div>
           <div className="flex items-center space-x-2 mb-1">
-            <span className="text-purple-200 font-semibold text-sm uppercase tracking-wider">Luxury Coin Balance</span>
+            <span className="text-purple-200 font-semibold text-sm uppercase tracking-wider">Credits Balance</span>
           </div>
           <div className="flex items-center space-x-3">
             <Coins className="w-8 h-8 text-yellow-400" />

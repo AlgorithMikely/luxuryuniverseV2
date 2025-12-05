@@ -159,7 +159,16 @@ async def get_line_view(
                 "priority_value": sub.priority_value,
                 "track_title": sub.track_title,
                 "est_wait_minutes": wait_time,
-                "submission_id": sub.id
+                "submission_id": sub.id,
+                # Add full details for frontend usage
+                "artist": sub.artist,
+                "track_url": sub.track_url,
+                "cover_art_url": sub.cover_art_url,
+                "status": sub.status,
+                "submitted_at": sub.submitted_at.isoformat() if sub.submitted_at else None,
+                "is_priority": sub.is_priority,
+                "bookmarked": sub.bookmarked,
+                "spotlighted": sub.spotlighted
              })
 
         if sub.priority_value > 0:
@@ -175,7 +184,8 @@ async def get_line_view(
                 track_title=sub.track_title,
                 artist=sub.artist,
                 track_url=safe_track_url,
-                is_community_winner=getattr(sub, 'is_community_winner', False)
+                is_community_winner=getattr(sub, 'is_community_winner', False),
+                cover_art_url=sub.cover_art_url
             ))
         else:
             # Free Item
@@ -185,7 +195,8 @@ async def get_line_view(
                 user=sub.user.username,
                 track_title=sub.track_title,
                 artist=sub.artist,
-                track_url=safe_track_url
+                track_url=safe_track_url,
+                cover_art_url=sub.cover_art_url
             ))
             
     # 6. Get Total Waiting Count (Free)
@@ -348,6 +359,8 @@ async def vote_on_track(
 class UpgradeRequest(schemas.BaseModel):
     target_priority_value: int
     new_submissions: List[schemas.SmartSubmissionItem] = []
+    note: Optional[str] = None
+    genre: Optional[str] = None
 
 
 @router.post("/{reviewer_identifier}/submission/{submission_id}/upgrade")
@@ -413,6 +426,12 @@ async def upgrade_submission(
     submission.priority_value = target_value
     submission.is_priority = True
     
+    # Update metadata if provided
+    if request.note is not None:
+        submission.notes = request.note
+    if request.genre is not None:
+        submission.genre = request.genre
+    
     # Generate Batch ID if needed
     import uuid
     if not submission.batch_id:
@@ -420,26 +439,66 @@ async def upgrade_submission(
     
     batch_id = submission.batch_id
     
-    # 6. Create New Submissions (if any)
+    # 6. Create New Submissions (or Update Existing)
     created_submissions = []
     if request.new_submissions:
         for item in request.new_submissions:
-            new_sub = await queue_service.create_submission(
-                db=db,
-                reviewer_id=reviewer.id,
-                user_id=user.id,
-                track_url=item.track_url,
-                track_title=item.track_title or "Untitled",
-                archived_url=None, # TODO: Handle file uploads if needed, but for now assuming links or pre-uploaded
-                batch_id=batch_id,
-                sequence_order=item.sequence_order,
-                hook_start_time=item.hook_start_time,
-                hook_end_time=item.hook_end_time,
-                priority_value=target_value,
-                artist=item.artist,
-                genre=item.genre
-            )
-            created_submissions.append(new_sub)
+            if item.id:
+                # Update existing submission
+                existing_sub_stmt = select(models.Submission).where(models.Submission.id == item.id)
+                existing_sub_result = await db.execute(existing_sub_stmt)
+                existing_sub = existing_sub_result.scalars().first()
+                
+                if existing_sub and existing_sub.user_id == user.id:
+                    existing_sub.priority_value = target_value
+                    existing_sub.is_priority = True
+                    existing_sub.batch_id = batch_id
+                    existing_sub.sequence_order = item.sequence_order
+                    if item.note:
+                        existing_sub.notes = item.note
+                    # Update other fields if provided? 
+                    # For now, we trust the existing data but update sequence/batch
+                    created_submissions.append(existing_sub)
+                else:
+                    # If not found or not owned, maybe log warning? 
+                    # Let's treat as new but warn.
+                    logger.warning(f"Submission {item.id} not found or not owned by user {user.id} during upgrade. Creating new.")
+                    # Fallback to create new
+                    new_sub = await queue_service.create_submission(
+                        db=db,
+                        reviewer_id=reviewer.id,
+                        user_id=user.id,
+                        track_url=item.track_url,
+                        track_title=item.track_title or "Untitled",
+                        archived_url=None,
+                        batch_id=batch_id,
+                        sequence_order=item.sequence_order,
+                        hook_start_time=item.hook_start_time,
+                        hook_end_time=item.hook_end_time,
+                        priority_value=target_value,
+                        artist=item.artist,
+                        genre=item.genre,
+                        note=item.note
+                    )
+                    created_submissions.append(new_sub)
+            else:
+                # Create new submission
+                new_sub = await queue_service.create_submission(
+                    db=db,
+                    reviewer_id=reviewer.id,
+                    user_id=user.id,
+                    track_url=item.track_url,
+                    track_title=item.track_title or "Untitled",
+                    archived_url=None, # TODO: Handle file uploads if needed, but for now assuming links or pre-uploaded
+                    batch_id=batch_id,
+                    sequence_order=item.sequence_order,
+                    hook_start_time=item.hook_start_time,
+                    hook_end_time=item.hook_end_time,
+                    priority_value=target_value,
+                    artist=item.artist,
+                    genre=item.genre
+                )
+                created_submissions.append(new_sub)
 
     await db.commit()
     

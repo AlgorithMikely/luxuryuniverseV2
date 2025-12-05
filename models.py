@@ -56,6 +56,7 @@ class User(Base):
     spotify_token_expires_at = Column(DateTime(timezone=True), nullable=True)
     avatar = Column(String, nullable=True)
     xp = Column(Integer, default=0, nullable=False)
+    credit_balance = Column(Integer, default=0, nullable=False) # Global Credits
 
     # Gamification Stats
     discord_user_id = Column(String, nullable=True)
@@ -101,12 +102,14 @@ class Reviewer(Base):
     avatar_url = Column(String, nullable=True)
     bio = Column(String, nullable=True)
     community_goal_cooldown_minutes = Column(Integer, default=5, nullable=False)
+    skip_price_credits = Column(Integer, default=100, nullable=False)
 
     user = relationship("User", back_populates="reviewer_profile")
     submissions = relationship("Submission", back_populates="reviewer")
     economy_configs = relationship("EconomyConfig", back_populates="reviewer", cascade="all, delete-orphan")
     transactions = relationship("Transaction", back_populates="reviewer")
     payment_configs = relationship("PaymentConfig", back_populates="reviewer", cascade="all, delete-orphan")
+    wallet = relationship("ReviewerWallet", back_populates="reviewer", uselist=False, cascade="all, delete-orphan")
 
     @property
     def username(self):
@@ -164,6 +167,9 @@ class Submission(Base):
     hook_start_time = Column(Integer, nullable=True) # Seconds
     hook_end_time = Column(Integer, nullable=True) # Seconds
     file_hash = Column(String, nullable=True, index=True) # SHA256 hash of the file
+    
+    # Album Art
+    cover_art_url = Column(String, nullable=True)
 
     reviewer = relationship("Reviewer", back_populates="submissions")
     user = relationship("User", back_populates="submissions")
@@ -216,6 +222,39 @@ class Wallet(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     reviewer_id = Column(Integer, ForeignKey("reviewers.id"), nullable=False)
     balance = Column(Integer, default=0, nullable=False)
+
+    reviewer = relationship("Reviewer")
+
+
+class ReviewerWallet(Base):
+    __tablename__ = "reviewer_wallets"
+    id = Column(Integer, primary_key=True, index=True)
+    reviewer_id = Column(Integer, ForeignKey("reviewers.id"), nullable=False, unique=True)
+    balance_usd = Column(Numeric(10, 4), default=0.0000, nullable=False) # High precision for internal calc
+    total_earnings_usd = Column(Numeric(10, 4), default=0.0000, nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    reviewer = relationship("Reviewer", back_populates="wallet")
+
+
+class TransactionLedger(Base):
+    __tablename__ = "transaction_ledger"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True) # Nullable for system actions
+    reviewer_id = Column(Integer, ForeignKey("reviewers.id"), nullable=True) # Nullable for platform actions
+    session_id = Column(Integer, ForeignKey("review_sessions.id"), nullable=True) # Link to specific session
+    action = Column(String, nullable=False) # 'skip', 'purchase', 'withdraw', 'adjustment'
+    credits_spent = Column(Integer, default=0, nullable=False)
+    usd_earned = Column(Numeric(10, 4), default=0.0000, nullable=False)
+    platform_revenue_usd = Column(Numeric(10, 4), default=0.0000, nullable=False) # Spread
+    exchange_rate_snapshot = Column(Numeric(10, 4), nullable=True) # e.g. 0.0075
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    meta_data = Column(JSON, nullable=True)
+    
+    # Audit Logging
+    request_id = Column(String, index=True, nullable=True)
+    ip_address = Column(String, nullable=True)
+    user_agent = Column(String, nullable=True)
 
     user = relationship("User")
     reviewer = relationship("Reviewer")

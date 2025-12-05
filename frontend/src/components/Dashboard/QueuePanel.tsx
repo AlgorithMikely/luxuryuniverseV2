@@ -252,6 +252,20 @@ const QueuePanel: React.FC<QueuePanelProps> = ({ reviewerId: propReviewerId }) =
                           <span className="ml-2 text-pink-400">(@{submission.user.tiktok_username})</span>
                         )}
                       </p>
+                      {/* Genre and Notes */}
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {submission.genre && (
+                          <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                            {submission.genre}
+                          </span>
+                        )}
+                        {submission.note && (
+                          <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-gray-700 text-gray-300 border border-gray-600 truncate max-w-[200px]">
+                            📝 {submission.note}
+                          </span>
+                        )}
+                      </div>
+
                       {priorityValue > 0 && (() => {
                         const tier = tiers.slice().sort((a, b) => b.value - a.value).find(t => priorityValue >= t.value);
                         const color = tier ? tier.color : 'gray';

@@ -8,6 +8,16 @@ def create_app():
     app = FastAPI(title="Universe Bot Main App")
 
     # Import and include routers here to avoid circular imports
+    from middleware.request_id import RequestIdMiddleware
+    app.add_middleware(RequestIdMiddleware)
+
+    # Rate Limiting
+    from slowapi import _rate_limit_exceeded_handler
+    from slowapi.errors import RateLimitExceeded
+    from middleware.rate_limit import limiter
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
     from api import auth, reviewer_api, user_api, admin_api, proxy_api, session_api, spotify_api, stripe_api, upload_api, achievements_api, soundcloud_api, paypal_api
     app.include_router(auth.router, prefix="/api")
     app.include_router(spotify_api.router, prefix="/api")

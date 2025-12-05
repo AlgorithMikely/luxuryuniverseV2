@@ -33,6 +33,19 @@ const ReviewHub: React.FC<ReviewHubProps> = ({ reviewerId }) => {
     }
   }, [currentTrack]);
 
+  // Listen for EQ export events from WebPlayer/EQVisualizer
+  useEffect(() => {
+    const handleEQExport = (e: CustomEvent) => {
+      setNotes(prev => {
+        const separator = prev ? '\n\n' : '';
+        return prev + separator + e.detail;
+      });
+    };
+
+    window.addEventListener('ADD_REVIEW_NOTE' as any, handleEQExport as any);
+    return () => window.removeEventListener('ADD_REVIEW_NOTE' as any, handleEQExport as any);
+  }, []);
+
   const syncReviewData = () => {
     if (!currentTrack) return;
     updateSubmission({

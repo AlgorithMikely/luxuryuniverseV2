@@ -73,7 +73,13 @@ export const useSubmissionSlots = ({ initialSlots = {}, defaultArtistName = "" }
                     previewUrl = data.preview_url;
                     const genre = data.primary_genre || (data.genres && data.genres.length > 0 ? data.genres[0] : "");
 
-                    const updatedItem = { ...item, track_title: title, artist, genre, preview_url: previewUrl };
+                    // Extract album art
+                    let coverArt = "";
+                    if (data.album && data.album.images && data.album.images.length > 0) {
+                        coverArt = data.album.images[0].url;
+                    }
+
+                    const updatedItem = { ...item, track_title: title, artist, genre, preview_url: previewUrl, cover_art_url: coverArt };
                     updateSlot(slotNum, updatedItem);
                 } else if (text.includes('youtube.com') || text.includes('youtu.be')) {
                     const { data } = await api.post('/proxy/metadata', { url: text });
@@ -81,7 +87,8 @@ export const useSubmissionSlots = ({ initialSlots = {}, defaultArtistName = "" }
                         ...item,
                         track_title: data.title || "YouTube Video",
                         artist: data.artist || defaultArtistName,
-                        genre: data.genre || ""
+                        genre: data.genre || "",
+                        cover_art_url: data.thumbnail || ""
                     };
                     updateSlot(slotNum, updatedItem);
                 } else if (text.includes('soundcloud.com')) {
@@ -90,7 +97,8 @@ export const useSubmissionSlots = ({ initialSlots = {}, defaultArtistName = "" }
                         ...item,
                         track_title: data.title || "SoundCloud Track",
                         artist: data.artist || defaultArtistName,
-                        genre: data.genre || ""
+                        genre: data.genre || "",
+                        cover_art_url: data.thumbnail_url || ""
                     };
                     updateSlot(slotNum, updatedItem);
                 } else {

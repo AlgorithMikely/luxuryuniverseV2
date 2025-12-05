@@ -57,6 +57,12 @@ async def get_current_active_user(
     user = await user_service.get_user_by_discord_id(db, discord_id=current_user.discord_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    # Attach roles from the token data to the user object
+    # This is necessary because the User model doesn't have a 'roles' column,
+    # but the application logic expects it (e.g. for admin checks).
+    user.roles = current_user.roles
+    
     return user
 
 def require_admin(current_user: schemas.TokenData = Depends(get_current_user)):

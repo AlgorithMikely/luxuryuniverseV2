@@ -22,12 +22,16 @@ const ReviewerSettingsPage: React.FC = () => {
     const [discordChannels, setDiscordChannels] = useState<DiscordChannel[]>([]);
     const [visibleFreeLimit, setVisibleFreeLimit] = useState<number | ''>('');
     const [maxFreeSubmissionsSession, setMaxFreeSubmissionsSession] = useState<number | ''>('');
+    const [skipPriceCredits, setSkipPriceCredits] = useState<number | ''>('');
 
     // Base Values State
     const [likesBaseTarget, setLikesBaseTarget] = useState<number | ''>('');
     const [sharesBaseTarget, setSharesBaseTarget] = useState<number | ''>('');
     const [giftsBaseTarget, setGiftsBaseTarget] = useState<number | ''>('');
     const [commentsBaseTarget, setCommentsBaseTarget] = useState<number | ''>('');
+    const [freeSkipPriorityValue, setFreeSkipPriorityValue] = useState<number | ''>('');
+    const [freeSkipColor, setFreeSkipColor] = useState<string>('cyan');
+    const [isFreeSkipColorDropdownOpen, setIsFreeSkipColorDropdownOpen] = useState(false);
 
     const [communityGoalCooldown, setCommunityGoalCooldown] = useState<number | ''>('');
     const [bio, setBio] = useState('');
@@ -165,13 +169,17 @@ const ReviewerSettingsPage: React.FC = () => {
                 setSeeTheLineChannelId(profile.see_the_line_channel_id || '');
                 setVisibleFreeLimit(profile.configuration?.visible_free_limit ?? 20);
                 setMaxFreeSubmissionsSession(profile.configuration?.max_free_submissions_session ?? '');
+                setSkipPriceCredits(profile.skip_price_credits ?? 100);
 
                 // Load Giveaway Settings
                 const settings = profile.configuration?.giveaway_settings || {};
                 setLikesBaseTarget(settings['LIKES']?.base_target ?? 10000);
                 setSharesBaseTarget(settings['SHARES']?.base_target ?? 250);
                 setGiftsBaseTarget(settings['GIFTS']?.base_target ?? 1000);
+                setGiftsBaseTarget(settings['GIFTS']?.base_target ?? 1000);
                 setCommentsBaseTarget(settings['COMMENTS']?.base_target ?? 500);
+                setFreeSkipPriorityValue(profile.configuration?.free_skip_priority_value ?? '');
+                setFreeSkipColor(profile.configuration?.free_skip_color || 'cyan');
 
                 setCommunityGoalCooldown(profile.community_goal_cooldown_minutes ?? 5);
 
@@ -300,6 +308,7 @@ const ReviewerSettingsPage: React.FC = () => {
                 see_the_line_channel_id: seeTheLineChannelId,
                 social_platform: socialPlatform,
                 social_handle: socialHandle,
+                skip_price_credits: skipPriceCredits === '' ? 100 : Number(skipPriceCredits),
                 community_goal_cooldown_minutes: communityGoalCooldown === '' ? 5 : Number(communityGoalCooldown),
                 economy_configs: economyConfigs.map(c => ({ event_name: c.event_name, coin_amount: c.coin_amount })),
                 avatar_url: avatarR2Uri || avatarUrl,
@@ -314,6 +323,8 @@ const ReviewerSettingsPage: React.FC = () => {
                         'GIFTS': { base_target: giftsBaseTarget === '' ? 1000 : Number(giftsBaseTarget), description: "Drop {target} Diamonds for a Free Skip!" },
                         'COMMENTS': { base_target: commentsBaseTarget === '' ? 500 : Number(commentsBaseTarget), description: "Chat {target} times for a Free Skip!" },
                     },
+                    free_skip_priority_value: freeSkipPriorityValue === '' ? null : Number(freeSkipPriorityValue),
+                    free_skip_color: freeSkipColor,
                     line_show_skips: lineShowSkips,
                     banner_url: bannerR2Uri || bannerUrl,
                     theme_color: themeColor,
@@ -721,6 +732,64 @@ const ReviewerSettingsPage: React.FC = () => {
                                 />
                                 <p className="text-xs text-gray-500 mt-1">Duration of cooldown after a free skip goal is reached.</p>
                             </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-400 mb-2">Free Skip Priority Value</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={freeSkipPriorityValue}
+                                    onChange={(e) => setFreeSkipPriorityValue(e.target.value === '' ? '' : parseInt(e.target.value))}
+                                    className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-purple-500"
+                                    placeholder="Auto (Lowest Paid Tier)"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Specific priority value to award for free skips. Leave empty to automatically use your lowest paid tier.
+                                </p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-400 mb-2">Free Skip Color</label>
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setIsFreeSkipColorDropdownOpen(!isFreeSkipColorDropdownOpen)}
+                                        className="flex items-center gap-2 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-purple-500 w-full md:w-64 justify-between"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span
+                                                className="w-4 h-4 rounded-full border border-gray-500"
+                                                style={{ backgroundColor: colorOptions.find(c => c.value === freeSkipColor)?.hex || '#06b6d4' }}
+                                            ></span>
+                                            <span className="capitalize text-gray-200">
+                                                {colorOptions.find(c => c.value === freeSkipColor)?.name || 'Cyan'}
+                                            </span>
+                                        </div>
+                                        <span className="text-xs text-gray-500">▼</span>
+                                    </button>
+
+                                    {isFreeSkipColorDropdownOpen && (
+                                        <>
+                                            <div className="fixed inset-0 z-10" onClick={() => setIsFreeSkipColorDropdownOpen(false)}></div>
+                                            <div className="absolute top-full mt-1 left-0 w-full md:w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-20 max-h-60 overflow-y-auto">
+                                                {colorOptions.map((option) => (
+                                                    <button
+                                                        key={option.value}
+                                                        onClick={() => {
+                                                            setFreeSkipColor(option.value);
+                                                            setIsFreeSkipColorDropdownOpen(false);
+                                                        }}
+                                                        className="w-full text-left px-3 py-2 hover:bg-gray-700 flex items-center gap-2 transition-colors"
+                                                    >
+                                                        <span className="w-3 h-3 rounded-full" style={{ backgroundColor: option.hex }}></span>
+                                                        <span className="text-sm text-gray-200">{option.name}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                                <p className="text-xs text-gray-500 mt-2">
+                                    Color for "Free Skip Winner" submissions on the line page.
+                                </p>
+                            </div>
                         </div>
                     </section>
 
@@ -891,6 +960,43 @@ const ReviewerSettingsPage: React.FC = () => {
                             >
                                 <RotateCcw size={14} /> Reset Defaults
                             </button>
+                        </div>
+
+                        {/* Skip Price Settings */}
+                        <div className="bg-gray-700/50 p-4 rounded-lg mb-6 flex flex-col md:flex-row gap-6 items-center border border-gray-700">
+                            <div className="flex-1">
+                                <label className="block text-sm font-medium text-gray-300 mb-2">Base Skip Price (Credits)</label>
+                                <input
+                                    type="number"
+                                    min="100"
+                                    step="100"
+                                    value={skipPriceCredits}
+                                    onChange={(e) => setSkipPriceCredits(parseInt(e.target.value) || '')}
+                                    className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:border-purple-500 text-white"
+                                />
+                                <p className="text-xs text-gray-500 mt-2">
+                                    Cost for a single skip (Priority 1). Higher tiers multiply this value.
+                                    <br />
+                                    <span className="text-purple-400">100 Credits = $1.00 USD</span>
+                                </p>
+                            </div>
+                            <div className="flex-1 bg-gray-900/50 p-4 rounded border border-gray-700 w-full">
+                                <h4 className="text-sm font-bold text-purple-400 mb-3 uppercase tracking-wider">Earnings Calculator</h4>
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-gray-400">User Pays</span>
+                                        <span className="text-white font-bold">${((Number(skipPriceCredits) || 0) / 100).toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-gray-400">Platform Fee (25%)</span>
+                                        <span className="text-red-400">-${((Number(skipPriceCredits) || 0) * 0.0025).toFixed(2)}</span>
+                                    </div>
+                                    <div className="border-t border-gray-700 pt-2 mt-2 flex justify-between items-center">
+                                        <span className="text-sm font-bold text-white">You Earn</span>
+                                        <span className="text-green-400 font-bold text-lg">${((Number(skipPriceCredits) || 0) * 0.0075).toFixed(2)}</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         {/* Tier List */}

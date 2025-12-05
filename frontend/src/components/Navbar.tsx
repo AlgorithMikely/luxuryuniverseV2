@@ -246,6 +246,13 @@ const Navbar = () => {
                       >
                         Admin Dashboard
                       </Link>
+                      <Link
+                        to="/admin/metrics"
+                        className="block px-4 py-2.5 text-sm text-green-400 hover:bg-gray-800 hover:text-green-300 font-medium transition-colors"
+                        onClick={() => setIsProfileOpen(false)}
+                      >
+                        Platform Metrics
+                      </Link>
                     </div>
                   )}
 

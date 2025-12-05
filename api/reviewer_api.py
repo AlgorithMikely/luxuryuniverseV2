@@ -143,7 +143,7 @@ async def submit_smart(
                     # We need economy_service
                     # And a reviewer_id. We can use the current reviewer_id from the request.
                     try:
-                        await economy_service.add_coins(db, reviewer_id, current_user.id, tiktok_account.pending_coins, "Retroactive TikTok rewards")
+                        await economy_service.purchase_credits(db, current_user.id, tiktok_account.pending_coins, 0.0, "tiktok_reward", "retroactive")
                         tiktok_account.pending_coins = 0
                     except Exception as e:
                         logging.error(f"Failed to transfer pending coins: {e}")
@@ -245,25 +245,27 @@ async def submit_smart(
              
         if submissions_per_bundle > 1:
             bundles_needed = math.ceil(count / submissions_per_bundle)
-            cost_for_group = bundles_needed * priority_value * 100
+            cost_for_group = bundles_needed * priority_value * reviewer.skip_price_credits
         else:
-            cost_for_group = count * priority_value * 100
+            cost_for_group = count * priority_value * reviewer.skip_price_credits
             
         total_cost += cost_for_group
 
     if total_cost > 0:
-        current_balance = await economy_service.get_balance(db, reviewer_id, current_user.id)
+        # Check global credit balance
+        current_balance = await economy_service.get_user_credit_balance(db, current_user.id)
         if current_balance < total_cost:
             raise HTTPException(status_code=402, detail=f"Insufficient balance. Required: {total_cost}, Available: {current_balance}")
 
-        # Deduct coins
+        # Process Atomic Transaction (Deduct Credits -> Credit Reviewer USD)
         try:
-            await economy_service.deduct_coins(db, reviewer_id, current_user.id, total_cost, "submission_fee")
+            session_id = active_session.id if active_session else None
+            await economy_service.process_skip_transaction(db, current_user.id, reviewer_id, total_cost, "submission_fee", session_id=session_id)
         except ValueError as e:
-            raise HTTPException(status_code=402, detail=f"Insufficient balance: {str(e)}")
+            raise HTTPException(status_code=402, detail=f"Transaction failed: {str(e)}")
         except Exception as e:
             import logging
-            logging.error(f"Deduction failed: {e}")
+            logging.error(f"Payment processing failed: {e}")
             raise HTTPException(status_code=500, detail="Payment processing failed. Please contact support.")
 
     # 2. Handle Files and Create Submissions
@@ -494,7 +496,9 @@ async def submit_smart(
             priority_value=item.priority_value,
             artist=item.artist,
             genre=item.genre,
-            file_hash=final_file_hash
+            file_hash=final_file_hash,
+            cover_art_url=item.cover_art_url,
+            note=item.note
         )
         
         created_submissions.append(submission)

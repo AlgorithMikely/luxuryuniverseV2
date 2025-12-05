@@ -80,8 +80,12 @@ const SubmissionSlot: React.FC<SubmissionSlotProps> = ({
                 <div className="p-4 w-full h-full flex flex-col">
                     <div className="flex justify-between items-start mb-2">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded bg-gray-800 flex items-center justify-center text-gray-500">
-                                <Music size={20} />
+                            <div className="w-10 h-10 rounded bg-gray-800 flex items-center justify-center text-gray-500 overflow-hidden relative">
+                                {item.cover_art_url ? (
+                                    <img src={item.cover_art_url} alt="Art" className="w-full h-full object-cover" />
+                                ) : (
+                                    <Music size={20} />
+                                )}
                             </div>
                             <div className="flex flex-col overflow-hidden">
                                 <span className="font-bold truncate max-w-[180px] text-sm">{item.track_title || "Unknown Track"}</span>
@@ -106,6 +110,22 @@ const SubmissionSlot: React.FC<SubmissionSlotProps> = ({
                             placeholder="Title"
                             value={item.track_title || ""}
                             onChange={(e) => onUpdate({ track_title: e.target.value })}
+                            className="bg-black/20 border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500 w-full"
+                        />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 mb-2" onClick={(e) => e.stopPropagation()}>
+                        <input
+                            type="text"
+                            placeholder="Genre (e.g. Hip Hop)"
+                            value={item.genre || ""}
+                            onChange={(e) => onUpdate({ genre: e.target.value })}
+                            className="bg-black/20 border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500 w-full"
+                        />
+                        <input
+                            type="text"
+                            placeholder="Note to Reviewer (Optional)"
+                            value={item.note || ""}
+                            onChange={(e) => onUpdate({ note: e.target.value })}
                             className="bg-black/20 border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500 w-full"
                         />
                     </div>

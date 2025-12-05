@@ -7,6 +7,7 @@ import { useAuthStore } from '../stores/authStore';
 import api from '../services/api';
 import CheckoutModal from '../components/CheckoutModal';
 import UpgradeZone from '../components/UpgradeZone';
+import SubmissionSelectionModal from '../components/SubmissionSelectionModal';
 import Navbar from '../components/Navbar';
 import './SeeTheLinePage.css';
 
@@ -204,6 +205,7 @@ interface QueueSectionProps {
     activeGoal: MissionBar | null;
     handlePurchase: (tier: PriorityTier) => void;
     pricing_tiers: PriorityTier[];
+    freeSkipColor?: string;
 }
 
 const QueueSection: React.FC<QueueSectionProps> = React.memo(({
@@ -213,7 +215,8 @@ const QueueSection: React.FC<QueueSectionProps> = React.memo(({
     peopleAhead,
     activeGoal,
     handlePurchase,
-    pricing_tiers
+    pricing_tiers,
+    freeSkipColor
 }) => (
     <div className="view-queue">
         {/* VIP Section */}
@@ -255,8 +258,15 @@ const QueueSection: React.FC<QueueSectionProps> = React.memo(({
                 )}
 
                 {priority_queue.map((item, index) => {
-                    const tierColor = getTierColor(item.amount, pricing_tiers);
+                    let tierColor = getTierColor(item.amount, pricing_tiers);
                     const isWinner = item.is_community_winner;
+
+                    if (isWinner && freeSkipColor) {
+                        const mappedColor = colorOptions.find(c => c.value === freeSkipColor);
+                        if (mappedColor) {
+                            tierColor = mappedColor.hex;
+                        }
+                    }
 
                     // Determine if we need a divider
                     const prevItem = index > 0 ? priority_queue[index - 1] : null;
@@ -416,155 +426,71 @@ const LinePage = () => {
     const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
     const [selectedTier, setSelectedTier] = useState<PriorityTier | null>(null);
     const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
-    const [selectedSubmissionForUpgrade, setSelectedSubmissionForUpgrade] = useState<Submission | null>(null);
+    const [selectedSubmissionsForUpgrade, setSelectedSubmissionsForUpgrade] = useState<Submission[]>([]);
     const [isSelectionModalOpen, setIsSelectionModalOpen] = useState(false);
 
     const isInitialized = React.useRef(false);
 
-    // Data Fetching
     const fetchLineState = useCallback(async () => {
         if (!reviewerHandle) return;
         try {
-            // Only show loading spinner on very first load
-            if (!isInitialized.current) {
-                setLoading(true);
-            }
-
+            // setLoading(true); // Don't reset loading on poll to avoid flicker
             const response = await api.get(`/queue/line/${reviewerHandle}`);
-
-            // Map backend data to frontend interfaces
-            const data = response.data;
-            if (data.community_goals) {
-                data.community_goals = data.community_goals.map((g: any) => ({
-                    ...g,
-                    current: g.progress, // Map progress -> current
-                    percent: (g.progress / g.target) * 100, // Calculate percent
-                    status: g.is_active ? 'active' : 'completed'
-                }));
-            }
-
-            setLineState(data);
-            setError(null);
-            isInitialized.current = true;
+            setLineState(response.data);
+            setLoading(false);
         } catch (err: any) {
             console.error("Error fetching line state:", err);
-            setError("Failed to load line data. Please try again.");
-        } finally {
+            setError(err.response?.data?.detail || "Failed to load line");
             setLoading(false);
         }
     }, [reviewerHandle]);
 
     useEffect(() => {
+        if (!reviewerHandle) return;
+
         fetchLineState();
 
-        const interval = setInterval(fetchLineState, 30000); // Poll every 30s
-        return () => clearInterval(interval);
-    }, [fetchLineState]);
-
-    // Goal Selection (Random on Mount + Rotation)
-    useEffect(() => {
-        if (!lineState?.community_goals || lineState.community_goals.length === 0) return;
-
-        // Pick a random goal to display initially if not already set (or just let it rotate)
-        // We only want to set random index once on mount, but this effect runs when goals change.
-        // Actually, let's just set up the interval.
-
-        const interval = setInterval(() => {
-            setCurrentGoalIndex((prevIndex) => {
-                if (!lineState.community_goals || lineState.community_goals.length === 0) return 0;
-                return (prevIndex + 1) % lineState.community_goals.length;
-            });
-        }, 15000); // Rotate every 15 seconds
-
-        return () => clearInterval(interval);
-    }, [lineState?.community_goals?.length]); // Re-run if goals length changes
-
-    // WebSocket Connection
-    useEffect(() => {
-        if (!lineState?.reviewer?.id) return;
-
-        const socketUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-        console.log('Connecting to socket at:', socketUrl);
-
-        const socket = io(socketUrl, {
+        // Socket connection
+        const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:8000', {
+            path: '/socket.io',
             transports: ['websocket'],
+            reconnection: true,
             auth: { is_public: true }
         });
 
         socket.on('connect', () => {
-            console.log('Connected to socket, joining reviewer room:', lineState.reviewer.id);
-            socket.emit('join_reviewer_room', lineState.reviewer.id);
-            socket.emit('ping'); // Send ping
+            console.log('Socket connected');
+            socket.emit('join_line_room', { reviewer_handle: reviewerHandle });
         });
 
-        socket.on('welcome', (data: any) => {
-            console.log('Received welcome from socket:', data);
+        socket.on('queue_update', (data) => {
+            console.log('Queue update received:', data);
+            fetchLineState();
         });
 
-        socket.on('pong', (data: any) => {
-            console.log('Received pong from socket:', data);
+        socket.on('current_track_update', (data) => {
+            console.log('Current track update received:', data);
+            fetchLineState();
         });
 
-        socket.on('initial_state', (data: any) => {
-            console.log('Received initial state from socket:', data);
-        });
+        // Poll every 30 seconds as backup
+        const interval = setInterval(fetchLineState, 30000);
 
-        socket.on('error', (data: any) => {
-            console.error('Received socket error:', data);
-        });
-
-        socket.on('giveaway_updated', (updatedGoal: any) => {
-            console.log('Received giveaway update:', updatedGoal);
-            setLineState((prevState) => {
-                if (!prevState) return null;
-
-                // Map backend GiveawayState to frontend MissionBar
-                const mappedGoal: MissionBar = {
-                    status: updatedGoal.is_active ? 'active' : 'completed',
-                    type: updatedGoal.type,
-                    target: updatedGoal.target,
-                    current: updatedGoal.progress,
-                    percent: (updatedGoal.progress / updatedGoal.target) * 100
-                };
-
-                // Update the specific goal in the array
-                const newGoals = prevState.community_goals?.map(g =>
-                    g.type === mappedGoal.type ? mappedGoal : g
-                ) || [];
-
-                // If it's a new goal type not in the list (unlikely but possible), add it
-                if (!newGoals.find(g => g.type === mappedGoal.type)) {
-                    newGoals.push(mappedGoal);
-                }
-
-                return {
-                    ...prevState,
-                    community_goals: newGoals,
-                    // Also update legacy field if it matches
-                    giveaway_state: prevState.giveaway_state?.type === mappedGoal.type ? mappedGoal : prevState.giveaway_state
-                };
+        // Goal Rotation
+        const goalInterval = setInterval(() => {
+            setLineState(prev => {
+                if (!prev || !prev.community_goals || prev.community_goals.length <= 1) return prev;
+                setCurrentGoalIndex(curr => (curr + 1) % prev.community_goals!.length);
+                return prev;
             });
-        });
-
-        socket.on('queue_updated', (newQueue: any[]) => {
-            console.log('Queue updated, re-fetching line state...');
-            fetchLineState();
-        });
-
-        socket.on('current_track_updated', (track: any) => {
-            console.log('Current track updated:', track);
-            fetchLineState();
-        });
-
-        socket.on('reviewer_settings_updated', (settings: any) => {
-            console.log('Reviewer settings updated:', settings);
-            fetchLineState();
-        });
+        }, 5000);
 
         return () => {
             socket.disconnect();
+            clearInterval(interval);
+            clearInterval(goalInterval);
         };
-    }, [lineState?.reviewer?.id, fetchLineState]);
+    }, [reviewerHandle, fetchLineState]);
 
     // Handlers
     const handlePurchase = (tier: PriorityTier) => {
@@ -574,36 +500,55 @@ const LinePage = () => {
             handleUpgradeClick();
         } else {
             console.log("User not in queue, new submission...");
-            setSelectedSubmissionForUpgrade(null);
+            setSelectedSubmissionsForUpgrade([]);
             setIsUpgradeModalOpen(true);
         }
     };
 
     const handleUpgradeClick = () => {
         console.log("handleUpgradeClick called");
-        const sub = lineState?.user_status.submissions[0];
-        if (sub) {
-            console.log("Found submission:", sub);
-            setSelectedSubmissionForUpgrade({
-                id: sub.submission_id,
-                reviewer_id: lineState?.reviewer.id || 0,
-                user: user,
-                track_url: "",
-                track_title: "My Track",
-                artist: "Me",
-                status: "pending",
-                submitted_at: new Date().toISOString(),
-                is_priority: false,
-                priority_value: sub.priority_value || 0,
-                bookmarked: false,
-                spotlighted: false,
-            } as any);
-            setIsUpgradeModalOpen(true);
+        const submissions = lineState?.user_status.submissions || [];
+
+        if (submissions.length > 0) {
+            setIsSelectionModalOpen(true);
         } else {
             console.log("No submission found, falling back to new...");
-            setSelectedSubmissionForUpgrade(null);
+            setSelectedSubmissionsForUpgrade([]);
             setIsUpgradeModalOpen(true);
         }
+    };
+
+    const handleSubmissionSelect = (subs: any[]) => {
+        const mappedSubs = subs.map(sub => ({
+            id: sub.submission_id,
+            reviewer_id: lineState?.reviewer.id || 0,
+            user: user,
+            track_url: sub.track_url || "",
+            track_title: sub.track_title || "Untitled",
+            artist: sub.artist || "Unknown Artist",
+            status: sub.status || "pending",
+            submitted_at: sub.submitted_at || new Date().toISOString(),
+            is_priority: sub.is_priority || false,
+            priority_value: sub.priority_value || 0,
+            bookmarked: sub.bookmarked || false,
+            spotlighted: sub.spotlighted || false,
+            cover_art_url: sub.cover_art_url,
+            genre: "",
+            description: "",
+            file_hash: "",
+            hook_start_time: 0,
+            hook_end_time: 0
+        } as any));
+
+        setSelectedSubmissionsForUpgrade(mappedSubs);
+        setIsSelectionModalOpen(false);
+        setIsUpgradeModalOpen(true);
+    };
+
+    const handleCreateNewSubmission = () => {
+        setSelectedSubmissionsForUpgrade([]);
+        setIsSelectionModalOpen(false);
+        setIsUpgradeModalOpen(true);
     };
 
     const handleCheckoutSuccess = () => {
@@ -612,9 +557,29 @@ const LinePage = () => {
 
     const handleUpgradeSuccess = () => {
         setIsUpgradeModalOpen(false);
+        setSelectedSubmissionsForUpgrade([]);
+        fetchLineState();
     };
 
     if (loading) return <div className="loading-screen"><div className="spinner"></div></div>;
+
+    if (error) {
+        return (
+            <div className="flex items-center justify-center min-h-screen bg-black text-white">
+                <div className="text-center p-8 bg-red-500/10 border border-red-500/20 rounded-2xl">
+                    <h2 className="text-2xl font-bold text-red-400 mb-2">Error Loading Line</h2>
+                    <p className="text-gray-300">{error}</p>
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="mt-4 px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg font-bold transition-colors"
+                    >
+                        Retry
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     if (!lineState) return null;
 
     const { now_playing, priority_queue, free_queue, pricing_tiers, is_live, community_goals } = lineState;
@@ -688,6 +653,7 @@ const LinePage = () => {
                                     activeGoal={activeGoal}
                                     handlePurchase={handlePurchase}
                                     pricing_tiers={pricing_tiers}
+                                    freeSkipColor={lineState.reviewer.configuration?.free_skip_color}
                                 />
                             </motion.div>
                         ) : (
@@ -724,6 +690,7 @@ const LinePage = () => {
                             activeGoal={activeGoal}
                             handlePurchase={handlePurchase}
                             pricing_tiers={pricing_tiers}
+                            freeSkipColor={lineState.reviewer.configuration?.free_skip_color}
                         />
                     </div>
                 </div>
@@ -766,13 +733,21 @@ const LinePage = () => {
                     <div className="bg-gray-900 border border-white/10 rounded-2xl w-full max-w-5xl h-[90vh] p-6 relative shadow-2xl overflow-hidden">
                         <UpgradeZone
                             reviewer={lineState.reviewer as any}
-                            existingSubmission={selectedSubmissionForUpgrade}
+                            existingSubmissions={selectedSubmissionsForUpgrade}
                             onClose={() => setIsUpgradeModalOpen(false)}
                             onSuccess={handleUpgradeSuccess}
                         />
                     </div>
                 </div>
             )}
+
+            <SubmissionSelectionModal
+                isOpen={isSelectionModalOpen}
+                onClose={() => setIsSelectionModalOpen(false)}
+                submissions={lineState.user_status?.submissions || []}
+                onSelect={handleSubmissionSelect}
+                onCreateNew={handleCreateNewSubmission}
+            />
         </div>
     );
 };

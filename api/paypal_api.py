@@ -10,7 +10,9 @@ from database import get_db
 from services.payment_service import payment_service
 from services import queue_service, economy_service, user_service
 from config import settings
+from config import settings
 import datetime
+from middleware.rate_limit import limiter
 
 router = APIRouter(prefix="/paypal", tags=["PayPal"])
 
@@ -37,13 +39,15 @@ async def get_paypal_access_token(client_id: str, client_secret: str, mode: str 
         return response.json()["access_token"]
 
 @router.post("/create-order")
+@limiter.limit("5/minute")
 async def create_order(
     data: schemas.PaymentIntentCreate,
     reviewer_id: int,
     submission_id: int = None,
     payment_type: str = "priority_request",
     current_user: models.User | None = Depends(security.get_current_user_optional),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    request: Request = None # Required for slowapi
 ):
     # Get Reviewer's PayPal Config
     config = await payment_service.get_provider_config(db, reviewer_id, "paypal")
@@ -98,13 +102,15 @@ async def create_order(
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/capture-order")
+@limiter.limit("5/minute")
 async def capture_order(
     data: dict,
     reviewer_id: int,
     submission_id: int = None,
     payment_type: str = "priority_request",
     current_user: models.User | None = Depends(security.get_current_user_optional),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    request: Request = None # Required for slowapi
 ):
     order_id = data.get("order_id")
     if not order_id:
@@ -160,11 +166,11 @@ async def capture_order(
                             user = await user_service.create_guest_user(db, email)
                             
                             # 2. Credit Wallet
-                            coins = amount_cents
-                            await economy_service.add_coins(db, reviewer_id, user.id, coins, "Auto-purchase for submission", metadata={"source": "paypal_order", "order_id": order_id})
+                            credits = amount_cents
+                            await economy_service.purchase_credits(db, user.id, credits, amount_cents / 100.0, "paypal_guest", order_id)
                             
                             # 3. Debit Wallet
-                            await economy_service.deduct_coins(db, reviewer_id, user.id, coins, "Submission to Reviewer")
+                            await economy_service.process_skip_transaction(db, user.id, reviewer_id, credits, "Submission to Reviewer")
                             
                             # 4. Finalize Submission
                             is_priority = True # Assumed if paying
@@ -249,3 +255,116 @@ async def update_paypal_config(
     )
     
     return config
+
+@router.post("/payout")
+async def request_payout(
+    data: dict,
+    current_user: models.User = Depends(security.get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Initiates a payout to the reviewer via PayPal Payouts API.
+    """
+    if not current_user.reviewer_profile:
+        raise HTTPException(status_code=400, detail="User is not a reviewer")
+    
+    reviewer_id = current_user.reviewer_profile.id
+    payout_email = data.get("email")
+    if not payout_email:
+        raise HTTPException(status_code=400, detail="Payout email is required")
+
+    # 1. Check Balance
+    wallet = await economy_service.get_reviewer_wallet(db, reviewer_id)
+    if wallet.balance_usd < economy_service.MIN_WITHDRAWAL_USD:
+        raise HTTPException(status_code=400, detail=f"Insufficient balance. Minimum withdrawal is ${economy_service.MIN_WITHDRAWAL_USD}")
+
+    amount_to_withdraw = float(wallet.balance_usd) # Convert Decimal to float for PayPal API
+    
+    # 2. Authenticate Platform PayPal (Sender)
+    # We use Platform credentials here, not Reviewer credentials
+    platform_client_id = os.getenv("PLATFORM_PAYPAL_CLIENT_ID")
+    platform_client_secret = os.getenv("PLATFORM_PAYPAL_CLIENT_SECRET")
+    mode = os.getenv("PAYPAL_MODE", "sandbox")
+    
+    if not platform_client_id or not platform_client_secret:
+         raise HTTPException(status_code=500, detail="Platform PayPal configuration missing")
+
+    try:
+        access_token = await get_paypal_access_token(platform_client_id, platform_client_secret, mode)
+        base_url = "https://api-m.sandbox.paypal.com" if mode == "sandbox" else "https://api-m.paypal.com"
+        
+        # 3. Create Payout Batch
+        import uuid
+        batch_id = f"Payout_{reviewer_id}_{uuid.uuid4()}"
+        
+        payout_payload = {
+            "sender_batch_header": {
+                "sender_batch_id": batch_id,
+                "email_subject": "You have a payout from Luxury Universe",
+                "email_message": "Thank you for your reviews! Here is your payout.",
+                "recipient_type": "EMAIL"
+            },
+            "items": [
+                {
+                    "amount": {
+                        "value": f"{amount_to_withdraw:.2f}",
+                        "currency": "USD"
+                    },
+                    "receiver": payout_email,
+                    "note": "Reviewer Withdrawal",
+                    "sender_item_id": f"Withdrawal_{reviewer_id}_{datetime.datetime.now().timestamp()}"
+                }
+            ]
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{base_url}/v1/payments/payouts",
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "application/json"
+                },
+                json=payout_payload
+            )
+            
+            if response.status_code not in [200, 201]:
+                raise HTTPException(status_code=400, detail=f"PayPal Payout Error: {response.text}")
+            
+            payout_data = response.json()
+            batch_status = payout_data["batch_header"]["batch_status"]
+            
+            if batch_status in ["PENDING", "PROCESSING", "SUCCESS"]:
+                # 4. Deduct from Wallet
+                # We deduct the full amount. Platform pays fees on top (PayPal charges sender).
+                
+                # Convert back to Decimal for subtraction if needed, or rely on SQLAlchemy casting
+                # wallet.balance_usd is Numeric (Decimal)
+                from decimal import Decimal
+                wallet.balance_usd -= Decimal(str(amount_to_withdraw))
+                wallet.total_earnings_usd += 0 # Earnings don't change on withdrawal
+                
+                # Log to Ledger
+                ledger_entry = models.TransactionLedger(
+                    user_id=None, 
+                    reviewer_id=reviewer_id,
+                    action="withdraw",
+                    credits_spent=0,
+                    usd_earned=-Decimal(str(amount_to_withdraw)), # Negative earned = withdrawal
+                    exchange_rate_snapshot=None,
+                    meta_data={
+                        "payout_batch_id": payout_data["batch_header"]["payout_batch_id"],
+                        "payout_email": payout_email,
+                        "provider": "paypal"
+                    }
+                )
+                db.add(ledger_entry)
+                await db.commit()
+                
+                return {"status": "success", "batch_id": payout_data["batch_header"]["payout_batch_id"], "amount": f"{amount_to_withdraw:.2f}"}
+            else:
+                raise HTTPException(status_code=400, detail=f"Payout failed with status: {batch_status}")
+
+    except Exception as e:
+        import logging
+        logging.error(f"Payout failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

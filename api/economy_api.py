@@ -61,3 +61,40 @@ async def get_balance(
     Get current user's balance for a specific reviewer.
     """
     return await economy_service.get_balance(db, reviewer_id, current_user.id)
+
+@router.get("/reviewer/{reviewer_id}/wallet", response_model=schemas.ReviewerWallet)
+async def get_reviewer_wallet(
+    reviewer_id: int,
+    current_user: models.User = Depends(security.get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    # Auth check: only the reviewer or admin can see the wallet
+    if "admin" not in current_user.roles:
+        reviewer = await queue_service.get_reviewer_by_user_id(db, current_user.id)
+        if not reviewer or reviewer.id != reviewer_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+    wallet = await economy_service.get_reviewer_wallet(db, reviewer_id)
+    return wallet
+
+@router.get("/reviewer/{reviewer_id}/ledger", response_model=List[schemas.TransactionLedger])
+async def get_ledger(
+    reviewer_id: int,
+    page: int = 1,
+    limit: int = 50,
+    current_user: models.User = Depends(security.get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    # Auth check
+    if "admin" not in current_user.roles:
+        reviewer = await queue_service.get_reviewer_by_user_id(db, current_user.id)
+        if not reviewer or reviewer.id != reviewer_id:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+    stmt = select(models.TransactionLedger).filter(models.TransactionLedger.reviewer_id == reviewer_id)
+    stmt = stmt.order_by(desc(models.TransactionLedger.timestamp))
+    stmt = stmt.offset((page - 1) * limit).limit(limit)
+    stmt = stmt.options(selectinload(models.TransactionLedger.user))
+    
+    result = await db.execute(stmt)
+    return result.scalars().all()
