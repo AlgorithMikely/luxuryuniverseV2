@@ -99,6 +99,7 @@ export interface ReviewerProfile {
   community_goal_cooldown_minutes?: number;
   skip_price_credits?: number;
   is_live?: boolean;
+  is_following?: boolean;
 }
 // --- Submissions & Queue ---
 export interface Submission {

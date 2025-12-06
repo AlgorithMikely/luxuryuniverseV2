@@ -198,6 +198,7 @@ class ReviewerProfile(BaseModel):
     avg_total_viewers: int = 0
     max_total_viewers: int = 0
     is_live: bool = False
+    is_following: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 

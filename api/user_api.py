@@ -464,3 +464,50 @@ async def delete_my_account(
     
     await db.commit()
     return {"status": "account_deleted", "message": "Your account has been anonymized."}
+
+@router.post("/follow/{reviewer_id}")
+async def follow_reviewer(
+    reviewer_id: int,
+    current_user: models.User = Depends(security.get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    # Check if reviewer exists
+    result = await db.execute(select(models.Reviewer).where(models.Reviewer.id == reviewer_id))
+    reviewer = result.scalars().first()
+    if not reviewer:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Reviewer not found")
+        
+    # Check if already following
+    existing = await db.execute(
+        select(models.Follow)
+        .where(models.Follow.user_id == current_user.id)
+        .where(models.Follow.reviewer_id == reviewer_id)
+    )
+    if existing.scalars().first():
+        return {"status": "already_following"}
+        
+    follow = models.Follow(user_id=current_user.id, reviewer_id=reviewer_id)
+    db.add(follow)
+    await db.commit()
+    
+    return {"status": "success"}
+
+@router.delete("/follow/{reviewer_id}")
+async def unfollow_reviewer(
+    reviewer_id: int,
+    current_user: models.User = Depends(security.get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = select(models.Follow).where(
+        models.Follow.user_id == current_user.id,
+        models.Follow.reviewer_id == reviewer_id
+    )
+    result = await db.execute(stmt)
+    follow = result.scalars().first()
+    
+    if follow:
+        await db.delete(follow)
+        await db.commit()
+        
+    return {"status": "success"}

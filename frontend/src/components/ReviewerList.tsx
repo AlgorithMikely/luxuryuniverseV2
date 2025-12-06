@@ -4,6 +4,7 @@ import api from "../services/api";
 import { ReviewerProfile } from "../types";
 import toast from "react-hot-toast";
 import { useSocket } from "../context/SocketContext";
+import { UserPlus, UserMinus } from "lucide-react";
 
 const ReviewerList = () => {
     const [reviewers, setReviewers] = useState<ReviewerProfile[]>([]);
@@ -46,6 +47,25 @@ const ReviewerList = () => {
         };
     }, [socket]);
 
+    const handleFollow = async (reviewerId: number, isFollowing: boolean) => {
+        try {
+            if (isFollowing) {
+                await api.delete(`/user/follow/${reviewerId}`);
+                toast.success("Unfollowed reviewer");
+            } else {
+                await api.post(`/user/follow/${reviewerId}`);
+                toast.success("Following reviewer");
+            }
+            // Update local state
+            setReviewers(prev => prev.map(r =>
+                r.id === reviewerId ? { ...r, is_following: !isFollowing } : r
+            ));
+        } catch (error) {
+            console.error("Follow action failed:", error);
+            toast.error("Failed to update follow status");
+        }
+    };
+
     if (isLoading) {
         return <div className="text-center text-gray-500 py-8">Loading reviewers...</div>;
     }
@@ -61,6 +81,21 @@ const ReviewerList = () => {
                     key={reviewer.id}
                     className="bg-gray-800 rounded-xl p-6 border border-gray-700 flex flex-col items-center space-y-4 hover:border-purple-500/50 transition-colors relative overflow-hidden"
                 >
+                    {/* Follow Button */}
+                    <button
+                        onClick={(e) => {
+                            e.preventDefault();
+                            handleFollow(reviewer.id, !!reviewer.is_following);
+                        }}
+                        className={`absolute top-3 left-3 p-2 rounded-full z-10 transition-colors ${reviewer.is_following
+                                ? "bg-purple-600 text-white hover:bg-purple-700"
+                                : "bg-gray-700/50 text-gray-300 hover:bg-gray-700 hover:text-white"
+                            }`}
+                        title={reviewer.is_following ? "Unfollow" : "Follow"}
+                    >
+                        {reviewer.is_following ? <UserMinus size={16} /> : <UserPlus size={16} />}
+                    </button>
+
                     {/* Live Tag */}
                     {reviewer.is_live && (
                         <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-red-500/10 px-2 py-1 rounded border border-red-500/20 z-10">

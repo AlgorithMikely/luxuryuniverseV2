@@ -388,3 +388,13 @@ class GlobalConfig(Base):
     key = Column(String, primary_key=True, index=True)
     value = Column(JSON, nullable=True)
 
+
+class Follow(Base):
+    __tablename__ = "follows"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    reviewer_id = Column(Integer, ForeignKey("reviewers.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", backref="following")
+    reviewer = relationship("Reviewer", backref="followers")

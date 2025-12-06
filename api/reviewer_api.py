@@ -46,7 +46,10 @@ async def check_is_reviewer(
     return current_user
 
 @router.get("/all", response_model=List[schemas.ReviewerProfile])
-async def get_all_reviewers(db: AsyncSession = Depends(get_db)):
+async def get_all_reviewers(
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[models.User] = Depends(security.get_current_user_optional)
+):
     """
     Returns a list of all reviewers.
     """
@@ -65,10 +68,18 @@ async def get_all_reviewers(db: AsyncSession = Depends(get_db)):
     result_live = await db.execute(stmt_live)
     live_user_ids = set(result_live.scalars().all())
 
+    # Pre-fetch followed reviewer IDs for current user
+    followed_reviewer_ids = set()
+    if current_user:
+        stmt_follows = select(models.Follow.reviewer_id).where(models.Follow.user_id == current_user.id)
+        result_follows = await db.execute(stmt_follows)
+        followed_reviewer_ids = set(result_follows.scalars().all())
+
     enriched_reviewers = []
     for r in reviewers:
         profile = await media_service.enrich_reviewer_profile(r)
         profile.is_live = r.user_id in live_user_ids
+        profile.is_following = r.id in followed_reviewer_ids
         enriched_reviewers.append(profile)
         
     return enriched_reviewers
